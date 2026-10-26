@@ -1,19 +1,25 @@
 # Architecture Decisions
 
-ADR log for Voice AI for Business. One entry per significant, actually-made decision — never backfilled invented history. Every entry states a **cost implication** explicitly, because the team operates under a zero-budget constraint (ADR-0002): `Free` (no recurring cost), `Free tier with limits` (free today, bounded by a quota/ceiling), or `Deferred paid` (a real cost, intentionally pushed to when a paying client funds it).
+ADR log for Catalyst. One entry per significant, actually-made decision — never backfilled invented history. Every entry states a **cost implication** explicitly, because the team operates under a zero-budget constraint (ADR-0002): `Free` (no recurring cost), `Free tier with limits` (free today, bounded by a quota/ceiling), or `Deferred paid` (a real cost, intentionally pushed to when a paying client funds it).
 
 **Format:** ID · Date · Status · Cost implication · Context · Decision · Consequences.
+
+**Statuses:** `Accepted` · `Proposed` (written down, awaiting team approval — do not build on it as if settled) · `Superseded` · `Rejected`. ADRs are never deleted; a reversal is a new ADR. If a change would reverse an Accepted ADR, write it as **Proposed**.
+
+**Open decisions** (not yet ADRs) are at the bottom: D3–D7. D1 and D2 are Proposed ADRs (ADR-0029, ADR-0030).
+
+**Path note (2026-10-26):** older ADRs say `src/...`. The layout is now `backend/src/...` everywhere (e.g. `backend/src/providers/`).
 
 ## Index
 
 | ID | Title | Status | Cost implication |
 |---|---|---|---|
 | ADR-0001 | Adopt a Claude Code context-engineering structure | Accepted | Free |
-| ADR-0002 | Zero-budget as a binding architectural constraint | Accepted | Free |
-| ADR-0003 | Oracle Cloud Always Free as the single production host | Accepted | Free tier with limits |
-| ADR-0004 | Self-hosted Pipecat over paid Vapi/Retell | Accepted | Free |
-| ADR-0005 | WebRTC-first development; PSTN deferred | Accepted | Free |
-| ADR-0006 | Telephony cost passed through per-client | Accepted | Deferred paid |
+| ADR-0002 | Zero-budget as a binding architectural constraint | Accepted — *challenged by ADR-0029, ADR-0030 (Proposed)* | Free |
+| ADR-0003 | Oracle Cloud Always Free as the single production host | Accepted — *RAM figure disputed, see D3* | Free tier with limits |
+| ADR-0004 | Self-hosted Pipecat over paid Vapi/Retell | Accepted — *challenged by ADR-0029 (Proposed)* | Free |
+| ADR-0005 | WebRTC-first development; PSTN deferred | Accepted — *challenged by ADR-0030 (Proposed)* | Free |
+| ADR-0006 | Telephony cost passed through per-client | Accepted — *challenged by ADR-0030 (Proposed)* | Deferred paid |
 | ADR-0007 | Groq free tier for live-call STT and LLM | Accepted | Free tier with limits |
 | ADR-0008 | Kokoro + Piper for TTS over paid Sarvam/ElevenLabs | Accepted | Free |
 | ADR-0009 | Gemini Flash free tier for offline parsing and embeddings | Accepted | Free tier with limits |
@@ -22,19 +28,26 @@ ADR log for Voice AI for Business. One entry per significant, actually-made deci
 | ADR-0012 | Cloudflare R2 free tier, 30-day audio lifecycle | Accepted | Free tier with limits |
 | ADR-0013 | Cloudflare Pages for frontend hosting | Accepted | Free tier with limits |
 | ADR-0014 | Provider abstraction layer as the free-to-paid migration mechanism | Accepted | Free (enables cheap Deferred paid later) |
-| ADR-0015 | Accept 1.2-2s latency as the price of zero budget | Accepted | Free |
+| ADR-0015 | Accept 1.2-2s latency as the price of zero budget | Accepted — *MVP targets <~1 s; challenged by ADR-0029 (Proposed)* | Free |
 | ADR-0016 | Multi-tenancy via tenant_id + RLS from day one | Accepted | Free |
-| ADR-0017 | Mandatory human confirmation before applying WhatsApp knowledge updates | Accepted | Free |
+| ADR-0017 | Mandatory human confirmation before applying WhatsApp knowledge updates | Accepted — *extended to every WhatsApp write by ADR-0034* | Free |
 | ADR-0018 | Separate agent configs for customer care vs. outbound sales | Accepted | Free |
 | ADR-0019 | Inbound-first; outbound blocked on paid DLT registration | Accepted | Deferred paid |
 | ADR-0020 | Reject self-hosting speech models (Whisper/Piper) | **Superseded by ADR-0021** | Deferred paid (assumed API cost) |
-| ADR-0021 | Adopt self-hosted faster-whisper + Piper | Accepted — **supersedes ADR-0020** | Free |
-| ADR-0022 | Vapi/Retell as the default voice platform | Rejected | Deferred paid |
+| ADR-0021 | Adopt self-hosted faster-whisper + Piper | Accepted — **supersedes ADR-0020**; *challenged by ADR-0029 (Proposed)* | Free |
+| ADR-0022 | Vapi/Retell as the default voice platform | Rejected — *ADR-0029 (Proposed) would use one for the pilot only* | Deferred paid |
 | ADR-0023 | Managed Postgres, managed Redis, paid secret manager | Rejected | Deferred paid |
-| ADR-0024 | Speculative phone number provisioning | Rejected | Deferred paid |
+| ADR-0024 | Speculative phone number provisioning | Rejected — *ADR-0030 (Proposed) would allow one pilot number* | Deferred paid |
 | ADR-0025 | Training our own speech/language models | Rejected | Deferred paid |
 | ADR-0026 | A separate vector database | Rejected | Free tier with limits (would've added its own footprint) |
 | ADR-0027 | BFSI vertical | Rejected | N/A — not a cost decision |
+| ADR-0028 | Clinics first, coaching second; D2C and real estate deferred | Accepted — supersedes the vertical order in ADR-0027's consequences and the old `CLAUDE.md` | N/A |
+| ADR-0029 | Managed voice platform for the pilot behind `VoiceOrchestrator` (D1) | **Proposed** | Deferred paid → paid during pilot |
+| ADR-0030 | One team-funded phone number for the pilot (D2) | **Proposed** | Paid during pilot |
+| ADR-0031 | Clinic escalation by doctor-approved red-flag list, not "any symptom" | **Proposed** | Free |
+| ADR-0032 | Backend owns the brain: agent tools API, safety guard in our code | Accepted | Free |
+| ADR-0033 | Verticals are config; generic booking model with exclusion constraint | Accepted | Free |
+| ADR-0034 | WhatsApp is its own channel module; preview-and-confirm on every write | Accepted — extends ADR-0017 | Free tier with limits (per-message pricing, D5) |
 
 ---
 
@@ -320,6 +333,130 @@ ADR log for Voice AI for Business. One entry per significant, actually-made deci
 
 ---
 
+### ADR-0028: Clinics first, coaching second; D2C and real estate deferred
+
+- **Date:** 2026-10-26
+- **Status:** Accepted — supersedes the vertical order in ADR-0027's consequences and the old `CLAUDE.md`
+- **Cost implication:** N/A.
+
+**Context:** Discovery work found a pilot dental clinic with clear, daily pain (missed calls, double-bookings, manual reminders) and an owner willing to pilot. The old order (D2C → real estate → education → healthcare, healthcare gated last) had no pilot customer behind it.
+
+**Decision:** Clinics are the first customer type and the MVP (`context/mvp.md`). Coaching institutes are next, added as config only. D2C and real estate are deferred. BFSI stays rejected (ADR-0027).
+
+**Consequences:** The healthcare safety guard moves from a late gate to an MVP requirement (C5). Outbound lead follow-up, the main D2C/real-estate use case, stays deferred behind DLT (ADR-0019).
+
+---
+
+### ADR-0032: Backend owns the brain — agent tools API, safety guard in our code
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Cost implication:** Free — a design rule.
+
+**Context:** Whichever voice stack we use (managed or self-hosted Pipecat), switching it must never touch business logic. Healthcare also needs a safety check we control, not one buried in a vendor prompt.
+
+**Decision:** Knowledge, schedule, rules, safety decisions and alerts live in our backend. The voice layer only talks and calls our **agent tools API** — nine tools: `get_clinic_info`, `find_slots`, `book`, `reschedule`, `cancel`, `create_callback`, `escalate`, `transfer`, `log_call_outcome` (contracts in `context/contracts.md`). Every LLM reply on a clinic call passes our safety guard (`backend/src/safety/`) before it is spoken. With a managed platform, its LLM calls route through our own endpoint (custom-LLM mode) so the guard still runs. A platform that cannot do this is not acceptable for healthcare.
+
+**Consequences:** `contracts.md` becomes a shared contract all four work areas build against; changes to it are called out in PRs. Adds one network hop per LLM turn on a managed platform — measure in spike S3.
+
+---
+
+### ADR-0033: Verticals are config; generic booking model with exclusion constraint
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Cost implication:** Free.
+
+**Context:** Coaching follows clinics. Adding it must not need a restructure. Double-bookings across phone, WhatsApp and walk-in are the pilot clinic's main pain.
+
+**Decision:** Each vertical is a folder `verticals/<name>/` (`vertical.yaml`, `agent-prompt.md`, `escalation-rules.yaml`, `onboarding-questions.md`, `seed-knowledge.yaml`, `tests/`). Core code never branches on vertical; `backend/src/verticals/` only loads and validates. The booking model is generic: resources, services, availability rules, blocks, bookings — no table or column named after a clinic-only concept. Every booking has a `source` (`phone` | `whatsapp` | `walk_in`). A Postgres exclusion constraint makes overlapping active bookings for the same resource impossible.
+
+**Consequences:** A dummy `demo_coaching` vertical must load in tests without core changes — that test is an MVP done-criterion. Prompts move from the old `prompts/` idea into `verticals/<name>/agent-prompt.md`.
+
+---
+
+### ADR-0034: WhatsApp is its own channel module; preview-and-confirm on every write
+
+- **Date:** 2026-10-26
+- **Status:** Accepted — extends ADR-0017
+- **Cost implication:** Free tier with limits — business-initiated messages (reminders, alerts, summaries) are billed per message (D5, VERIFY).
+
+**Context:** WhatsApp was documented only as knowledge-update ingestion under `src/knowledge/`. The MVP also needs doctor schedule commands, urgent alerts, a weekly summary and patient reminders with opt-out.
+
+**Decision:** `backend/src/channels/whatsapp/` owns all of it. ADR-0017's rule widens: **every** WhatsApp-sourced write (knowledge or schedule) is previewed and applied only after an explicit "Haan". Only numbers registered to the tenant may give commands.
+
+**Consequences:** Knowledge and booking modules expose plain service functions; WhatsApp calls them after confirmation. Formats in `context/contracts.md`.
+
+---
+
+## Proposed
+
+These need team approval. Until approved, the Accepted ADRs they challenge still stand — but build behind the interfaces so either outcome works.
+
+### ADR-0029: Managed voice platform for the pilot behind `VoiceOrchestrator` (D1)
+
+- **Date:** 2026-10-26
+- **Status:** **Proposed**
+- **Cost implication:** Paid during the pilot (per-minute platform fees, VERIFY current pricing); Pipecat stays the long-term low-cost path.
+- **Would change:** ADR-0002 (zero budget), ADR-0004 (Pipecat default), ADR-0015 (1.2–2 s accepted), ADR-0021 (self-hosted speech), ADR-0022 (Vapi/Retell rejected as default).
+
+**Context:** The backlog's effort estimates and the MVP's sub-~1 s latency target (C2) assume a managed platform (Vapi/Retell). The accepted ADRs chose self-hosted Pipecat at zero cost with 1.2–2 s latency. Older callers hang up on robotic or slow agents, so latency is a product risk, not polish.
+
+**Recommendation:** Use a managed platform for the single pilot clinic, behind `VoiceOrchestrator`, and keep Pipecat as the long-term low-cost path. Conditions:
+
+1. The platform must support the custom-LLM route (ADR-0032) so our safety guard runs on every reply. VERIFY on the chosen platform.
+2. **Data residency.** A US-hosted platform processes call audio outside India, which breaks this repo's India-residency rule. The team and our mentor decide whether that is acceptable for the pilot under DPDP (VERIFY), or find an India-hosted option. **Note:** the same question already applies to the accepted stack — Groq/Cerebras (live STT/LLM), Gemini (offline parsing) and Cloudflare R2 (audio) are not India-hosted as far as we know (VERIFY). Decide residency for all of them together.
+
+**Consequences if accepted:** Spike S3 measures real latency; D3 (hosting) and D4 (cost per minute) must be re-checked.
+
+---
+
+### ADR-0030: One team-funded phone number for the pilot (D2)
+
+- **Date:** 2026-10-26
+- **Status:** **Proposed**
+- **Cost implication:** Paid during the pilot, owned by the team (VERIFY provider pricing).
+- **Would change:** ADR-0002 (paid costs passed through, not absorbed), ADR-0005 (WebRTC-first), ADR-0006 (per-client, once paying), ADR-0024 (no speculative numbers).
+
+**Context:** Item 1 (C1) needs a real number before the clinic pays. Missed calls on the clinic's own number cannot be proven over WebRTC, so the pilot cannot show value without one.
+
+**Recommendation:** One pilot number, cost owned by the team during the pilot. Spike S1 decides the provider (and whether an Indian provider such as Exotel must sit between the SIM/landline and the voice stack; VERIFY the regulatory side).
+
+**Consequences if accepted:** ADR-0024's rule still holds for everything beyond this one number. At Gate 1 the cost moves to the clinic per ADR-0006.
+
+---
+
+### ADR-0031: Clinic escalation by doctor-approved red-flag list, not "any symptom"
+
+- **Date:** 2026-10-26
+- **Status:** **Proposed** — loosens a documented safety rule, so it needs explicit team approval.
+- **Cost implication:** Free.
+- **Would change:** the old healthcare rule ("any symptom description → immediate hard escalation, no exceptions") previously in `context/architecture.md` §5 and `.claude/skills/skills.md`.
+
+**Context:** Most clinic calls mention a reason ("daant mein dard hai"). Escalating every one would flood the doctor and defeat the product. Discovery showed routine reasons should just book.
+
+**Decision (proposed):** The agent still never gives diagnosis, medicine or dosage advice — enforced by the guard in code. Routine reasons book. Only the doctor-approved red-flag list (`verticals/clinic/escalation-rules.yaml`) escalates; **grey-zone calls count as medical and escalate**. After hours, the approved emergency instruction is given. The 50+ call safety suite must pass at 100% before go-live and after every prompt or rule change.
+
+**Consequences:** The safety suite becomes the gate that makes this safe; its scripts must include tricky routine-vs-red-flag pairs.
+
+---
+
+## Open decisions
+
+Not yet decided. Do not resolve these in code; keep the relevant part behind an interface or config until the team decides. Add owner and date to the row when decided.
+
+| ID | Question | Notes |
+|---|---|---|
+| D1 | Voice stack for the pilot | → ADR-0029 (Proposed). |
+| D2 | Real phone number for the pilot | → ADR-0030 (Proposed). Provider decided by spike S1. |
+| D3 | Hosting | If D1 goes managed, the VM no longer runs speech models — re-check the RAM budget. Docs disagree: `open-source/open-source.md` says Always Free may now be 2 OCPU / 12 GB; `context/architecture.md` §10 and ADR-0003 assume 4 OCPU / 24 GB. VERIFY on the team's own account. Residency of hosted components ties into ADR-0029. |
+| D4 | Pricing vs cost | Pricing hypothesis: ₹3,000 for up to 500 minutes. Our earlier estimate put effective AI call cost at roughly ₹6–9/min; if that holds, a fully used Starter plan costs more to serve than it earns. Measure real per-minute cost during the pilot, before Gate 1. |
+| D5 | WhatsApp Business setup | Reminders, alerts and summaries need the WhatsApp Business Platform, approved utility templates and per-message charges (VERIFY current pricing — the change listed for Oct 2026 in `open-source.md` needs re-checking). Repeating urgent alerts and reminders outside a 24-hour window are paid template messages. Business verification can take time — start early. |
+| D6 | Work-area owners | Areas A–D in `context/team.md`. Owners TBD. |
+| D7 | Scheduler for reminders, summaries and health alerts | Celery beat (already in the stack) or something lighter. |
+
+---
+
 ## Superseded
 
 ### ADR-0020: Reject self-hosting speech models (Whisper/Piper)
@@ -406,4 +543,4 @@ ADR log for Voice AI for Business. One entry per significant, actually-made deci
 
 **Context/Decision:** Rejected as an entry vertical. BFSI is explicitly called out as too saturated (well-served by existing enterprise voice AI vendors) and too regulated (RBI/BFSI-specific compliance burden well beyond DPDP/TRAI) for a 4-person part-time team's Year-1 scope.
 
-**Consequences:** Entry verticals stay D2C, real estate, education, healthcare (priority order per `CLAUDE.md`). BFSI can be reconsidered only as a much later-stage expansion decision, not a Year-1 one.
+**Consequences:** Entry verticals stay D2C, real estate, education, healthcare (priority order per `CLAUDE.md`). *(Vertical order superseded by ADR-0028: clinics first, coaching second, D2C and real estate deferred. BFSI stays rejected.)* BFSI can be reconsidered only as a much later-stage expansion decision, not a Year-1 one.
