@@ -1,0 +1,51 @@
+# DRAFT, team to review.
+# Clinic vertical config. Written from context/mvp.md. Real per-clinic values (hours,
+# chain, reminder time) live in tenant config, decided via context/go-live-checklist.md.
+
+name: clinic
+status: draft
+version: 0.1.0
+
+labels:
+  resource: "Doctor"
+  resource_plural: "Doctors"
+  contact: "Patient"
+  booking: "Appointment"
+  tenant: "Clinic"
+
+languages:
+  default: hi-en
+  supported: [hi-en, en, hi]
+
+booking:
+  default_slot_min: 15       # VERIFY with the pilot clinic
+  offer_slots: 3
+  allow_resource_choice: true
+  min_lead_min: 30
+  max_days_ahead: 30
+  sources: [phone, whatsapp, walk_in]
+
+whatsapp:
+  commands: [block_day, block_range, set_hours, query_today]
+  confirm_words: [haan, ha, yes, ok]
+  reject_words: [nahi, na, no]
+  preview_expiry_min: 30
+
+reminders:
+  enabled: true
+  hours_before: 18           # placeholder; the clinic sets this at go-live
+  opt_out_words: [stop, "band karo"]
+
+alerts:
+  repeat_minutes: 5
+
+ops:
+  silence_hours: 3
+
+knowledge:
+  answer_only_approved: true
+
+safety:
+  guard: required            # C5 — never optional for clinics
+  escalation_rules: escalation-rules.yaml
+  prompt: agent-prompt.md

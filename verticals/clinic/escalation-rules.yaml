@@ -1,0 +1,57 @@
+# DRAFT, team to review. NOT APPROVED.
+# Clinic (dental pilot) escalation rules, written from context/mvp.md C5 and ADR-0031 (Proposed).
+# The red-flag list below is a starting suggestion ONLY. Doctor A must review, edit and approve
+# it before go-live (context/go-live-checklist.md). Grey zone counts as medical.
+
+version: 0.1.0
+approved_by: null            # role only, e.g. "Doctor A"
+approved_on: null
+
+grey_zone_policy: escalate   # C5: grey-zone calls count as medical
+
+red_flags:
+  - id: breathing_swallowing
+    rationale: "Difficulty breathing or swallowing can signal a spreading infection — needs a human now."
+    phrases: ["saans lene mein dikkat", "nigalne mein dikkat", "can't breathe", "difficulty swallowing"]
+  - id: swelling_spreading
+    rationale: "Facial swelling spreading to eye, neck or jaw."
+    phrases: ["sujan aankh tak", "gale tak sujan", "face swelling spreading", "chehra bahut sooj gaya"]
+  - id: uncontrolled_bleeding
+    rationale: "Bleeding that won't stop, e.g. after an extraction."
+    phrases: ["khoon ruk nahi raha", "bleeding won't stop", "bahut khoon"]
+  - id: trauma
+    rationale: "Injury to face or mouth, knocked-out or broken tooth after an accident."
+    phrases: ["chot lag gayi", "daant toot gaya gir ke", "accident", "tooth knocked out"]
+  - id: fever_with_swelling
+    rationale: "High fever together with dental swelling."
+    phrases: ["tez bukhar aur sujan", "fever and swelling"]
+  - id: medication_reaction
+    rationale: "Possible reaction to a medicine or anaesthetic."
+    phrases: ["dawai ke baad reaction", "allergy ho gayi", "rash after medicine"]
+
+routine:                     # just book — no escalation (C5)
+  - id: tooth_pain
+    phrases: ["daant mein dard", "toothache", "daant dukh raha"]
+  - id: checkup_cleaning
+    phrases: ["checkup", "cleaning", "safai"]
+  - id: filling_root_canal_followup
+    phrases: ["filling", "root canal", "next sitting", "follow up"]
+  - id: braces
+    phrases: ["braces", "taar"]
+  - id: sensitivity
+    phrases: ["thanda garam lagta hai", "sensitivity"]
+
+after_hours:
+  instruction:               # placeholder — exact wording must be doctor-approved
+    hi-en: "<doctor-approved emergency instruction, e.g. where to go for urgent care>"
+    en: "<doctor-approved emergency instruction>"
+
+caller_request_staff:
+  phrases: ["kisi se baat karni hai", "doctor se baat", "receptionist", "talk to a person", "insaan se baat"]
+
+never_say:                   # enforced by the guard in code; listed here for test generation
+  - diagnosis
+  - medicine names or recommendations
+  - dosage
+  - "it's nothing serious"
+  - "ghabraane ki baat nahi"

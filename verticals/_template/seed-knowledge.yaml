@@ -1,0 +1,12 @@
+# Seed knowledge — _template
+# Starting question/answer pairs. Each tenant's real values live in tenant config and are
+# approved by the client before go-live (C3). Use {placeholders}, never real data.
+
+version: 0.1.0
+entries:
+  - id: hours
+    question: "Kab khulta hai? / What are your hours?"
+    answer: "{tenant_name} {opening_hours} khula rehta hai."
+  - id: location
+    question: "Kahan hai? / Where are you?"
+    answer: "{tenant_name} {address} par hai, {landmark} ke paas."
