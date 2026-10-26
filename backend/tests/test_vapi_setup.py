@@ -25,7 +25,8 @@ def test_male_voice_changes_forms_and_greeting(conn, settings):
 def test_payload_shape(conn, isolated, monkeypatch):
     isolated.write_text("PUBLIC_URL=https://demo.trycloudflare.com\n", encoding="utf-8")
     body = vapi.payload(conn, "sek")
-    server = {"url": "https://demo.trycloudflare.com/vapi/webhook", "headers": {"x-catalyst-secret": "sek"}}
+    server = {"url": "https://demo.trycloudflare.com/vapi/webhook", "headers": {"x-catalyst-secret": "sek"},
+              "timeoutSeconds": vapi.SERVER_TIMEOUT_SECONDS}
     assert body["server"] == server and body["serverMessages"] == ["end-of-call-report"]
     names = [t["function"]["name"] for t in body["model"]["tools"] if t["type"] == "function"]
     assert {"find_slots", "book", "find_booking", "escalate", "create_callback"} <= set(names)

@@ -1,0 +1,116 @@
+# Render Blueprint for the clinic demo (ADR-0035) on the free tier.
+# Root directory is the repo root (Render's default when rootDir is unset): the app reads verticals/ and frontend/.
+# Free tier: the service sleeps after idle and takes about a minute to wake. VERIFY current limits on render.com.
+services:
+  - type: web
+    name: catalyst-demo
+    runtime: python
+    plan: free
+    branch: feat/demo-mvp
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn src.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      # SQLite in /tmp: always writable, wiped on every restart or deploy (fine for the demo; seed data reloads).
+      - key: CATALYST_DB
+        value: /tmp/catalyst/clinic.db
+      # Every name from .env.example. sync: false = Render asks for the value in the dashboard; leave unused ones blank.
+      # --- Demo build ---
+      - key: PUBLIC_URL
+        sync: false
+      - key: VAPI_PRIVATE_KEY
+        sync: false
+      - key: VAPI_PUBLIC_KEY
+        sync: false
+      - key: VAPI_ASSISTANT_ID
+        sync: false
+      - key: CATALYST_TOOL_SECRET
+        sync: false
+      - key: DESK_PASSWORD
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_FROM
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        sync: false
+      - key: VAPI_MODEL_PROVIDER
+        sync: false
+      - key: VAPI_MODEL
+        sync: false
+      - key: VAPI_VOICE_PROVIDER
+        sync: false
+      - key: VAPI_VOICE_ID
+        sync: false
+      - key: VAPI_TRANSCRIBER_PROVIDER
+        sync: false
+      - key: VAPI_TRANSCRIBER_MODEL
+        sync: false
+      - key: VAPI_TRANSCRIBER_LANGUAGE
+        sync: false
+      # --- Core ---
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: APP_ENV
+        sync: false
+      # --- Agent tools API ---
+      - key: TOOLS_API_KEY
+        sync: false
+      # --- LLM ---
+      - key: CEREBRAS_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      # --- Voice platform ---
+      - key: RETELL_API_KEY
+        sync: false
+      # --- Telephony ---
+      - key: EXOTEL_API_KEY
+        sync: false
+      - key: EXOTEL_API_TOKEN
+        sync: false
+      - key: EXOTEL_SID
+        sync: false
+      # --- WhatsApp Business Platform ---
+      - key: WHATSAPP_CLOUD_API_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      # --- Jobs ---
+      - key: REDIS_URL
+        sync: false
+      # --- Self-hosted speech ---
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      # --- Post-MVP ---
+      - key: CLOUDFLARE_R2_ACCESS_KEY_ID
+        sync: false
+      - key: CLOUDFLARE_R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: CLOUDFLARE_R2_BUCKET
+        sync: false
+      - key: LANGFUSE_HOST
+        sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: POSTHOG_API_KEY
+        sync: false

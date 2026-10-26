@@ -71,6 +71,10 @@ To check everything at once: `python scripts\doctor.py`. It says what's missing 
 
 **When the tunnel URL changes** (every time cloudflared restarts): update `PUBLIC_URL` in `.env`, rerun `python scripts\setup_vapi.py`, and paste the new `<PUBLIC_URL>/whatsapp/incoming` into the Twilio sandbox settings.
 
+### Deploy on Render (free tier)
+
+`render.yaml` describes the service. In Render, choose **New → Blueprint**, pick this repo and the `feat/demo-mvp` branch, and fill in the values it asks for. Real environment variables override `.env`. The SQLite file lives in `/tmp`, so data resets on every restart or deploy. A sleeping free service takes about a minute to wake, so the Vapi tool timeout is 90 s. When you have the Render URL, set `PUBLIC_URL` to it in your local `.env`, run `python scripts/setup_vapi.py` locally, and copy `PUBLIC_URL`, `VAPI_ASSISTANT_ID` and `CATALYST_TOOL_SECRET` into Render's Environment settings.
+
 ### Linux / macOS
 
 Same steps, with these commands: `python3 -m venv .venv && source .venv/bin/activate`, `cp ../.env.example ../.env`, and `python scripts/setup_vapi.py`.

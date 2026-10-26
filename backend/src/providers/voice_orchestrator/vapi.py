@@ -15,6 +15,9 @@ from ...core.config import env, set_env
 API = "https://api.vapi.ai"
 # Azure Hindi neural voices; they read Devanagari Hindi and Latin English words. VERIFY on Vapi.
 VOICES = {"female": "hi-IN-SwaraNeural", "male": "hi-IN-MadhurNeural"}
+# Seconds Vapi waits for our webhook. A sleeping Render free-tier service takes about a minute to wake,
+# so the default 20 s would fail the first tool call after idle. VERIFY the max (300) on Vapi.
+SERVER_TIMEOUT_SECONDS = 90
 FALLBACK_VOICE_HINT = (
     "If Vapi rejects the voice, set VAPI_VOICE_PROVIDER and VAPI_VOICE_ID in .env to a voice your Vapi account "
     "lists (for example provider 11labs with a multilingual voice, or Azure hi-IN-AnanyaNeural), then rerun."
@@ -40,7 +43,11 @@ def ensure_secret() -> str:
 def payload(conn: sqlite3.Connection, secret: str) -> dict:
     s = cs.load(conn)
     system, first = prompt.build(conn, s)
-    server = {"url": f"{public_url()}/vapi/webhook", "headers": {"x-catalyst-secret": secret}}
+    server = {
+        "url": f"{public_url()}/vapi/webhook",
+        "headers": {"x-catalyst-secret": secret},
+        "timeoutSeconds": SERVER_TIMEOUT_SECONDS,
+    }
     voice = s.get("voice") if s.get("voice") in VOICES else "female"
     return {
         "name": f"{s['name']} receptionist"[:40],

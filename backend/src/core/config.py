@@ -1,4 +1,7 @@
-"""Paths, environment and clock. `.env` is re-read on every call so setup scripts apply without a restart."""
+"""Paths, environment and clock. `.env` is re-read on every call so setup scripts apply without a restart.
+
+Real environment variables win over `.env`, so a host like Render configures the app without a file.
+"""
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,10 +22,10 @@ def env_path() -> Path:
 
 
 def env(name: str, default: str = "") -> str:
-    """Value from `.env` (fresh read), else the process environment, else `default`."""
+    """Value from the process environment, else `.env` (fresh read), else `default`."""
     path = env_path()
     values = dotenv_values(path) if path.exists() else {}
-    value = values.get(name) or os.environ.get(name) or default
+    value = os.environ.get(name) or values.get(name) or default
     return value.strip()
 
 

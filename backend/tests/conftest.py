@@ -18,7 +18,7 @@ def isolated(tmp_path, monkeypatch):
     env_file.write_text("", encoding="utf-8")
     monkeypatch.setenv("CATALYST_ENV_FILE", str(env_file))
     for name in ("CATALYST_TOOL_SECRET", "DESK_PASSWORD", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN",
-                 "GROQ_API_KEY", "VAPI_PRIVATE_KEY", "PUBLIC_URL"):
+                 "GROQ_API_KEY", "VAPI_PRIVATE_KEY", "VAPI_ASSISTANT_ID", "PUBLIC_URL"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(config, "now", lambda: FIXED_NOW)
     yield env_file

@@ -54,7 +54,8 @@ def main() -> int:
         problems += 1
     if public:
         try:
-            r = httpx.get(public + "/healthz", timeout=8)
+            # 90 s: a sleeping Render free-tier service needs about a minute to wake.
+            r = httpx.get(public + "/healthz", timeout=90)
             if r.status_code == 200:
                 line(OK, f"PUBLIC_URL reaches this app ({public})")
             else:
