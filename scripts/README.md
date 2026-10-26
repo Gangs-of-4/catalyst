@@ -1,6 +1,13 @@
 # Scripts
 
-Placeholders. There is no code yet. These are ops CLIs that our team runs, not end users.
+Ops CLIs that our team runs, not end users. Run them from the repo root with the backend venv active.
+
+## Demo build (ADR-0035)
+
+- `python scripts/setup_vapi.py` creates the clinic's Vapi assistant on the first run and updates it after. It writes `VAPI_ASSISTANT_ID` and `CATALYST_TOOL_SECRET` into `.env` and prints the page and Twilio webhook URLs. Rerun it whenever the tunnel URL changes.
+- `python scripts/doctor.py` checks every `.env` value, the tunnel, the Vapi key and assistant (including a stale webhook URL), and the Twilio credentials, in plain words.
+
+## Planned
 
 ## Clinic setup CLI (C12)
 
