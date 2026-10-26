@@ -1,30 +1,28 @@
-# Frontend: receptionist web app (C7)
+# Frontend: Try-it page, receptionist desk, clinic settings
 
-Placeholder. There is no code yet.
+**Demo build (ADR-0035):** plain HTML, CSS and JS served by the backend. There is no build step and nothing to `npm install`. The planned Next.js app (ADR-0013) replaces this before the pilot.
 
-**Purpose.** One responsive web app on the device already at the clinic desk.
-- Today's bookings from every channel, tagged by source.
-- One column per doctor (per resource; the label comes from `vertical.yaml`).
-- Add walk-in and WhatsApp bookings.
-- Mark a booking arrived, no-show or done.
-- A callback and urgent inbox with "mark done".
+| Page | File | Who | Capability |
+|---|---|---|---|
+| `/` | `index.html`, `static/try.js` | Public: prospects try the agent with a web call and watch the register | C2, C4 |
+| `/desk` | `desk.html`, `static/desk.js` | The receptionist: day grid per doctor, walk-ins, statuses, inbox, call log | C7, C10 |
+| `/setup` | `setup.html`, `static/setup.js` | Our team or the clinic: settings, leave days, agent sync | C12, C8 |
 
-**Stack** (already chosen in the repo): Next.js App Router, TypeScript strict, Tailwind and shadcn/ui. Hosting is per ADR-0013. VERIFY that it still fits once D3 is decided.
+`/desk` and `/setup` use HTTP Basic auth with `DESK_PASSWORD` (any username). The public page shows first names and an initial only, never phone numbers.
 
-**Design bar.** Big buttons, and learnable in 15 minutes. Login is a simple clinic login; OTP, roles and an audit log are Phase 2 (item 88).
+**Design.** The motif is the paper appointment register: ruled rows, one column per doctor, bookings "written in" with ink. Font: Mukta (Devanagari and Latin). Colours: cool off-white paper, deep green-teal ink, saffron for live states, sindoor red only for urgent items. All in `static/app.css`.
 
-**Contracts.** The backend REST API only (`backend/src/api/`). It uses the same booking rules as phone and WhatsApp, and a double-booking attempt returns `SLOT_TAKEN`.
+**Rules.** Pages hold no business rules and never touch the database. They call the backend API only, and don't keep patient data in browser storage.
 
-**Must not.**
-- Hold business rules.
-- Talk to the database directly.
-- Store patient data in browser storage beyond the session.
+## Vapi Web SDK bundle
 
-## Run (target commands)
-
-From `frontend/`, the commands are the same on Windows, Linux and macOS:
+`static/vapi.bundle.js` is `@vapi-ai/web` **2.7.1** (MIT; it bundles `@daily-co/daily-js`, BSD-2-Clause), built once as an IIFE that sets `window.Vapi`. It is committed so nobody needs Node to run the demo. To rebuild it (Node LTS needed), in an empty folder outside the repo:
 
 ```
-npm install
-npm run dev
+npm init -y
+npm install @vapi-ai/web@2.7.1 esbuild@0.25.10
+echo import Vapi from '@vapi-ai/web'; window.Vapi = Vapi; > entry.js
+npx esbuild entry.js --bundle --format=iife --minify --platform=browser --target=es2019 --outfile=vapi.bundle.js
 ```
+
+Then copy `vapi.bundle.js` into `frontend/static/`. Don't move to 3.x without testing; it was days old when this was built.

@@ -92,7 +92,7 @@ def day_grid(conn: sqlite3.Connection, s: dict, d: date) -> dict:
             else:
                 state = "free"
             slots.append({
-                "time": t, "state": state, "bookings": bookings,
+                "time": t, "state": state, "past": past, "bookings": bookings,
                 "block": (block["kind"] if block else ("closed" if closed else None)),
             })
         columns.append({"doctor": doc, "slots": slots})

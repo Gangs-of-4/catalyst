@@ -2,10 +2,12 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from . import seed
-from .api import vapi
+from .api import public, vapi
 from .core import db
+from .core.config import FRONTEND_DIR
 
 
 @asynccontextmanager
@@ -18,6 +20,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Catalyst clinic demo", lifespan=lifespan)
 app.include_router(vapi.router)
+app.include_router(public.router)
+app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
 
 
 @app.get("/healthz")
