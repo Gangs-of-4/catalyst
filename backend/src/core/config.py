@@ -26,6 +26,19 @@ def env(name: str, default: str = "") -> str:
     return value.strip()
 
 
+def set_env(values: dict[str, str]) -> None:
+    """Write or replace KEY=value lines in `.env`, keeping every other line as it is."""
+    path = env_path()
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    pending = dict(values)
+    for i, line in enumerate(lines):
+        key = line.split("=", 1)[0].strip()
+        if key in pending:
+            lines[i] = f"{key}={pending.pop(key)}"
+    lines += [f"{k}={v}" for k, v in pending.items()]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def db_path() -> Path:
     return Path(os.environ.get("CATALYST_DB", BACKEND_DIR / "data" / "clinic.db"))
 
