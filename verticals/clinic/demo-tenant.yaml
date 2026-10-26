@@ -1,0 +1,47 @@
+# FICTIONAL demo clinic for the demo build (ADR-0035). Not a real clinic, doctor or patient.
+# Fills the {placeholders} in seed-knowledge.yaml and the gaps in the DRAFT clinic vertical.
+# A real clinic's tenant config contains phone numbers and never goes in the repo.
+
+name: Muskaan Dental Clinic
+city: Lucknow
+address: "B-14, Sector C, Aliganj, Lucknow"
+landmark: "Kapoorthala chauraha"
+sessions:            # clinic hours, every open day
+  - ["10:00", "14:00"]
+  - ["17:00", "20:00"]
+closed_weekdays: [6] # 0 = Monday … 6 = Sunday
+slot_min: 30         # overrides vertical.yaml default_slot_min for the demo
+voice: female
+
+doctors:             # ids stay stable; bookings point at them
+  - {id: dr-a, name: "Dr. Asha Verma", gender: f}
+  - {id: dr-b, name: "Dr. Vikram Saxena", gender: m}
+
+services:
+  - {name: Consultation, fee: "₹300"}
+  - {name: Cleaning and scaling, fee: "₹800"}
+  - {name: Filling, fee: "₹1,000 se shuru"}
+  - {name: Root canal, fee: "₹4,500 se shuru"}
+  - {name: Extraction, fee: "₹600 se shuru"}
+  - {name: Braces consultation, fee: "₹500"}
+
+answers:             # fills seed-knowledge.yaml placeholders
+  payment_modes_answer: "UPI, card aur cash, teeno chalte hain."
+  what_to_bring_answer: "Purani prescription ya X-ray ho to saath le aaiye. Bas itna hi."
+  parking_answer: "Two-wheeler parking clinic ke bahar hai. Car gali mein park ho jaati hai."
+
+emergency_instruction: >-
+  Agar saans lene ya nigalne mein dikkat hai, sujan tezi se badh rahi hai, ya khoon ruk nahi raha,
+  to turant nazdeeki hospital ki emergency mein jaaiye ya 108 par call kijiye.
+
+whatsapp_numbers: []  # fill on /setup; empty = any number may command (demo only, with a warning)
+
+seed:                # relative days: 0 = today, 1 = next open day
+  bookings:
+    - {day: 0, time: "10:30", doctor: dr-a, name: "Ramesh Gupta", phone: "+919000000001", reason: "checkup"}
+    - {day: 0, time: "11:00", doctor: dr-b, name: "Sunita Yadav", phone: "+919000000002", reason: "cleaning"}
+    - {day: 0, time: "18:00", doctor: dr-a, name: "Faisal Ahmed", phone: "+919000000003", reason: "filling", source: walk_in}
+    - {day: 1, time: "10:00", doctor: dr-a, name: "Pooja Mishra", phone: "+919000000004", reason: "daant dard"}
+    - {day: 1, time: "17:00", doctor: dr-b, name: "Anil Srivastava", phone: "+919000000005", reason: "root canal sitting", source: whatsapp}
+  callbacks:
+    - {name: "Kavita Singh", phone: "+919000000006", reason: unanswered_question, note: "Braces ki EMI ke baare mein poocha"}
