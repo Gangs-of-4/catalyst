@@ -1,0 +1,18 @@
+# Test-only dummy vertical.
+version: 0.0.1
+approved_by: null
+approved_on: null
+grey_zone_policy: callback
+red_flags:
+  - id: fee_waiver
+    rationale: "Fee negotiation goes to a human."
+    phrases: ["fees kam karo", "fee waiver"]
+routine:
+  - id: demo_class
+    phrases: ["demo class", "trial class"]
+after_hours:
+  instruction:
+    hi-en: "Institute abhi band hai, kal subah call aayega."
+    en: "The institute is closed now; we will call you tomorrow morning."
+caller_request_staff:
+  phrases: ["talk to a person"]

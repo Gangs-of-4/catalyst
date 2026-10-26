@@ -1,0 +1,6 @@
+# Test-only dummy vertical.
+version: 0.0.1
+entries:
+  - id: hours
+    question: "Institute kab khulta hai?"
+    answer: "{tenant_name} {opening_hours} khula rehta hai."

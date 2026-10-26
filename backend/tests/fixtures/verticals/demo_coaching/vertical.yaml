@@ -1,0 +1,50 @@
+# Test-only dummy vertical. Proves a second vertical loads with no core-code change
+# (MVP done-criterion, ADR-0033). Not a real product vertical — see verticals/ for those.
+
+name: demo_coaching
+status: draft
+version: 0.0.1
+
+labels:
+  resource: "Teacher"
+  resource_plural: "Teachers"
+  contact: "Student"
+  booking: "Demo class"
+  tenant: "Institute"
+
+languages:
+  default: hi-en
+  supported: [hi-en, en]
+
+booking:
+  default_slot_min: 60
+  offer_slots: 3
+  allow_resource_choice: false
+  min_lead_min: 120
+  max_days_ahead: 14
+  sources: [phone, whatsapp, walk_in]
+
+whatsapp:
+  commands: [block_day, set_hours, query_today]
+  confirm_words: [haan, yes]
+  reject_words: [nahi, no]
+  preview_expiry_min: 30
+
+reminders:
+  enabled: true
+  hours_before: 4
+  opt_out_words: [stop]
+
+alerts:
+  repeat_minutes: 15
+
+ops:
+  silence_hours: 6
+
+knowledge:
+  answer_only_approved: true
+
+safety:
+  guard: optional
+  escalation_rules: escalation-rules.yaml
+  prompt: agent-prompt.md
