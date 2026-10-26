@@ -10,8 +10,8 @@ No application code exists in the repository yet (no lockfile/manifest to point 
 
 These surfaced during research for this document (verified externally, not from memory) and affect assumptions already baked into other docs in this repo:
 
-- **Oracle Cloud Always Free ARM allocation was reduced** in mid-2026 from 4 OCPUs/24GB RAM to **2 OCPUs/12GB RAM** (200GB block storage unchanged). `context/architecture.md` §10's RAM budget (~13.1GB estimated usage) was written against the old 24GB figure and needs revisiting against the new ceiling — flagged, not yet fixed, as of this document.
-- **Meta WhatsApp Cloud API moved to per-message pricing** in July 2025 (with another change scheduled Oct 2026). It is not simply "free" the way earlier docs assumed — see `open-source/integrations/integrations.md` for detail.
+- **Oracle Cloud Always Free ARM allocation was reduced** in mid-2026 from 4 OCPUs/24GB RAM to **2 OCPUs/12GB RAM** (200GB block storage unchanged). `context/architecture.md` §11's old RAM estimate (~13.1GB) was written against 24GB. Recorded as open decision **D3** in `context/decisions.md` — VERIFY on the team's own account.
+- **Meta WhatsApp Cloud API moved to per-message pricing** in July 2025 (with another change scheduled Oct 2026 — VERIFY what actually changed). Recorded as open decision **D5**. It is not simply "free" the way earlier docs assumed — see `open-source/integrations/integrations.md` for detail.
 - **Redis's license depends heavily on version.** ≤7.2 is BSD-3-Clause; 7.4+ is RSAL/SSPL/AGPL tri-licensed (only AGPLv3 is OSI-approved). Pin the version you actually deploy and re-check this table against it.
 - **Piper's license differs by fork.** The original `rhasspy/piper` (MIT) is archived; the actively maintained successor `OHF-Voice/piper1-gpl` is GPL-3.0. Confirm which fork is actually vendored before treating Piper as permissively licensed.
 - **Google Gemini's free-tier limits are not fixed** — Google publishes them only via the live AI Studio console, not a stable table. Don't hardcode a number from this document into code or a client-facing SLA.
@@ -27,7 +27,7 @@ These surfaced during research for this document (verified externally, not from 
 | Component | License | What it replaces | What it would cost if paid | arm64 support |
 |---|---|---|---|---|
 | Pipecat | BSD 2-Clause | Vapi/Retell managed voice orchestration | Vapi ~$0.05/min platform fee; Retell ~$0.055-0.07/min (both realistically $0.10-0.30+/min all-in with STT/LLM/TTS) | Python framework — compatible via its dependencies; verify each transport/plugin dependency individually rather than assuming |
-| faster-whisper | MIT (SYSTRAN); CTranslate2 (OpenNMT) MIT; underlying Whisper model MIT | Deepgram/Sarvam paid STT | Deepgram ~$0.0043-0.0077/min; Sarvam ~₹30/hr (~₹0.50/min) | CTranslate2 wheel availability for aarch64 not confirmed — verify before committing to this image (`context/architecture.md` §10) |
+| faster-whisper | MIT (SYSTRAN); CTranslate2 (OpenNMT) MIT; underlying Whisper model MIT | Deepgram/Sarvam paid STT | Deepgram ~$0.0043-0.0077/min; Sarvam ~₹30/hr (~₹0.50/min) | CTranslate2 wheel availability for aarch64 not confirmed — verify before committing to this image (`context/architecture.md` §11) |
 | Kokoro TTS | Apache 2.0 | ElevenLabs/Sarvam paid TTS (English) | ElevenLabs $6-990+/month tiers; Sarvam TTS ₹30/10,000 chars | ONNX/torch runtime — verify aarch64 wheel availability before deploy |
 | Piper | ⚠️ split by fork — MIT (`rhasspy/piper`, archived) vs **GPL-3.0** (`OHF-Voice/piper1-gpl`, actively maintained) | Sarvam/ElevenLabs paid TTS (Hindi/Hinglish) | same as Kokoro row above | Lightweight ONNX voices; generally good arm64 history, confirm against whichever fork is actually vendored |
 | FastAPI | MIT | N/A — framework, no direct paid equivalent | N/A | Pure Python, fully compatible |
@@ -45,15 +45,15 @@ These surfaced during research for this document (verified externally, not from 
 
 | Service | Exact free limit | What happens at the limit | Our fallback | Card required? |
 |---|---|---|---|---|
-| Groq | Whisper large-v3-turbo: 20 RPM / 2,000 RPD / 7,200 audio-sec per hour / 28,800 audio-sec per day. Llama 3.1 8B Instant: 30 RPM / 14,400 RPD / 6,000 TPM / 500K TPD. Llama 3.3 70B: 30 RPM / 1,000 RPD / 12,000 TPM / 100K TPD. | HTTP 429 | Self-hosted faster-whisper for STT (`context/architecture.md` §13); Cerebras or queued retry for LLM | Not confirmed — verify at signup |
+| Groq | Whisper large-v3-turbo: 20 RPM / 2,000 RPD / 7,200 audio-sec per hour / 28,800 audio-sec per day. Llama 3.1 8B Instant: 30 RPM / 14,400 RPD / 6,000 TPM / 500K TPD. Llama 3.3 70B: 30 RPM / 1,000 RPD / 12,000 TPM / 100K TPD. | HTTP 429 | Self-hosted faster-whisper for STT (`context/architecture.md` §12, Post-MVP); Cerebras or queued retry for LLM | Not confirmed — verify at signup |
 | Google Gemini Flash | ⚠️ Not fixed — Google publishes only via the live console, not a stable table; secondary sources cite ~10 RPM / 250K TPM / 500-1,500 RPD depending on model version. **Check the live console, don't hardcode this number.** | Request throttled/rejected | Queue via Celery and retry later — offline processing (WhatsApp parsing, embeddings) tolerates delay | Not confirmed |
-| Cloudflare R2 | 10GB-month storage, 1M Class A ops/month, 10M Class B ops/month, $0 egress always | No hard cutoff — pay-as-you-go billing begins automatically beyond the free allocation | 30-day audio lifecycle rule + usage monitoring to stay under 10GB (`context/architecture.md` §7, §13) | Yes — R2 requires billing details on file even to use the free allocation, unlike most other Cloudflare free products |
+| Cloudflare R2 | 10GB-month storage, 1M Class A ops/month, 10M Class B ops/month, $0 egress always | No hard cutoff — pay-as-you-go billing begins automatically beyond the free allocation | 30-day audio lifecycle rule + usage monitoring to stay under 10GB (`context/architecture.md` §12, Post-MVP) | Yes — R2 requires billing details on file even to use the free allocation, unlike most other Cloudflare free products |
 | Cloudflare Pages | 500 builds/month, unlimited bandwidth, 20,000 files/site, 25MiB max asset size | Builds queue/fail until next month | Reduce build frequency; build locally and push static output if needed | Not required |
 | Meta WhatsApp Cloud API | ⚠️ Not a flat free tier — per-message pricing since July 2025; free only inside a customer-opened 24-hour service window or a 72-hour click-to-WhatsApp ad entry. Another pricing change is scheduled for Oct 2026. | Not a quota — messages outside the free windows are billed per message | Keep confirmation messages inside owner-opened windows where possible; budget a small ongoing per-message cost, don't assume $0 (see `open-source/integrations/integrations.md`) | Yes — production use requires a Meta Business payment method on file |
 | Sentry | 5,000 errors/month (Developer plan), separately metered spans/replays/logs/attachments | Events dropped/sampled until next cycle | Reduce sampling rate, prioritize error capture over trace volume | Not required for Developer plan |
 | PostHog | 1,000,000 events/month | Ingestion stops (or bills, if pay-as-you-go is enabled) until reset | Reduce event volume / sample | Not required to start |
 | GitHub Actions | 2,000 min/month (private repos; unlimited for public repos); OS multipliers Linux 1x / Windows 2x / macOS 10x | Workflow runs blocked until next cycle or a card is added | Linux-only runners (cheapest multiplier), reduce CI frequency | Not required unless exceeding free minutes |
-| Oracle Cloud Always Free | ⚠️ **Reduced mid-2026** to 2 OCPUs / 12GB RAM (down from the 4 OCPU/24GB figure most existing tutorials and this project's own earlier docs cite), 200GB block storage. ARM capacity is frequently exhausted regionally. | Cannot provision additional Always Free resources; existing resources keep running | None within the zero-budget constraint — see the retry approach in `context/roadmap.md` Phase 0 | Yes — Oracle requires a card for identity verification, but should not charge if usage stays within Always Free limits |
+| Oracle Cloud Always Free | ⚠️ **Reduced mid-2026** to 2 OCPUs / 12GB RAM (down from the 4 OCPU/24GB figure most existing tutorials and this project's own earlier docs cite), 200GB block storage. ARM capacity is frequently exhausted regionally. | Cannot provision additional Always Free resources; existing resources keep running | None within the zero-budget constraint — hosting is open decision D3 in `context/decisions.md` | Yes — Oracle requires a card for identity verification, but should not charge if usage stays within Always Free limits |
 
 ---
 
@@ -61,7 +61,7 @@ These surfaced during research for this document (verified externally, not from 
 
 | Alternative | What it would improve | Approximate cost | Trigger condition to adopt |
 |---|---|---|---|
-| Vapi | Voice orchestration reliability/features vs. self-hosted Pipecat | ~$0.05/min platform fee (~$0.10-0.30+/min all-in) | A client's call volume/reliability needs exceed self-hosted Pipecat, funded by that client's `cost_tier` (`context/architecture.md` §12) |
+| Vapi | Voice orchestration reliability/features vs. self-hosted Pipecat | ~$0.05/min platform fee (~$0.10-0.30+/min all-in) | A client's call volume/reliability needs exceed self-hosted Pipecat, funded by that client's `cost_tier` (`context/architecture.md` §12). **Note:** proposed for the pilot itself by ADR-0029 (D1) |
 | Retell AI | Same as Vapi; alternate orchestration vendor for redundancy | ~$0.055-0.07/min base (~$0.07-0.31/min all-in) | Same as Vapi |
 | Sarvam AI | STT/TTS quality for Indic languages vs. Groq/Piper | STT ~₹30/hr (~₹0.50/min); TTS ~₹30/10,000 chars | A client's language/accent needs exceed Groq+Piper quality, funded by that client's tier |
 | Deepgram | English STT accuracy/latency vs. Groq/faster-whisper | Batch ~$0.0043/min; streaming ~$0.0077/min | Groq free-tier STT quality/latency becomes the limiting factor for a paying client |
@@ -75,6 +75,6 @@ These surfaced during research for this document (verified externally, not from 
 ## See Also
 
 - `context/decisions.md` — the ADRs behind each choice above (search for the component name).
-- `context/architecture.md` §10, §12, §13 — deployment topology, cost-tier config, free-tier guardrails.
+- `context/architecture.md` §11 (deployment, latency), §12 (Post-MVP: cost tiers, R2, observability, free-tier guardrails).
 - `open-source/integrations/integrations.md` — deeper integration detail (auth, rate limits, sandbox, failure modes, fallback) for the external API integrations named above.
 - `context/coding-rules.md` — the license-check rule as it applies to new code dependencies generally.

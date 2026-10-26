@@ -1,0 +1,26 @@
+# Escalation rules — _template
+# Read by backend/src/safety/ red-flag engine. Each rule needs paired positive/negative
+# fixtures in tests/. Every list here must be approved by the client before go-live.
+
+version: 0.1.0
+approved_by: null          # role, e.g. "Doctor A" — never a real name
+approved_on: null
+
+grey_zone_policy: escalate # escalate | callback
+
+red_flags:                 # escalate immediately: live transfer, then alert chain
+  - id: example_rule
+    rationale: "One line on why this must reach a human."
+    phrases: ["example phrase"]
+
+routine:                   # mention of these just books — no escalation
+  - id: example_routine
+    phrases: ["example routine reason"]
+
+after_hours:
+  instruction:
+    hi-en: "<approved emergency instruction>"
+    en: "<approved emergency instruction>"
+
+caller_request_staff:
+  phrases: ["kisi se baat karni hai", "talk to a person", "staff se baat"]

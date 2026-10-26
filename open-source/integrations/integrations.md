@@ -2,21 +2,21 @@
 
 Detailed reference for each significant external integration: purpose, auth method, rate limits, sandbox availability, failure modes, and our fallback. For license/cost/free-tier framing, see `open-source/open-source.md` instead — this file is about *how the integration behaves*, not why it was chosen.
 
-Most of these are **not yet active** — they're documented ahead of implementation because several are deliberately deferred paid alternatives (`context/decisions.md`), and the provider abstraction layer (`context/architecture.md` §2) is designed so any of them can be switched on later as a config change. Status is called out per entry.
+Most of these are **not yet active** — they're documented ahead of implementation because several are deliberately deferred paid alternatives (`context/decisions.md`), and the provider abstraction layer (`context/architecture.md` §8) is designed so any of them can be switched on later as a config change. Status is called out per entry.
 
 ## Vapi
 
-- **Status:** Deferred (paid tier) — not integrated. Behind `VoiceOrchestrator` per ADR-0004/ADR-0022.
+- **Status:** Deferred (paid tier) — not integrated. Behind `VoiceOrchestrator` per ADR-0004/ADR-0022. **Pilot candidate** under ADR-0029 (Proposed, D1); must support the custom-LLM route (VERIFY).
 - **Purpose:** managed voice orchestration (turn-taking, interruption handling, provider glue) as a premium alternative to self-hosted Pipecat.
 - **Auth method:** API key, Bearer token.
 - **Rate limits:** not yet evaluated against our volume — check Vapi's current documented limits at implementation time, not from memory.
 - **Sandbox availability:** dashboard-based test calls available without a production commitment.
-- **Failure modes:** platform outage; per-minute billing spike from a misconfigured retry loop; vendor lock-in if ever called outside `src/providers/` (structurally prevented by the abstraction layer).
+- **Failure modes:** platform outage; per-minute billing spike from a misconfigured retry loop; vendor lock-in if ever called outside `backend/src/providers/` (structurally prevented by the abstraction layer).
 - **Our fallback:** self-hosted Pipecat, the default `VoiceOrchestrator` — switching is a `cost_tier` config change, not a rewrite.
 
 ## Retell AI
 
-- **Status:** Deferred (paid tier) — not integrated. Kept as a second `VoiceOrchestrator` option for vendor redundancy, not just a Vapi alternative.
+- **Status:** Deferred (paid tier) — not integrated. Kept as a second `VoiceOrchestrator` option for vendor redundancy. **Pilot candidate** under ADR-0029 (Proposed, D1).
 - **Purpose:** alternative managed voice orchestration vendor.
 - **Auth method:** API key.
 - **Rate limits:** not yet evaluated — check at implementation time.
@@ -26,7 +26,7 @@ Most of these are **not yet active** — they're documented ahead of implementat
 
 ## Exotel
 
-- **Status:** Deferred (paid tier) — additionally gated by TRAI DLT registration for outbound (ADR-0019) and by per-client provisioning (ADR-0006). Not integrated.
+- **Status:** Not integrated. Inbound pilot number is proposed by ADR-0030 (D2); spike S1 decides whether an Indian provider like Exotel is needed. Outbound stays gated by TRAI DLT registration (ADR-0019).
 - **Purpose:** India-native PSTN telephony with built-in DLT/DND support, behind `TelephonyProvider`.
 - **Auth method:** API Key + API Token (HTTP Basic Auth), scoped to an Exotel account Sid.
 - **Rate limits:** not publicly documented in detail by Exotel — confirm with their account team at provisioning time, per-client.
@@ -66,8 +66,8 @@ Most of these are **not yet active** — they're documented ahead of implementat
 
 ## Meta WhatsApp Cloud API
 
-- **Status:** **Active** — this is the core knowledge-update and owner-communication channel (`context/architecture.md` §4), not deferred.
-- **Purpose:** inbound webhook for owner WhatsApp messages (knowledge updates) and outbound confirmation/notification messages.
+- **Status:** **Active (MVP)** — `backend/src/channels/whatsapp/`: doctor commands, alerts, weekly summary, patient reminders (`context/architecture.md` §6, ADR-0034). Business verification and templates: D5.
+- **Purpose:** inbound webhook for doctor commands and patient STOP replies; outbound previews, confirmations, urgent alerts, weekly summary and appointment reminders (utility templates).
 - **Auth method:** Meta Business/System User access token (Bearer) for API calls, plus a separate webhook verify token for the inbound webhook handshake.
 - **Rate limits / cost:** ⚠️ not a request-rate limit in the usual sense — **per-message pricing since July 2025**, free only inside a customer-opened 24-hour service window or a 72-hour click-to-WhatsApp ad entry point. A further pricing change affecting previously-free messages is scheduled for **Oct 1, 2026**. This materially changes the "free WhatsApp channel" assumption elsewhere in this repo's docs — budget a small ongoing per-message cost rather than assuming $0. See `open-source/open-source.md`'s "Recent changes to watch."
 - **Sandbox availability:** a free test number is available during development, separate from a verified production business number.
@@ -76,12 +76,12 @@ Most of these are **not yet active** — they're documented ahead of implementat
 
 ## Cloudflare R2
 
-- **Status:** **Active** — call audio storage (`context/architecture.md` §7).
+- **Status:** **Post-MVP** — call audio storage (`context/architecture.md` §12). Residency open (ADR-0029).
 - **Purpose:** object storage for call audio, governed by a 30-day lifecycle rule.
 - **Auth method:** S3-compatible API using an R2 Access Key ID + Secret Access Key.
 - **Rate limits / free ceiling:** 10GB-month storage, 1M Class A ops/month, 10M Class B ops/month free; $0 egress always. No hard cutoff — pay-as-you-go billing begins automatically past the free allocation.
 - **Sandbox availability:** the free tier itself functions as the sandbox; no separate sandbox environment needed.
-- **Failure modes:** approaching the 10GB ceiling as tenant count grows (mitigated by the lifecycle rule + usage monitoring, `context/architecture.md` §13); upload failures; cross-tenant object access if bucket key paths aren't tenant-scoped by construction.
+- **Failure modes:** approaching the 10GB ceiling as tenant count grows (mitigated by the lifecycle rule + usage monitoring, `context/architecture.md` §12); upload failures; cross-tenant object access if bucket key paths aren't tenant-scoped by construction.
 - **Our fallback:** none currently configured — R2 is the adopted default (the original brief named S3 as an "or" option, but R2 is what's actually decided, per `CLAUDE.md`).
 
 ## Supabase
@@ -96,7 +96,7 @@ Most of these are **not yet active** — they're documented ahead of implementat
 
 ## Langfuse
 
-- **Status:** **Active** — self-hosted for observability (`context/architecture.md` §8, §10).
+- **Status:** **Post-MVP** — self-hosted for observability (`context/architecture.md` §12).
 - **Purpose:** LLM call tracing and per-call cost attribution across the voice pipeline.
 - **Auth method:** internal — a public/secret key pair generated by our own self-hosted instance, plus the instance's own admin login. No external vendor credential involved.
 - **Rate limits:** none meaningful — bounded only by our own VM's resources, since it's self-hosted.
@@ -112,19 +112,19 @@ Not every integration sits behind the provider abstraction layer — only the vo
 
 | Integration | Internal interface | Status |
 |---|---|---|
-| Vapi | `VoiceOrchestrator` | Deferred |
-| Retell AI | `VoiceOrchestrator` | Deferred |
-| Exotel | `TelephonyProvider` | Deferred |
+| Vapi | `VoiceOrchestrator` | Deferred — pilot candidate (D1) |
+| Retell AI | `VoiceOrchestrator` | Deferred — pilot candidate (D1) |
+| Exotel | `TelephonyProvider` | Candidate per spike S1 (D2) |
 | Sarvam AI | `SpeechToText` / `TextToSpeech` | Deferred |
 | Deepgram | `SpeechToText` | Deferred |
 | ElevenLabs | `TextToSpeech` | Deferred |
-| Meta WhatsApp Cloud API | none — direct integration in `src/knowledge/` (not a voice/STT/TTS/LLM vendor) | Active |
-| Cloudflare R2 | none — direct integration for object storage, not part of the voice provider abstraction | Active |
-| Supabase | would have been the Postgres layer itself, not a `src/providers/` interface | Rejected |
-| Langfuse | none — observability sits alongside the pipeline, not behind a swappable interface | Active |
+| Meta WhatsApp Cloud API | none — direct integration in `backend/src/channels/whatsapp/` (not a voice/STT/TTS/LLM vendor) | Active (MVP) |
+| Cloudflare R2 | none — direct integration for object storage, not part of the voice provider abstraction | Post-MVP |
+| Supabase | would have been the Postgres layer itself, not a `backend/src/providers/` interface | Rejected |
+| Langfuse | none — observability sits alongside the pipeline, not behind a swappable interface | Post-MVP |
 
 ## See Also
 
 - `open-source/open-source.md` — license, cost, and free-tier ceiling for every dependency named above.
-- `context/architecture.md` §2, §12 — the abstraction interfaces and how `cost_tier` resolves a concrete provider at runtime.
+- `context/architecture.md` §8 (interfaces), §12 (Post-MVP cost tiers).
 - `context/decisions.md` — the ADR for each accepted/deferred/rejected choice.

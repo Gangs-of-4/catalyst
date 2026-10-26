@@ -1,0 +1,27 @@
+# DRAFT, team to review.
+# Seed answers for a clinic. {placeholders} are filled per tenant; every answer must be
+# approved by the doctor before go-live (C3). No real clinic data in this file.
+
+version: 0.1.0
+entries:
+  - id: hours
+    question: "Clinic kab khulta hai? / What are the timings?"
+    answer: "{tenant_name} {opening_hours} khula rehta hai. {weekly_off} ko band rehta hai."
+  - id: location
+    question: "Clinic kahan hai? / Where is the clinic?"
+    answer: "{tenant_name} {address} par hai, {landmark} ke paas."
+  - id: doctors
+    question: "Kaun se doctor hain? / Which doctors are there?"
+    answer: "{resource_list} clinic mein dekhte hain."
+  - id: consultation_fee
+    question: "Consultation fee kitni hai?"
+    answer: "{consultation_fee_answer}"
+  - id: payment_modes
+    question: "UPI / card chalega?"
+    answer: "{payment_modes_answer}"
+  - id: what_to_bring
+    question: "Kya lekar aana hai?"
+    answer: "{what_to_bring_answer}"
+  - id: parking
+    question: "Parking hai?"
+    answer: "{parking_answer}"

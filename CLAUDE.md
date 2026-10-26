@@ -1,126 +1,110 @@
 # CLAUDE.md
 
-Single entry point for any agent (human or Claude) working in this repository. Read this fully before touching code.
+Entry point for any agent working in this repo. Read this, then `context/mvp.md`, before planning work.
 
-## Project
+## What we're building
 
-Voice AI for Business is a done-for-you AI voice agent service for small and medium Indian businesses — D2C sellers, real estate brokers, coaching institutes, clinics — handling inbound customer care and outbound lead follow-up calls. Business owners are non-technical and configure nothing; our team runs onboarding, WhatsApp-based knowledge updates, and ongoing setup on their behalf. This is **not** an AI-model or research product — voice AI is a commodity layer underneath it. The moat is zero-effort onboarding, WhatsApp-based knowledge updates, pre-built domain escalation logic, a provider-agnostic backend, and local trust, sold as a finished service to a segment that DIY tools (Vapi/Bland/Retell/ElevenLabs) and enterprise platforms (SquadStack/Yellow.ai/Gnani) both leave unserved. Entry verticals, in priority order: D2C e-commerce (COD/RTO reduction), real estate (speed-to-lead), education (coaching follow-up), healthcare (admin-only, hybrid-safety required). BFSI is out of scope. The team is 4 people, part-time, with effectively no budget — every infra choice is free-tier/open-source/self-hosted, or explicitly deferred until a paying client funds it.
+**Catalyst** is an AI front-desk assistant for small Indian businesses. It answers the phone like a polite receptionist. Our team sets it up, and the owner controls it from WhatsApp, never from a dashboard.
 
-## Tech Stack
+- **First customer type: small clinics.** The pilot is a dental clinic: Doctor A (owner), Doctor B, and the receptionist.
+- **Next:** coaching institutes, as config only. **Deferred:** D2C and real estate. **Rejected:** BFSI.
+- The team is four part-time people on Windows, Linux and macOS. Budget is near zero, so paid costs are explicit decisions (`context/decisions.md`).
 
-| Layer | Choice | Why |
-|---|---|---|
-| Compute | Oracle Cloud Always Free ARM VM (4 core/24GB/200GB, Mumbai/Hyderabad), Docker Compose | zero-cost compute that also satisfies India data residency |
-| Voice orchestration | Pipecat, self-hosted, open source | avoids per-minute Vapi/Retell billing; Vapi/Retell kept as future paid-tier options behind the abstraction layer |
-| Transport | WebRTC for all dev/demos | no phone number required pre-revenue |
-| Telephony | Exotel or Twilio — **deferred** until a paying client exists | cost is billed through to that client, never provisioned speculatively |
-| STT | Groq free tier (whisper-large-v3-turbo) primary; self-hosted faster-whisper (int8, CPU) fallback/offline | free, low-latency primary with an offline-capable fallback |
-| TTS | Kokoro TTS (Apache 2.0, CPU) for English; Piper Hindi voices for Hindi/Hinglish | free, self-hosted, no per-call cost; Sarvam/ElevenLabs are paid upgrades behind the abstraction layer, not defaults |
-| LLM — live calls | Groq or Cerebras free tier | chosen for latency, not intelligence, during a call |
-| LLM — offline (WhatsApp parsing, post-call analysis, embeddings) | Google Gemini Flash free tier | not latency-bound; free tier covers analysis workloads |
-| Backend | Python 3.12 + FastAPI | team fluency, async support, fast to ship |
-| Database | PostgreSQL + pgvector, self-hosted in Docker on the Oracle VM | no Supabase, no managed DB, no separate vector database — zero recurring cost |
-| Queue | Redis + Celery, self-hosted in the same Docker Compose stack | outbound call queue, retries, WhatsApp message ingestion, no managed queue cost |
-| Multi-tenancy | `tenant_id` on every table + Postgres Row Level Security | enforced from day one, not bolted on later |
-| WhatsApp | Meta WhatsApp Cloud API | free test number in dev, free service-conversation tier in production |
-| Object storage | Cloudflare R2 free tier (10GB, zero egress), 30-day lifecycle rule | call audio retention that stays inside the free tier |
-| Frontend | Next.js + TypeScript + Tailwind + shadcn/ui, deployed on Cloudflare Pages free tier | ops dashboard + thin read-only client view, zero hosting cost |
-| Observability | Langfuse self-hosted (Docker), Sentry free tier, PostHog free tier | minimum viable observability at zero cost |
-| CI | GitHub Actions free tier | no paid CI runner |
-| Secrets | `.env` files + GitHub Actions secrets | no paid secret manager |
+## North star
 
-**The abstraction layer is the central architectural idea**: every voice/STT/TTS/LLM provider sits behind our own interface in `src/providers/`, because today's stack is free/self-hosted with worse latency and quality, and must be swappable to paid providers per-client the instant revenue allows. No vendor SDK is imported outside `src/providers/`.
+> A small clinic never misses a patient call. The agent answers, books correctly into one shared schedule, and sends anything medical to a human. The doctor controls everything from WhatsApp.
 
-**Known tradeoff (documented, not hidden):** the self-hosted CPU stack runs ~1.2-2s round-trip latency vs. 600-900ms on paid APIs. Acceptable for demos and first design partners — it's the explicit price of zero budget. See `context/decisions.md`.
+## The MVP: 12 capabilities
 
-Rejected alternatives (any per-minute voice platform as default, any managed/paid DB/queue/secret manager, provisioning phone numbers pre-revenue, training a model from scratch, a separate vector DB, a website chatbot now, BFSI) are logged with reasoning in `context/decisions.md` — do not silently reintroduce them.
+The full "done when" for each is in `context/mvp.md`, which is the source of truth.
 
-## Repository Map
+| | | | |
+|---|---|---|---|
+| C1 Phone line and coverage | C2 Natural conversation | C3 Approved answers only | C4 One shared schedule |
+| C5 Patient safety | C6 Escalation and failover | C7 Receptionist screen | C8 Doctor control on WhatsApp |
+| C9 Reminders | C10 Proof of value | C11 Privacy and reliability | C12 Clinic setup from config |
 
-- `README.md`, `LICENSE` — project root files.
-- `CLAUDE.md` — this file.
-- `task.md` — reusable template for specifying the current task.
-- `.claude/` — Claude Code configuration.
-  - `settings.json` — Claude Code settings.
-  - `skills/skills.md` — skill-directory convention; populated once real frontend/backend/db/testing code exists.
-  - `commands/commands.md` — custom slash command convention.
-- `context/` — project knowledge that doesn't belong in this file: `project-context.md` (purpose/state), `architecture.md` (system design + compliance boundaries), `coding-rules.md` (established conventions), `decisions.md` (ADR log, including rejected alternatives), `roadmap.md` (phased execution plan, incl. which tasks are money-gated and what unblocks them).
-- `mcp/` — MCP server integration docs (`mcp.md`, `servers/`, `config/`). None configured yet.
-- `open-source/` — docs for significant third-party/open-source integrations beyond what the package manifest records (`open-source.md`, `integrations/`, `references/`).
-- Application code (backend, frontend, provider abstraction layer) does not exist in the repository yet — this scaffold predates implementation.
+**Out of scope for now:** everything else in `context/feature-backlog.md`, including outbound calls and SMS, AGENT OFF/ON, customisation panels, OTP and roles, and the setup form.
 
-## Non-Negotiable Rules
+## Working agreement for agents
 
-Apply regardless of task scope; do not relax for convenience.
+The repo guides; it never blocks. Members choose what they work on. Your job is to keep that work connected to the north star and visible to the others.
 
-1. **Provider abstraction layer.** All voice, STT, TTS, and LLM calls go through `src/providers/` — business logic never imports or calls Pipecat, Groq, Cerebras, Kokoro, Piper, Gemini, or (later) Vapi/Retell/Sarvam/ElevenLabs SDKs directly.
-2. **Multi-tenancy is mandatory.** Every table storing tenant data has a `tenant_id` column and a Postgres Row Level Security policy from its first migration — no table ships without RLS "for later."
-3. **No PII in logs.** No phone numbers, names, transcripts, or recordings in log output. Log tenant/call/lead IDs, never the underlying data.
-4. **India data residency.** Personal data — recordings, transcripts, contact details — stays on the Oracle Mumbai/Hyderabad VM (or other India-region infra) per DPDP. Never route personal data through non-India infrastructure or third parties that store it outside India.
-5. **No direct provider SDK calls outside `src/providers/`.** This includes today's free-tier providers and any Vapi/Retell/Sarvam/ElevenLabs SDK added later as a paid tier — finding one imported elsewhere is a bug.
+1. **Start of session.** Read this file and `context/mvp.md`, and understand what the member wants. In your plan, say which capability (C1–C12) the work moves forward.
+2. **Outside the MVP?** Say so in one line, then ask: build it now, or add it to `context/feature-backlog.md`? Do what the member decides. **Never refuse.**
+3. **Before anything sizeable,** run `git fetch`, check remote branches and open PRs touching the same module, and mention any overlap.
+4. **Shared contracts.** If a change touches `context/contracts.md`, say so clearly in the PR description.
+5. **When done,** update the module README or docs if behaviour changed. If a capability is now complete, tick it in `context/roadmap.md`.
+6. **Personal data:** never in code, logs, fixtures or docs. Use "the pilot clinic", "Doctor A", "Doctor B", "the receptionist" and "our mentor".
+7. **Unverified facts** (prices, limits, regulations, platform features) are marked `VERIFY`.
+8. **Decisions.** Don't silently reverse an ADR. Write a **Proposed** ADR instead. Open questions D1–D7 are in `context/decisions.md`; don't resolve them in code.
 
-Compliance rules that shape architecture and code — TRAI DLT Principal Entity registration (paid, deferred, blocks the entire outbound phase), 9 AM-9 PM IST calling window, consent/DND logging, DPDP consent and deletion handling, healthcare admin-only scope with hard escalation on any symptom/emergency signal — are detailed in `context/architecture.md` and `context/coding-rules.md`. Treat them as load-bearing, not optional.
+## Architecture in one screen
 
-## Read These First
+- **Our backend owns the brain; the voice stack only talks** (ADR-0032).
+  - The voice layer calls nine tools: `get_clinic_info`, `find_slots`, `book`, `reschedule`, `cancel`, `create_callback`, `escalate`, `transfer` and `log_call_outcome`.
+  - Contracts are in `context/contracts.md`.
+- **The safety guard runs in our code** on every LLM reply on a clinic call. A managed platform must use our custom-LLM endpoint.
+- **Generic booking model:** resources, services, availability rules, blocks and bookings. A Postgres exclusion constraint makes double-booking impossible. Every booking has a `source` (`phone`, `whatsapp` or `walk_in`).
+- **Verticals are config:** `verticals/<name>/`. Core code never branches on vertical.
+- **WhatsApp is its own module.** Preview-and-confirm applies to every write.
+- **Telephony.** The clinic number forwards conditionally to the pilot number. **Never transfer back to the forwarding number**; use contact-chain mobiles only.
+- **Voice stack (D1) and pilot number (D2) are Proposed ADRs.** Build behind `VoiceOrchestrator` and `TelephonyProvider` so either outcome works.
 
-Before non-trivial work, read in this order:
+Details are in `context/architecture.md`.
 
-1. `context/project-context.md` — what this product is, who it's for, current state.
-2. `context/architecture.md` — system design, data flow, compliance boundaries.
-3. `context/decisions.md` — what's decided and rejected, and why.
-4. `context/coding-rules.md` — established conventions once code exists.
+## Rules
 
-## Local Dev Setup
+Tags: **[MVP]** applies now. **[Post-MVP]** applies once that part exists. The full list is in `context/coding-rules.md`.
 
-No application code exists in the repository yet; these are the target commands for the decided stack, to be verified against the real scaffolding as it lands. Everything runs in Docker Compose on a single VM (Oracle in production, any machine locally).
+**[MVP]**
+1. **One layout: `backend/src/...`.** Vendor SDKs are imported only in `backend/src/providers/`.
+2. **`tenant_id` plus RLS** on every tenant table from its first migration. Every query is tenant-scoped.
+3. **No PII in logs.** Log IDs only.
+4. **Safety guard in code** on every clinic-call LLM reply. Never give diagnosis, medicine or dosage advice.
+5. **Pydantic validation** of every external payload and all LLM structured output. Fail closed.
+6. **Preview-and-confirm** on every WhatsApp write. Only registered numbers can command.
+7. **Prompts** live in `verticals/<name>/agent-prompt.md`, versioned, never inline.
+8. **Minimum patient data:** name, phone, slot, and an optional non-clinical reason.
+9. **India data residency** is the default. Exceptions for hosted vendors are open (ADR-0029, D3).
 
-```bash
-# Full stack (Postgres+pgvector, Redis, Pipecat, backend, workers, self-hosted Langfuse)
-docker compose up -d
+**[Post-MVP]**
+- Langfuse, Sentry, PostHog, R2 audio, `mypy --strict`, and cost tiers beyond the pilot.
+- Outbound calls and SMS go through the fail-closed DLT gate (ADR-0019).
 
-# Backend (Python 3.12 + FastAPI), if iterating outside Docker
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-alembic upgrade head            # apply DB migrations
-uvicorn app.main:app --reload   # run API locally
+## Stack
 
-# Background workers (outbound call queue, WhatsApp ingestion)
-celery -A app.worker worker --loglevel=info
+| Layer | Choice |
+|---|---|
+| Backend | Python 3.12 + FastAPI |
+| Database | PostgreSQL + pgvector (self-hosted), RLS |
+| Voice | behind `VoiceOrchestrator`: managed platform for the pilot (Proposed, D1), or self-hosted Pipecat (ADR-0004) |
+| Telephony | behind `TelephonyProvider`; provider by spike S1 (D2) |
+| WhatsApp | Meta WhatsApp Business Platform: utility templates, paid per message (D5) |
+| Frontend | Next.js + TypeScript + Tailwind + shadcn/ui |
+| Jobs | Celery beat or lighter (D7) |
+| Hosting | single India-region VM, Docker Compose; RAM is disputed (D3) |
 
-# Frontend (Next.js ops dashboard)
-cd frontend
-npm install
-npm run dev
-```
-
-### Required Environment Variables (names only — never commit values)
+## Map
 
 ```
-DATABASE_URL
-REDIS_URL
-GROQ_API_KEY
-CEREBRAS_API_KEY
-GEMINI_API_KEY
-WHATSAPP_CLOUD_API_TOKEN
-WHATSAPP_PHONE_NUMBER_ID
-WHATSAPP_VERIFY_TOKEN
-CLOUDFLARE_R2_ACCESS_KEY_ID
-CLOUDFLARE_R2_SECRET_ACCESS_KEY
-CLOUDFLARE_R2_BUCKET
-LANGFUSE_HOST
-LANGFUSE_PUBLIC_KEY
-LANGFUSE_SECRET_KEY
-SENTRY_DSN
-POSTHOG_API_KEY
-JWT_SECRET
-
-# Deferred — only needed once a paying client funds these
-VAPI_API_KEY
-RETELL_API_KEY
-SARVAM_API_KEY
-ELEVENLABS_API_KEY
-EXOTEL_API_KEY
-EXOTEL_API_TOKEN
-EXOTEL_SID
+context/       mvp.md (source of truth) · feature-backlog · contracts · architecture
+               decisions (ADRs + D1–D7) · roadmap (M0–M5) · go-live-checklist · spikes
+               coding-rules · team (work areas) · glossary
+verticals/     _template/ (copy to start) · clinic/ (DRAFT)
+backend/src/   api core models workers providers/{llm,stt,tts,voice_orchestrator,telephony}
+               agents knowledge booking safety channels/whatsapp verticals compliance
+backend/tests/ incl. fixtures/verticals/demo_coaching
+frontend/      receptionist web app (C7)
+scripts/       clinic setup CLI (C12), call review CLI (C10)
+.claude/       helper commands: /whats-next /align /new-vertical /standup (optional)
+.github/       PR + issue templates (reminders, not gates)
+mcp/ open-source/   integration notes, licences, free-tier limits
+task.md        optional template for specifying a task
 ```
+
+Each `backend/src/<module>/README.md` gives the module's purpose, the capabilities it serves, the contracts it uses, and what it must not do.
+
+## Local setup
+
+See `README.md` for Windows and Linux/macOS steps. Environment variable names are in `.env.example`; never commit values.
