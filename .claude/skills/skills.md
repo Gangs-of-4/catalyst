@@ -1,85 +1,56 @@
 # Skills
 
-This directory holds project-specific Claude Code skills, one per subdirectory, each with a `SKILL.md`:
+Project skills live in `.claude/skills/<skill-name>/SKILL.md`. None is implemented yet; the specs below are the backlog. Create a `SKILL.md` when a skill is first needed, and write it from the real code.
 
-```
-.claude/skills/<skill-name>/SKILL.md
-```
+## Writing and versioning agent prompts [MVP]
 
-## Current state
-
-No application code exists yet, so none of the skills below have a `SKILL.md` implementation in a subdirectory yet — the specs here are the backlog. These four are process/workflow skills (not tied to a specific frontend/backend/db area), so they're worth speccing now even though no code exists: create `.claude/skills/<skill-name>/SKILL.md` per its spec below when it's first needed.
-
-## Reusable Skills
-
-### Writing and versioning voice agent prompts
-
-**When to trigger:** creating a new vertical's agent prompt (typically via `/new-vertical`), updating an existing prompt after a `/call-trace` review surfaces a problem, or a client requests a wording/behavior change via WhatsApp.
-
-**Inputs:** target vertical (D2C / real estate / education / healthcare); business context (name, offerings, tone) supplied at onboarding; the current self-hosted stack's latency budget (~1.2-2s round trip, see `context/decisions.md`); any escalation rules from that vertical's rule pack that must be reflected in the prompt.
+**When:** creating a vertical's prompt, or changing one after a call review or safety-suite failure.
 
 **Steps:**
-1. Start from the vertical's existing prompt version (or the vertical template if none exists).
-2. Write in short, interruptible turns — the agent must handle barge-in cleanly; avoid long uninterruptible monologues given the latency budget.
-3. Encode escalation triggers as explicit, recognizable instructions the model can act on mid-call, matching the vertical's escalation rule pack exactly (don't invent new triggers here — that's the escalation-rule-pack skill's job).
-4. For healthcare, hard-code the admin-only scope and the instruction to escalate on any symptom/emergency signal with no conditional bypass.
-5. Version the prompt (e.g. `v3` or a date stamp) and keep prior versions diffable.
-6. Note which real or seed call transcripts were used to validate pacing and interruption handling.
+1. Start from `verticals/<vertical>/agent-prompt.md`, or `_template/` if there is none.
+2. Use short, interruptible turns. Disclose that the caller is talking to an automated assistant. Read back before booking (C2).
+3. Answer only from `get_clinic_info` (C3). Use the nine tools exactly as named in `context/contracts.md`.
+4. Reflect `escalation-rules.yaml` and don't invent triggers. For clinics, the "never give diagnosis, medicine or dosage" section is backed by the guard in code.
+5. Bump the version and fill in the changelog header (version, date, what changed, why, validated against).
+6. **Run the safety suite.** Any prompt change must pass at 100% for clinics.
 
-**Output format:** a versioned prompt file (e.g. `verticals/<vertical>/agent-prompt.md`) with a short changelog header: version, date, what changed, why, and which transcripts it was validated against.
+## Designing escalation rule packs [MVP]
 
-### Designing escalation rule packs from real transcripts
-
-**When to trigger:** onboarding a new client or vertical (via `/new-vertical`), or after `/call-trace` or a `/compliance-check` finding shows a missed or over-firing escalation.
-
-**Inputs:** a batch of real or seed call transcripts for the vertical; the vertical's known risk signals (e.g. symptom/emergency mentions for healthcare, high-intent buying signals for real estate, angry-customer signals for D2C); the current escalation rule pack, if one exists.
+**When:** onboarding a vertical or client, or after a missed or over-firing escalation.
 
 **Steps:**
-1. Read transcripts and tag every utterance that should have triggered a human handoff.
-2. Generalize tagged utterances into rule patterns (keyword, intent classification, or sentiment threshold — whichever is cheapest to evaluate reliably at call time on the live-call LLM).
-3. Cross-check against hard compliance mandates first — for healthcare, any symptom or emergency signal escalates with no exception, regardless of confidence score.
-4. Write rules into the pack's structured format, each with a one-line rationale.
-5. Add a paired test-transcript set: positive examples (should escalate) and negative examples (should not), so a future prompt or rule change that breaks this is caught, not discovered live.
-6. Balance false positives (escalation fatigue, defeats the "zero-effort" pitch) against false negatives (safety/compliance risk) — bias toward safety for healthcare, bias toward fewer false positives elsewhere.
+1. Tag call turns that should, and should not, have reached a human.
+2. Split them into `red_flags` (escalate), `routine` (just book), and grey zone (clinic: escalate).
+3. Write each rule with a one-line rationale in `verticals/<vertical>/escalation-rules.yaml`.
+4. Add paired positive and near-miss negative scripts to `tests/safety-suite.yaml`.
+5. Get client sign-off (role only, e.g. "Doctor A") before go-live. Record it in `context/go-live-checklist.md`.
 
-**Output format:** `verticals/<vertical>/escalation-rules.yaml` (or equivalent structured file) plus its paired test-transcript set, each rule carrying a short rationale comment.
+Clinics bias toward safety. ADR-0031 (Proposed) replaces the old "any symptom escalates" rule with the approved red-flag list.
 
-### Adding a provider behind the abstraction layer
+## Adding a provider behind the abstraction layer [MVP]
 
-**When to trigger:** integrating a new voice/STT/TTS/LLM vendor, or moving a tenant from a free-tier provider to a paid one (e.g. Kokoro → ElevenLabs, Groq → a paid LLM) once revenue justifies it. Often invoked via `/new-provider`.
-
-**Inputs:** target layer (voice orchestration / STT / TTS / LLM); the layer's existing interface definition in `src/providers/<layer>/`; the layer's shared contract test suite; the new provider's SDK/API docs; whether the provider is free-tier or paid (for `/cost-report` and `context/decisions.md`).
+**When:** adding a voice, STT, TTS, LLM or telephony vendor (for example the D1 managed platform, or the S1 telephony provider).
 
 **Steps:**
-1. Read the existing interface for that layer. Do not change it unless the new provider reveals a gap that's genuinely shared across every provider on that layer — a one-off provider quirk stays inside that provider's own file.
-2. Implement the interface for the new provider; every vendor-SDK call lives inside this one file, per the "no direct provider SDK calls outside `src/providers/`" rule in `CLAUDE.md`.
-3. Run the layer's shared contract test suite against the new implementation before writing any provider-specific tests.
-4. Add required config as environment variable names (never values) and register the provider in the layer's factory/config so tenants can select it.
-5. Grep the codebase to confirm no file outside `src/providers/<layer>/` imports the new SDK directly.
-6. If this is a new paid vendor relationship, add an entry to `context/decisions.md` and note its per-unit cost for `/cost-report`.
+1. Read the interface in `backend/src/providers/<layer>/`. Don't change it for a one-off quirk.
+2. Implement it. All vendor SDK calls stay in this one file.
+3. Pass the layer's shared contract tests.
+4. Add env var names (never values) to `.env.example`.
+5. Grep the codebase to confirm nothing outside `backend/src/providers/` imports the SDK.
+6. For a new paid vendor, add or update an ADR and note the cost (VERIFY).
 
-**Output format:** a new file under `src/providers/<layer>/` passing the shared contract test suite, plus (if applicable) a `context/decisions.md` entry and a cost note.
+## Reviewing code for privacy and compliance [MVP; outbound parts Post-MVP]
 
-### Reviewing code for DPDP/TRAI compliance
+**When:** before merging changes that touch logging, storage, WhatsApp, transfers or LLM replies.
 
-**When to trigger:** before merging any change touching outbound calling, logging, data storage, or WhatsApp data handling; as a standing periodic audit. This is the procedure `/compliance-check` runs.
+**Checks:**
+1. No PII in logs.
+2. Every clinic-call LLM reply passes the guard.
+3. WhatsApp writes require "Haan", and only registered senders can command.
+4. Transfers never target a forwarding number.
+5. Patient messages are service-only and STOP is honoured.
+6. Minimum data is collected, with no clinical detail stored.
+7. Residency follows the current decision (ADR-0029 / D3).
+8. **[Post-MVP]** Outbound calls and SMS go through the fail-closed DLT gate, the 9 AM–9 PM IST window checked at dispatch, DND and consent.
 
-**Inputs:** the code path or diff under review; the compliance rules in `CLAUDE.md` and `context/architecture.md` (calling window, consent/DND, DPDP data handling, healthcare escalation); current TRAI DLT registration status (while unregistered, all outbound commercial calling must be fully gated off, not just rate-limited).
-
-**Steps:**
-1. Confirm any outbound-calling code path checks current IST time against the 9 AM-9 PM window before dialing.
-2. Confirm consent and DND status are checked and logged before any outbound commercial call, and that the entire outbound path is disabled if TRAI DLT registration isn't complete yet — not just discouraged.
-3. Grep log statements on the path for PII — raw phone numbers, names, transcript text — flag any occurrence; only tenant/call/lead IDs should appear in logs.
-4. Confirm recordings and transcripts are written only to India-region storage (Oracle Mumbai/Hyderabad or equivalent) and that a deletion path exists for DPDP "delete on request" requests.
-5. For healthcare-vertical code, confirm symptom/emergency detection routes to hard escalation with no confidence-based bypass.
-6. Check whether the call-start AI-disclosure requirement (expected mandatory 2026-27) is implemented or explicitly tracked as pending — don't let it silently fall through.
-
-**Output format:** a findings list, each entry as `file:line — violation — severity — rule violated — suggested fix`, referencing the specific `CLAUDE.md` non-negotiable or compliance requirement broken.
-
-## Adding a skill
-
-Once a skill above is first needed, or once a real area of the codebase exists (e.g. a frontend app, an API service, a test suite) that needs its own skill:
-
-1. Create `.claude/skills/<skill-name>/SKILL.md`.
-2. Write practical, project-specific instructions verified from the actual code — conventions, common commands, gotchas specific to that area.
-3. Avoid generic/filler content that isn't specific to this project.
+**Output:** `file:line — violation — severity — rule — fix`.
