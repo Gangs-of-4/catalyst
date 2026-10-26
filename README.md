@@ -1,83 +1,88 @@
-# Catalyst — Voice AI for Business
+# Catalyst
 
-A done-for-you AI voice agent service for small and medium Indian businesses: it answers inbound customer calls and follows up on leads by phone, and the business owner never touches a config screen — our team sets it up and keeps it current for them over WhatsApp.
+An AI front-desk assistant for small Indian businesses. It answers the phone the way a polite receptionist would. Our team sets it up, and the owner controls it from WhatsApp, never from a complicated dashboard.
 
-## Who it's for
+**First customer type: small clinics.** Coaching institutes come next.
 
-Non-technical SMB owners who want a working voice agent, not a tool to configure: D2C sellers (COD/RTO reduction), real estate brokers (speed-to-lead), coaching institutes (lead follow-up), and clinics (admin-only, hybrid-safety required). BFSI is explicitly out of scope.
+> **North star:** A small clinic never misses a patient call. The agent answers, books correctly into one shared schedule, and sends anything medical to a human. The doctor controls everything from WhatsApp.
 
-## The problem, and the economics
+## Status
 
-Voice AI is a commodity — Vapi, Bland, Retell, and ElevenLabs sell capable DIY tooling, but only to developers. Yellow.ai, Gnani, and SquadStack sell finished automation, but only to enterprises. A small business that wants a working voice agent with zero setup effort is unserved by both ends of that market. Catalyst sells the finished service to that middle segment. The moat isn't model quality — it's zero-effort onboarding, WhatsApp-based knowledge updates, pre-built escalation logic per vertical, a provider-agnostic backend, and local trust.
+**Pre-code.** The MVP, contracts, architecture and module skeleton are defined, but no feature code exists yet. We are at **M0: foundation and week-1 spikes** (`context/roadmap.md`).
 
-This is also a service-heavy business in its first stage, run by a 4-person part-time team with no funding, targeting 15-30 clients in Year 1 — so the build leans on free-tier and self-hosted infrastructure wherever possible, and treats every paid dependency as something to defer until a client's revenue funds it. See `context/decisions.md` for the reasoning behind each of those calls.
+Two big decisions are still open: the voice stack for the pilot (D1) and a real phone number for the pilot (D2). Both are in `context/decisions.md`.
 
-## Tech Stack
+## Where to read
 
-| Layer | Choice |
+| You want… | Read |
 |---|---|
-| Compute | Oracle Cloud Always Free ARM VM, single Docker Compose stack |
-| Voice orchestration | Pipecat (self-hosted); Vapi/Retell as a future paid tier |
-| Transport | WebRTC today; PSTN telephony (Exotel/Twilio) deferred to first paying client |
-| STT | Groq (whisper-large-v3-turbo) primary, self-hosted faster-whisper fallback |
-| TTS | Kokoro (English), Piper (Hindi/Hinglish) |
-| LLM | Groq/Cerebras for live calls, Gemini Flash for offline analysis and embeddings |
-| Backend | Python 3.12 + FastAPI |
-| Database | PostgreSQL + pgvector, self-hosted |
-| Queue | Redis + Celery |
-| WhatsApp | Meta WhatsApp Cloud API |
-| Object storage | Cloudflare R2 |
-| Frontend | Next.js + TypeScript + Tailwind + shadcn/ui, on Cloudflare Pages |
-| Observability | Langfuse (self-hosted), Sentry, PostHog |
-
-Full detail, and why each choice was made, is in `CLAUDE.md` and `context/architecture.md`.
-
-## Repo Structure
-
-```
-CLAUDE.md            instructions for any agent working in this repo
-task.md              template for specifying a task
-.claude/             Claude Code config, skills, and commands
-context/             project knowledge: purpose, architecture, coding rules, decisions, roadmap
-mcp/                 MCP server integration docs (none configured yet)
-open-source/         open-source & third-party dependency docs (license, cost, integration detail)
-```
-
-Application code (backend, frontend, provider abstraction layer) doesn't exist yet — this repo is currently the planning/context scaffold that precedes it.
+| What we're building and when it's done | `context/mvp.md` |
+| What's next | `context/roadmap.md` |
+| How it fits together | `context/architecture.md`, `context/contracts.md` |
+| What's decided and what's open | `context/decisions.md` |
+| Who works on what | `context/team.md` |
+| Instructions for coding agents | `CLAUDE.md` (also `AGENTS.md`) |
 
 ## Quickstart
 
-**Prerequisites:** Docker + Docker Compose, Python 3.12, Node.js (for the frontend), and free-tier API keys for Groq, Cerebras, and Google Gemini.
+These are target commands. They become runnable as M0 lands.
 
-**Environment variables** (names only — get real values from whoever holds them, never commit them):
+**Prerequisites:**
+- Git
+- Python 3.12
+- Node.js LTS
+- Docker with Compose (on Windows and macOS this usually means Docker Desktop; VERIFY its licence terms for the team, see `open-source/open-source.md`)
 
+### Windows (PowerShell)
+
+```powershell
+git clone https://github.com/Gangs-of-4/catalyst.git; cd catalyst
+Copy-Item .env.example .env        # fill in values from the team; never commit .env
+docker compose up -d               # Postgres + pgvector (from M0)
+
+cd backend
+py -3.12 -m venv .venv; .\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn src.main:app --reload
+
+cd ..\frontend
+npm install; npm run dev
 ```
-DATABASE_URL, REDIS_URL, GROQ_API_KEY, CEREBRAS_API_KEY, GEMINI_API_KEY,
-WHATSAPP_CLOUD_API_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_VERIFY_TOKEN,
-CLOUDFLARE_R2_ACCESS_KEY_ID, CLOUDFLARE_R2_SECRET_ACCESS_KEY, CLOUDFLARE_R2_BUCKET,
-LANGFUSE_HOST, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY,
-SENTRY_DSN, POSTHOG_API_KEY, JWT_SECRET
-```
 
-**Run it:**
+If PowerShell blocks the venv activation script, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+
+### Linux / macOS
 
 ```bash
-docker compose up -d          # Postgres+pgvector, Redis, Pipecat, backend, workers, self-hosted Langfuse
-cd frontend && npm install && npm run dev   # ops dashboard
+git clone https://github.com/Gangs-of-4/catalyst.git && cd catalyst
+cp .env.example .env               # fill in values from the team; never commit .env
+docker compose up -d               # Postgres + pgvector (from M0)
+
+cd backend
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn src.main:app --reload
+
+cd ../frontend
+npm install && npm run dev
 ```
 
-(These are the target commands for the decided stack — there's no application code to actually run yet. See "Current Status" below.)
+## Repo layout
 
-## Current Status & Roadmap
-
-This repo is pre-code: the tech stack, architecture, and compliance rules are decided and documented, but nothing has been built. We're at the start of **Phase 0 — Zero-cost foundation**: stand up the free infrastructure and get a browser-based voice conversation working end to end, on Rs 0.
-
-After that: Phase 1 proves the product loop with unpaid design partners in one vertical; Phase 2 brings on the first paying clients (which is what unlocks a real phone number); Phase 3 scales across verticals; Phase 4 turns on outbound calling once TRAI DLT registration is complete. Full detail in `context/roadmap.md`.
+```
+context/      product, contracts, architecture, decisions, roadmap, team
+verticals/    customer types as config (clinic = DRAFT)
+backend/      Python 3.12 + FastAPI; module skeleton under backend/src/
+frontend/     receptionist web app (Next.js)
+scripts/      ops CLIs (clinic setup, call review)
+.claude/      optional Claude Code helper commands
+mcp/ open-source/   integration notes and dependency licences
+```
 
 ## Team
 
-A 4-person, part-time student team. This is being built as an execution-service business, not a research project — see `context/decisions.md` for why that shapes almost every technical choice in this repo.
+A four-person, part-time student team. See `context/team.md`.
 
 ## License
 
-MIT — see `LICENSE`.
+MIT. See `LICENSE`.

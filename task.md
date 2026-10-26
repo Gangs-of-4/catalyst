@@ -6,6 +6,10 @@ Reusable template for specifying a task for Claude Code. Copy/fill this out (or 
 
 _What outcome should exist when this task is done? One or two sentences._
 
+## Capability
+
+_Which MVP capability (C1–C12, `context/mvp.md`) does this move forward? If none, say so and note the backlog item number._
+
 ## Context
 
 _Why is this needed? Link related issues/decisions (see `context/decisions.md`) or prior work._

@@ -1,0 +1,33 @@
+# Secrets and tenant data — never commit
+.env
+.env.*
+!.env.example
+tenants/
+*.tenant.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+.next/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Call data — never commit recordings or transcripts
+*.wav
+*.mp3
+recordings/
+transcripts/
+
+# Claude Code local settings
+.claude/settings.local.json
