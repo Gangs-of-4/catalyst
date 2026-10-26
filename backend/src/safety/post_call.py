@@ -27,7 +27,8 @@ STRONG = [
 WEAK = [
     _B + r"(infection|abscess|cavity|pus|cyst) (hai|ho gaya|ho gayi|lag raha|lagta|hoga)" + _E,
     r"(इन्फेक्शन|संक्रमण)\s*(है|हो गया)",
-    _B + r"(dawai|dawaai|goli|tablet|capsule|antibiotic|painkiller|medicine|prescription)s?" + _E,
+    # Not "prescription": "bring your old prescription" is a clinic FAQ answer, not advice.
+    _B + r"(dawai|dawaai|goli|tablet|capsule|antibiotic|painkiller|medicine)s?" + _E,
     r"(दवाई|गोली|टैबलेट)",
 ]
 REFUSAL = re.compile(
