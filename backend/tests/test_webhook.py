@@ -157,3 +157,10 @@ def test_end_of_call_flags_unsafe_assistant_line(client):
 
 def test_other_message_types_are_ok(client):
     assert post(client, {"message": {"type": "status-update", "status": "in-progress"}}).json() == {"ok": True}
+
+
+def test_fee_question_returns_fees_only(client):
+    r = result(post(client, tool_calls("get_clinic_info", {"question": "consultation fee kitni hai?"})))
+    assert "Consultation ₹300" in r["result"] and "Parking" not in r["result"] and "lekar" not in r["result"]
+    r = result(post(client, tool_calls("get_clinic_info", {"question": "Parking hai kya?"}, tc_id="tc-2")))
+    assert "Two-wheeler" in r["result"] and "Fees" not in r["result"]

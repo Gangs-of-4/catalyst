@@ -95,7 +95,7 @@ def find_slots(ctx: Ctx, args: dict) -> str:
     listing = "; ".join(f"{spoken_time(sl.time)} with {cs.doctor_name(ctx.settings, sl.resource_id)}" for sl in slots)
     head = ""
     if found_day != d:
-        head = f"Nothing free on {spoken_date(d)} because {_no_slots_reason(ctx, d, doctor)}. Nearest open day: "
+        head = f"Nothing free on {spoken_date(d)} because {_no_slots_reason(ctx, d, doctor)}. "
     elif t and all(sl.time != t for sl in slots):
         head = f"{spoken_time(t)} is not free. "
     return (f"{head}Free slots on {spoken_date(found_day)}: {listing}. "

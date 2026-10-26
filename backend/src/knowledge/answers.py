@@ -59,8 +59,14 @@ def facts(conn: sqlite3.Connection, s: dict) -> dict[str, str]:
     return {k: v.strip() for k, v in out.items()}
 
 
+# Filler words that would make every FAQ look like a match ("... hai?").
+STOP = {"hai", "hain", "kya", "ko", "ka", "ki", "ke", "se", "mein", "me", "aur", "ya", "to", "toh", "bhi", "the", "is",
+        "are", "a", "an", "do", "does", "can", "i", "you", "your", "what", "how", "chahiye", "hoga", "hogi", "ji",
+        "है", "क्या", "का", "की", "के", "में", "से"}
+
+
 def _words(text: str) -> set[str]:
-    return {w for w in re.split(r"[^\wऀ-ॿ₹]+", text.lower()) if len(w) > 1 or w == "₹"}
+    return {w for w in re.split(r"[^\wऀ-ॿ₹]+", text.lower()) if (len(w) > 1 or w == "₹") and w not in STOP}
 
 
 def lookup(conn: sqlite3.Connection, s: dict, question: str) -> list[str]:

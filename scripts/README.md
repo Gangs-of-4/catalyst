@@ -9,7 +9,7 @@ Ops CLIs that our team runs, not end users. Run them from the repo root with the
 
 ## Planned
 
-## Clinic setup CLI (C12)
+### Clinic setup CLI (C12)
 
 `setup-tenant`: sets up a clinic with one command from a tenant config file plus `verticals/<name>/`.
 
@@ -20,7 +20,7 @@ Ops CLIs that our team runs, not end users. Run them from the repo root with the
 
 Tenant config files contain personal data (phone numbers), so they **never** go in the repo.
 
-## Call review CLI (C10)
+### Call review CLI (C10)
 
 `review-calls`: lists the week's calls flagged `misunderstood`, plus a sample of the rest, for the weekly team review. It also prints the misunderstood share.
 
