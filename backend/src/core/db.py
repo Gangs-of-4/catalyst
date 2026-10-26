@@ -66,6 +66,12 @@ CREATE TABLE IF NOT EXISTS calls (
   safety_review INTEGER NOT NULL DEFAULT 0,
   safety_hits TEXT
 );
+-- Tool results by Vapi toolCallId, so a retried tool call returns the first result (idempotent writes).
+CREATE TABLE IF NOT EXISTS tool_calls (
+  id TEXT PRIMARY KEY,
+  result TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS pending_actions (
   sender TEXT PRIMARY KEY,
   action TEXT NOT NULL,

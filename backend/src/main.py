@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from . import seed
+from .api import vapi
 from .core import db
 
 
@@ -16,6 +17,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Catalyst clinic demo", lifespan=lifespan)
+app.include_router(vapi.router)
 
 
 @app.get("/healthz")

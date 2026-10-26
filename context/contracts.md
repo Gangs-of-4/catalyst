@@ -167,6 +167,37 @@ Called once at call end. Feeds C10.
 
 Transcripts are pushed separately by the voice layer integration into our database (never into logs). `flags` feed the weekly misunderstood-call review.
 
+### 1.9a `find_booking` (added 2026-10-27)
+
+Looks up the caller's upcoming bookings before `reschedule` or `cancel`, so the agent can confirm which one.
+
+```json
+// request
+{ "call_id": "…", "phone": "+91…" }
+// response
+{ "bookings": [ { "booking_id": "…", "resource_label": "Doctor A", "starts_at": "2026-11-03T17:00:00+05:30" } ] }
+```
+
+### 1.10 Demo transport: Vapi webhook (ADR-0035, demo build only)
+
+The demo build serves the same tools through **one** Vapi endpoint instead of `/v1/tools/<name>`. The pilot returns to §1.
+
+- **Endpoint:** `POST /vapi/webhook` for both tool calls and server messages.
+- **Auth:** header `x-catalyst-secret: <CATALYST_TOOL_SECRET>`, set by `scripts/setup_vapi.py` on each tool and on the assistant's server. Missing or wrong → `401`. If the secret is unset on our side, everything is rejected.
+- **Tool call request** (VERIFY against the Vapi docs if Vapi changes it; checked against `@vapi-ai/web` 2.7.1 types):
+  ```json
+  { "message": { "type": "tool-calls",
+                 "toolCallList": [ { "id": "…", "type": "function", "function": { "name": "find_slots", "arguments": { "date": "kal", "time": "shaam 5 baje" } } } ],
+                 "call": { "id": "…", "type": "webCall", "customer": { "number": "+91…" } } } }
+  ```
+  `arguments` may be an object or a JSON string. The older `toolWithToolCallList[].toolCall` shape is also accepted.
+- **Tool call response** (HTTP 200): `{ "results": [ { "name": "<tool>", "toolCallId": "<id>", "result": "<plain text>" } ] }`. The result is plain text for the voice LLM, and always states the resolved day and date (e.g. "Wednesday, 28 October 2026, 5 PM with Dr. …").
+- **Arguments** take spoken words or ISO: `date` ("kal", "parso", "somvar", "28 Oct", "2026-10-28"), `time` ("shaam 5 baje", "saade 10", "17:00"), `doctor` (name, fuzzy-matched). `phone` defaults to the caller ID when Vapi sends one.
+- **Idempotency:** the Vapi `toolCallId` is the idempotency key. A retried tool call returns the first result.
+- **Outcome:** `log_call_outcome` is a stub. The backend derives the outcome from what the tools did during the call, then the `end-of-call-report` server message adds the summary, transcript and recording URL. Priority: `escalated` > `booked` > `changed` > `callback` > `answered` > `hung_up`. (`changed` = moved or cancelled; demo-only value.)
+- **`transfer`** is a stub: web calls cannot transfer. `escalate` raises the urgent inbox item and the WhatsApp alert instead.
+- **Booking `source`** stays `phone` for agent bookings, as in §3.
+
 ---
 
 ## 2. Custom-LLM endpoint (safety guard route)
