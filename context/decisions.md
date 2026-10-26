@@ -6,7 +6,7 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 
 **Statuses:** `Accepted` · `Proposed` (written down, awaiting team approval — do not build on it as if settled) · `Superseded` · `Rejected`. ADRs are never deleted; a reversal is a new ADR. If a change would reverse an Accepted ADR, write it as **Proposed**.
 
-**Open decisions** (not yet ADRs) are at the bottom: D3–D7. D1 and D2 are Proposed ADRs (ADR-0029, ADR-0030).
+**Open decisions** (not yet ADRs) are at the bottom: D3–D7. D1 is decided (ADR-0029, Accepted); D2 is still a Proposed ADR (ADR-0030).
 
 **Path note (2026-10-26):** older ADRs say `src/...`. The layout is now `backend/src/...` everywhere (e.g. `backend/src/providers/`). Section numbers (`architecture.md` §N) in ADRs dated before 2026-10-26 refer to the earlier architecture doc; see git history.
 
@@ -17,7 +17,7 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 | ADR-0001 | Adopt a Claude Code context-engineering structure | Accepted | Free |
 | ADR-0002 | Zero-budget as a binding architectural constraint | Accepted — *challenged by ADR-0029, ADR-0030 (Proposed)* | Free |
 | ADR-0003 | Oracle Cloud Always Free as the single production host | Accepted — *RAM figure disputed, see D3* | Free tier with limits |
-| ADR-0004 | Self-hosted Pipecat over paid Vapi/Retell | Accepted — *challenged by ADR-0029 (Proposed)* | Free |
+| ADR-0004 | Self-hosted Pipecat over paid Vapi/Retell | Accepted — *pilot uses Vapi per ADR-0029; Pipecat stays the long-term path* | Free |
 | ADR-0005 | WebRTC-first development; PSTN deferred | Accepted — *challenged by ADR-0030 (Proposed)* | Free |
 | ADR-0006 | Telephony cost passed through per-client | Accepted — *challenged by ADR-0030 (Proposed)* | Deferred paid |
 | ADR-0007 | Groq free tier for live-call STT and LLM | Accepted | Free tier with limits |
@@ -42,12 +42,13 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 | ADR-0026 | A separate vector database | Rejected | Free tier with limits (would've added its own footprint) |
 | ADR-0027 | BFSI vertical | Rejected | N/A — not a cost decision |
 | ADR-0028 | Clinics first, coaching second; D2C and real estate deferred | Accepted — supersedes the vertical order in ADR-0027's consequences and the old `CLAUDE.md` | N/A |
-| ADR-0029 | Managed voice platform for the pilot behind `VoiceOrchestrator` (D1) | **Proposed** | Deferred paid → paid during pilot |
-| ADR-0030 | One team-funded phone number for the pilot (D2) | **Proposed** | Paid during pilot |
-| ADR-0031 | Clinic escalation by doctor-approved red-flag list, not "any symptom" | **Proposed** | Free |
+| ADR-0029 | Managed voice platform for the pilot behind `VoiceOrchestrator` (D1) | Accepted — Vapi | Deferred paid → paid during pilot |
+| ADR-0030 | One team-funded phone number for the pilot (D2) | **Proposed** — *demo uses Vapi web calls* | Paid during pilot |
+| ADR-0031 | Clinic escalation by doctor-approved red-flag list, not "any symptom" | Accepted | Free |
 | ADR-0032 | Backend owns the brain: agent tools API, safety guard in our code | Accepted | Free |
 | ADR-0033 | Verticals are config; generic booking model with exclusion constraint | Accepted | Free |
 | ADR-0034 | WhatsApp is its own channel module; preview-and-confirm on every write | Accepted — extends ADR-0017 | Free tier with limits (per-message pricing, D5) |
+| ADR-0035 | Demo build simplifications | Accepted — *revisit before the first real clinic pilot* | Free tier with limits (Vapi, Twilio sandbox trial credit) |
 
 ---
 
@@ -389,14 +390,40 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 
 ---
 
+### ADR-0035: Demo build simplifications
+
+- **Date:** 2026-10-27
+- **Status:** Accepted — every item below is revisited **before the first real clinic pilot**.
+- **Cost implication:** Free tier with limits — Vapi trial credit, Twilio WhatsApp sandbox, Cloudflare quick tunnel (all VERIFY).
+- **Departs from (for the demo build only):** ADR-0010, ADR-0013, ADR-0016, ADR-0032, ADR-0033, ADR-0034, and `contracts.md` §1 transport.
+
+**Context:** We need a working, demo-able clinic voice agent in one day, on Windows machines, with fictional data only. Several accepted decisions cost more setup time than one day allows.
+
+**Decision:** The demo build (`feat/demo-mvp`) takes these shortcuts. Each has a revisit trigger: *before the first real clinic pilot*.
+
+| Shortcut | Instead of | Notes |
+|---|---|---|
+| SQLite file (`backend/data/clinic.db`) | Postgres + pgvector (ADR-0010) | Docker on Windows would eat the day. The double-booking lock is kept as a **partial unique index** on `(resource_id, date, time)` for active bookings, so the DB, not app code, still refuses a double booking. It only covers fixed-length aligned slots; the overlap exclusion constraint (ADR-0033) returns with Postgres. |
+| Single clinic, no `tenant_id` / RLS | ADR-0016 | One fictional clinic. Keep a `clinic_id` seam in mind; add `tenant_id` + RLS with the Postgres migration. |
+| Plain HTML, CSS and JS served by FastAPI | Next.js on Cloudflare Pages (ADR-0013) | No build step. The Vapi Web SDK is bundled once with esbuild and committed. |
+| Cloudflare quick tunnel | A hosted VM | Public HTTPS URL for Vapi and Twilio webhooks; the URL changes on every restart. |
+| Vapi web calls | A phone number (ADR-0030, still Proposed) | Prospects talk to the agent from our web page. Live transfer is impossible on web calls, so `transfer` is a stub. |
+| One `POST /vapi/webhook` with `x-catalyst-secret` | `POST /v1/tools/<name>` with `X-Catalyst-Tool-Key` (`contracts.md` §1) | Vapi sends every tool call and server message to one URL. Tool logic is the same; see `contracts.md` §1.10. |
+| Safety = prompt rules + red-flag `escalate` + **post-call** safety flag | Guard in code on every reply via custom-LLM (ADR-0032) | Detection, not prevention. The custom-LLM guard is the next step and is required before any real patient call. |
+| Twilio WhatsApp sandbox, rule-based commands | Meta WhatsApp Business Platform (D5) | Free-text alerts work inside the sandbox's 24-hour window only. Preview-and-confirm (ADR-0034) is kept. |
+
+**Consequences:** The demo must never take real patient calls. Moving to the pilot means: Postgres with `tenant_id` + RLS and the exclusion constraint, the custom-LLM guard, the `/v1/tools/*` transport, a real number (ADR-0030), and Meta WhatsApp templates.
+
+---
+
 ## Proposed
 
-These need team approval. Until approved, the Accepted ADRs they challenge still stand — but build behind the interfaces so either outcome works.
+ADR-0029 and ADR-0031 were accepted on 2026-10-27 and stay here so their history reads in order. The rest need team approval. Until approved, the Accepted ADRs they challenge still stand — but build behind the interfaces so either outcome works.
 
 ### ADR-0029: Managed voice platform for the pilot behind `VoiceOrchestrator` (D1)
 
 - **Date:** 2026-10-26
-- **Status:** **Proposed**
+- **Status:** Accepted — Team lead chose Vapi, 2026-10-27.
 - **Cost implication:** Paid during the pilot (per-minute platform fees, VERIFY current pricing); Pipecat stays the long-term low-cost path.
 - **Would change:** ADR-0002 (zero budget), ADR-0004 (Pipecat default), ADR-0015 (1.2–2 s accepted), ADR-0021 (self-hosted speech), ADR-0022 (Vapi/Retell rejected as default).
 
@@ -414,7 +441,7 @@ These need team approval. Until approved, the Accepted ADRs they challenge still
 ### ADR-0030: One team-funded phone number for the pilot (D2)
 
 - **Date:** 2026-10-26
-- **Status:** **Proposed**
+- **Status:** **Proposed** — Demo uses Vapi web calls; number decided before the pilot.
 - **Cost implication:** Paid during the pilot, owned by the team (VERIFY provider pricing).
 - **Would change:** ADR-0002 (paid costs passed through, not absorbed), ADR-0005 (WebRTC-first), ADR-0006 (per-client, once paying), ADR-0024 (no speculative numbers).
 
@@ -429,7 +456,7 @@ These need team approval. Until approved, the Accepted ADRs they challenge still
 ### ADR-0031: Clinic escalation by doctor-approved red-flag list, not "any symptom"
 
 - **Date:** 2026-10-26
-- **Status:** **Proposed** — loosens a documented safety rule, so it needs explicit team approval.
+- **Status:** Accepted — Team lead chose Vapi, 2026-10-27. (Accepted together with ADR-0029; it loosens a documented safety rule, so the safety suite gate below is binding.)
 - **Cost implication:** Free.
 - **Would change:** the old healthcare rule ("any symptom description → immediate hard escalation, no exceptions") previously in `context/architecture.md` §5 and `.claude/skills/skills.md`.
 
@@ -447,7 +474,7 @@ Not yet decided. Do not resolve these in code; keep the relevant part behind an 
 
 | ID | Question | Notes |
 |---|---|---|
-| D1 | Voice stack for the pilot | → ADR-0029 (Proposed). |
+| D1 | Voice stack for the pilot | Decided 2026-10-27 by the team lead: Vapi (ADR-0029, Accepted). |
 | D2 | Real phone number for the pilot | → ADR-0030 (Proposed). Provider decided by spike S1. |
 | D3 | Hosting | If D1 goes managed, the VM no longer runs speech models — re-check the RAM budget. Docs disagree: `open-source/open-source.md` says Always Free may now be 2 OCPU / 12 GB; `context/architecture.md` §10 and ADR-0003 assume 4 OCPU / 24 GB. VERIFY on the team's own account. Residency of hosted components ties into ADR-0029. |
 | D4 | Pricing vs cost | Pricing hypothesis: ₹3,000 for up to 500 minutes. Our earlier estimate put effective AI call cost at roughly ₹6–9/min; if that holds, a fully used Starter plan costs more to serve than it earns. Measure real per-minute cost during the pilot, before Gate 1. |
