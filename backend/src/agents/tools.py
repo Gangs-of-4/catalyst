@@ -250,8 +250,9 @@ def escalate(ctx: Ctx, args: dict) -> str:
     _alert(ctx, item)
     parts = ["ESCALATED: the doctor has been alerted on WhatsApp as urgent."]
     if category != "caller_request":
-        when = "" if _open_now(ctx.settings) else " The clinic is closed right now."
-        parts.append(f"If you have not said it yet, say the emergency instruction now:{when} "
+        if not _open_now(ctx.settings):
+            parts.append("The clinic is closed right now, so the instruction matters even more.")
+        parts.append(f"If you have not said it yet, say the emergency instruction now: "
                      f"\"{ctx.settings['emergency_instruction']}\"")
     parts.append("Live transfer is not available on this line. Tell the caller the clinic will call them back "
                  "very soon. If you don't have their name and 10-digit number yet, ask for them and call escalate "

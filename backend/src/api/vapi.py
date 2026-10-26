@@ -30,7 +30,7 @@ def _args(raw) -> dict:
         return raw
     if isinstance(raw, str) and raw.strip():
         try:
-            value = json.loads(raw)
+            value = json.loads(raw, strict=False)  # LLMs sometimes put raw newlines in strings
             return value if isinstance(value, dict) else {}
         except json.JSONDecodeError:
             return {}
