@@ -243,7 +243,7 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 
 **Context:** Nearly every default choice above (Pipecat, Groq, Kokoro/Piper, self-hosted Postgres) is free specifically because of zero budget, not because it's the best long-term choice. Voice AI vendor choice is not our differentiation (`CLAUDE.md` positioning) — so being stuck with today's free-tier vendor would be a self-inflicted, avoidable risk.
 
-**Decision:** Every voice, STT, TTS, and LLM provider sits behind our own interface in `src/providers/` (`VoiceOrchestrator`, `SpeechToText`, `TextToSpeech`, `LLMProvider`, `TelephonyProvider` — see `context/architecture.md` §2). No vendor SDK is imported outside that directory. Provider selection is resolved per-tenant at runtime from `agent_configs.cost_tier`.
+**Decision:** Every voice, STT, TTS, and LLM provider sits behind our own interface in `backend/src/providers/` (path updated 2026-10-26) (`VoiceOrchestrator`, `SpeechToText`, `TextToSpeech`, `LLMProvider`, `TelephonyProvider` — see `context/architecture.md` §2). No vendor SDK is imported outside that directory. Provider selection is resolved per-tenant at runtime from `agent_configs.cost_tier`.
 
 **Consequences:** Adding or upgrading a provider is additive (new file + contract test), never a rewrite of business logic. This is treated as non-negotiable in `CLAUDE.md`, enforced via `/compliance-check`-style grepping for stray SDK imports.
 
