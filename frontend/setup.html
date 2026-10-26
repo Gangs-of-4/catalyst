@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Clinic settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="masthead">
+    <div class="clinic"><span id="clinic-name">Clinic</span><small>Settings</small></div>
+    <nav aria-label="Staff pages">
+      <a href="/desk">Desk</a>
+      <a href="/setup" aria-current="page">Settings</a>
+      <a href="/">Try the agent</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Clinic settings</h1>
+    <p class="lede">Everything the receptionist agent knows about the clinic. Saving updates the agent straight away.</p>
+    <div id="agent-warning" class="banner" hidden>The agent isn't set up yet. Settings still save; run <code>python scripts/setup_vapi.py</code> to create the agent.</div>
+
+    <form id="settings" novalidate>
+      <fieldset>
+        <legend>The clinic</legend>
+        <div class="form-grid">
+          <div><label for="name">Clinic name</label><input id="name" required></div>
+          <div><label for="city">City</label><input id="city"></div>
+          <div class="wide"><label for="address">Address</label><input id="address" required></div>
+          <div class="wide"><label for="landmark">Landmark <span class="hint">(what callers know it by)</span></label><input id="landmark"></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Hours</legend>
+        <div class="form-grid">
+          <div>
+            <label for="sessions">Open hours <span class="hint">one session per line, e.g. 10:00-14:00</span></label>
+            <textarea id="sessions" rows="3"></textarea>
+          </div>
+          <div>
+            <label for="slot">Appointment length</label>
+            <select id="slot">
+              <option value="15">15 minutes</option><option value="20">20 minutes</option>
+              <option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option>
+            </select>
+            <span class="hint" id="closed-label" style="display:block;margin:.75rem 0 .25rem;font-weight:500">Closed on</span>
+            <div class="radio-row" id="closed" role="group" aria-labelledby="closed-label" style="flex-wrap:wrap;gap:.25rem 1rem"></div>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Doctors and fees</legend>
+        <div class="form-grid">
+          <div>
+            <label for="doctors">Doctors <span class="hint">one per line. Keep the "dr-…:" part so bookings stay linked; new lines get one.</span></label>
+            <textarea id="doctors" rows="4"></textarea>
+          </div>
+          <div>
+            <label for="services">Services and fees <span class="hint">one per line: Service: fee</span></label>
+            <textarea id="services" rows="6"></textarea>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Answers the agent may give</legend>
+        <label for="faqs">Questions and answers <span class="hint">one per line: question | answer. The agent says only these, plus hours, address, doctors and fees.</span></label>
+        <textarea id="faqs" rows="5"></textarea>
+      </fieldset>
+
+      <fieldset>
+        <legend>Safety</legend>
+        <label for="redflags">Red flags <span class="hint">one per line. Any of these: the agent gives the emergency instruction and alerts the doctor at once.</span></label>
+        <textarea id="redflags" rows="6"></textarea>
+        <label for="emergency">Emergency instruction <span class="hint">said word for word, in the caller's language</span></label>
+        <textarea id="emergency" rows="3"></textarea>
+      </fieldset>
+
+      <fieldset>
+        <legend>WhatsApp and voice</legend>
+        <div class="form-grid">
+          <div>
+            <label for="numbers">WhatsApp numbers that can give commands <span class="hint">one per line. They also get urgent alerts and summaries.</span></label>
+            <textarea id="numbers" rows="3" inputmode="tel"></textarea>
+          </div>
+          <div>
+            <span id="voice-label" style="display:block;font-weight:500;margin:.75rem 0 .25rem">Agent's voice</span>
+            <div class="radio-row" role="radiogroup" aria-labelledby="voice-label">
+              <label><input type="radio" name="voice" value="female"> Female</label>
+              <label><input type="radio" name="voice" value="male"> Male</label>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="save-bar">
+        <button class="btn primary" type="submit">Save and update the agent</button>
+        <span id="save-result" aria-live="polite"></span>
+      </div>
+    </form>
+
+    <fieldset style="margin-top:1.5rem">
+      <legend>Leave and holidays</legend>
+      <form id="leave-form" class="form-grid" novalidate>
+        <div><label for="leave-date">Date</label><input type="date" id="leave-date" required></div>
+        <div><label for="leave-who">Who</label><select id="leave-who"></select></div>
+        <div class="wide form-actions" style="justify-content:flex-start"><button class="btn" type="submit">Add leave</button><span id="leave-result" aria-live="polite"></span></div>
+      </form>
+      <ul class="leave-list" id="leave-list"></ul>
+    </fieldset>
+  </main>
+
+  <script src="/static/common.js"></script>
+  <script src="/static/setup.js"></script>
+</body>
+</html>

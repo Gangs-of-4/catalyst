@@ -31,3 +31,6 @@ transcripts/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Local SQLite database (demo build)
+backend/data/

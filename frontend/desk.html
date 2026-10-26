@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Front desk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="masthead">
+    <div class="clinic"><span id="clinic-name">Clinic</span><small>Front desk</small></div>
+    <nav aria-label="Staff pages">
+      <a href="/desk" aria-current="page">Desk</a>
+      <a href="/setup">Settings</a>
+      <a href="/">Try the agent</a>
+    </nav>
+  </header>
+
+  <main>
+    <div id="auth-warning" class="banner" hidden>Anyone with the link can open this page. Set <code>DESK_PASSWORD</code> in <code>.env</code> to require a password.</div>
+    <p class="stats" id="stats" aria-live="polite"></p>
+
+    <div class="desk">
+      <section aria-labelledby="day-title">
+        <h1 class="visually-hidden" id="day-title">Appointments</h1>
+        <div class="toolbar">
+          <button class="btn" id="prev" type="button" aria-label="Previous day">‹ Prev</button>
+          <button class="btn" id="today" type="button">Today</button>
+          <button class="btn" id="next" type="button" aria-label="Next day">Next ›</button>
+          <label class="visually-hidden" for="pick">Pick a date</label>
+          <input type="date" id="pick" style="width:auto">
+          <span class="date-label" id="date-label" aria-live="polite"></span>
+        </div>
+        <div class="ledger-pages" id="grid"></div>
+        <div id="stray"></div>
+      </section>
+
+      <aside>
+        <section class="panel" aria-labelledby="inbox-title">
+          <h2 id="inbox-title">Inbox</h2>
+          <div id="inbox"><p class="muted">Nothing waiting.</p></div>
+        </section>
+
+        <section class="panel" aria-labelledby="summary-title">
+          <h2 id="summary-title">Doctor's summary</h2>
+          <p class="muted">Sends today's numbers to the clinic's WhatsApp numbers.</p>
+          <button class="btn primary" id="send-summary" type="button">Send summary to doctor</button>
+          <p id="summary-result" aria-live="polite"></p>
+        </section>
+
+        <section class="panel" aria-labelledby="calls-title">
+          <h2 id="calls-title">Recent calls</h2>
+          <div id="calls"><p class="muted">No calls yet.</p></div>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <dialog id="walkin" aria-labelledby="walkin-title">
+    <form method="dialog" id="walkin-form">
+      <h2 id="walkin-title">Add a booking</h2>
+      <p id="walkin-slot" class="muted"></p>
+      <label for="w-name">Name</label>
+      <input id="w-name" name="name" required maxlength="80" autocomplete="off">
+      <label for="w-phone">Mobile number <span class="hint">(optional, 10 digits)</span></label>
+      <input id="w-phone" name="phone" inputmode="tel" autocomplete="off">
+      <label for="w-source">Came in by</label>
+      <select id="w-source" name="source">
+        <option value="walk_in">Walk-in</option>
+        <option value="whatsapp">WhatsApp</option>
+      </select>
+      <p id="walkin-error" class="result-err" aria-live="assertive"></p>
+      <div class="form-actions">
+        <button class="btn" type="button" id="walkin-cancel">Cancel</button>
+        <button class="btn primary" type="submit" value="save">Add booking</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/static/common.js"></script>
+  <script src="/static/desk.js"></script>
+</body>
+</html>

@@ -11,22 +11,22 @@ Adding an idea: append it under the right phase with the next free number (101+)
 
 ## MVP
 
-Per-item titles for MVP items live in the team's original backlog; this file groups them by capability. Add titles here when convenient.
+Item titles are listed with each capability.
 
 | Capability | Items |
 |---|---|
-| C1 Phone line and coverage | 1, 2 |
-| C2 Natural conversation | 4, 5, 6, 15, 16, 17, 18 |
-| C3 Approved answers only | 7, 8 |
-| C4 One shared schedule | 31, 32, 33, 34, 36 *(moved into MVP: choose a doctor)*, 38 |
-| C5 Patient safety | 21, 22, 25, 26, 29, 30 |
-| C6 Escalation and failover | 23, 24, 27, 28 *(simplified)*, 89 |
-| C7 Receptionist screen | 35, 39, 61, 62, 63, 64, 67 |
-| C8 Doctor control on WhatsApp | 51, 52, 53 *(moved into MVP: auto-understood updates)*, 55 *(moved into MVP: preview before live)*, 57 *(moved into MVP: today's schedule on WhatsApp)*, 59 |
-| C9 Reminders | 41, 50 |
-| C10 Proof of value | 81, 82, 83, 85 |
-| C11 Privacy and reliability | 84, 86, 90 |
-| C12 Clinic setup from config | 80 *(light version: CLI from config; full form is Phase 2)* |
+| C1 Phone line and coverage | 1 Keep your existing number; 2 Covers missed and after-hours calls |
+| C2 Natural conversation | 4 Honest greeting with a human exit; 5 Hindi, English and Hinglish; 6 Replies in the caller's language; 15 Natural fillers; 16 Interruption handling; 17 Fast replies; 18 Read-back and confirm |
+| C3 Approved answers only | 7 Clinic-approved answers only; 8 Honest "I don't know" |
+| C4 One shared schedule | 31 Book by phone; 32 Only free slots offered; 33 Cancel or move by phone; 34 Real-time double-booking lock; 36 Choose a doctor *(moved into MVP)*; 38 Leave and holiday calendar |
+| C5 Patient safety | 21 No medical advice, ever; 22 Doctor-approved red-flag list; 25 After-hours emergency instruction; 26 Unsure means medical; 29 Book without interrogation; 30 Safety test suite |
+| C6 Escalation and failover | 23 Instant live transfer; 24 Urgent callback if nobody answers; 27 Escalation summary; 28 Backup chain *(simplified)*; 89 Failover |
+| C7 Receptionist screen | 35 Walk-in and WhatsApp entry; 39 Arrived, no-show, done; 61 Responsive web app; 62 Today view, every channel; 63 Doctor columns; 64 Callback and urgent inbox; 67 Big buttons, short training |
+| C8 Doctor control on WhatsApp | 51 Update by WhatsApp; 52 Done reply; 53 Auto-understood updates *(moved into MVP)*; 55 Preview before live *(moved into MVP)*; 57 Today's schedule on WhatsApp *(moved into MVP)*; 59 Test-call number |
+| C9 Reminders | 41 Automatic reminder; 50 Opt-out respected |
+| C10 Proof of value | 81 Call log with outcomes; 82 Weekly WhatsApp summary; 83 "Calls saved" counter; 85 Misunderstood-call review |
+| C11 Privacy and reliability | 84 Recordings and transcripts; 86 Clinic-only data access; 90 Health alerts |
+| C12 Clinic setup from config | 80 Clinic template setup *(light version: CLI from config; full form is Phase 2)* |
 
 ## Phase 2 (after Gate 1)
 
