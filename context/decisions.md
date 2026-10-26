@@ -8,7 +8,7 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 
 **Open decisions** (not yet ADRs) are at the bottom: D3–D7. D1 and D2 are Proposed ADRs (ADR-0029, ADR-0030).
 
-**Path note (2026-10-26):** older ADRs say `src/...`. The layout is now `backend/src/...` everywhere (e.g. `backend/src/providers/`).
+**Path note (2026-10-26):** older ADRs say `src/...`. The layout is now `backend/src/...` everywhere (e.g. `backend/src/providers/`). Section numbers (`architecture.md` §N) in ADRs dated before 2026-10-26 refer to the earlier architecture doc; see git history.
 
 ## Index
 

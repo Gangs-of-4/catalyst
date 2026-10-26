@@ -51,6 +51,7 @@ Each module's `README.md` states its purpose, the capabilities it serves, the co
 - Python 3.12 and FastAPI. Async for I/O.
 - **Pydantic models for every external payload:** webhooks (WhatsApp, voice platform, telephony), tool requests, and LLM structured output.
 - Ruff + Black in CI once CI exists.
+- **Before adding a dependency,** record its licence and any free-tier ceiling in `open-source/open-source.md`. Flag copyleft licences.
 - **[Post-MVP]** `mypy --strict` as a merge gate. Type hints are still expected in the MVP.
 
 ---
