@@ -1,4 +1,5 @@
 """POST /vapi/webhook: Vapi tool calls and server messages (contracts.md §1.10)."""
+
 import json
 import sqlite3
 
@@ -41,7 +42,11 @@ def tool_call_list(message: dict) -> list[_ToolCall]:
     """Accept both `toolCallList[]` and the older `toolWithToolCallList[].toolCall`."""
     raw = message.get("toolCallList")
     if not raw:
-        raw = [t.get("toolCall") for t in message.get("toolWithToolCallList") or [] if isinstance(t, dict)]
+        raw = [
+            t.get("toolCall")
+            for t in message.get("toolWithToolCallList") or []
+            if isinstance(t, dict)
+        ]
     out = []
     for item in raw or []:
         try:
@@ -63,7 +68,7 @@ async def webhook(
     try:
         body = await request.json()
     except (json.JSONDecodeError, UnicodeDecodeError):
-        raise HTTPException(400, "Body must be JSON")
+        raise HTTPException(400, "Body must be JSON") from None
     message = body.get("message") if isinstance(body, dict) else None
     if not isinstance(message, dict):
         raise HTTPException(400, "Missing message")
@@ -78,7 +83,7 @@ async def webhook(
             conn=conn,
             settings=cs.load(conn),
             call_id=call_id,
-            caller_phone=ph.normalize(((call.get("customer") or {}).get("number"))),
+            caller_phone=ph.normalize((call.get("customer") or {}).get("number")),
         )
         results = []
         for tc in tool_call_list(message):
@@ -88,8 +93,10 @@ async def webhook(
             else:
                 result = tools.run(ctx, tc.function.name, _args(tc.function.arguments))
                 with conn:
-                    conn.execute("INSERT OR IGNORE INTO tool_calls (id, result, created_at) VALUES (?, ?, ?)",
-                                 (tc.id, result, db.stamp()))
+                    conn.execute(
+                        "INSERT OR IGNORE INTO tool_calls (id, result, created_at) VALUES (?, ?, ?)",
+                        (tc.id, result, db.stamp()),
+                    )
             log.info("vapi: call %s tool %s", call_id, tc.function.name)
             results.append({"name": tc.function.name, "toolCallId": tc.id, "result": result})
         for job in ctx.defer:

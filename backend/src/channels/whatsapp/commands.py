@@ -2,6 +2,7 @@
 
 Every write is previewed and stored as a pending action per sender (ADR-0034). Reads answer at once.
 """
+
 import json
 import re
 import sqlite3
@@ -24,6 +25,7 @@ WRITE_INTENTS = ("block_day", "late_start", "early_close", "set_fee", "walk_in")
 
 class Command(BaseModel):
     """One parsed command. The same schema validates rule and LLM output."""
+
     intent: str
     date: str | None = None
     doctor_id: str | None = None
@@ -59,11 +61,49 @@ def _words(t: str, *options: str) -> bool:
     return any(re.search(r"(?<![\wऀ-ॿ])" + re.escape(o) + r"(?![\wऀ-ॿ])", t) for o in options)
 
 
-LEAVE = ("chhutti", "chutti", "chuti", "chhuti", "leave", "holiday", "off", "band", "absent", "छुट्टी", "बंद",
-         "nahi aayenge", "nahi aayengi", "nahi aaungi", "nahi aaunga", "nahi aayega", "nahi aayegi", "nahin aayengi",
-         "nahin aayenge", "not coming", "won't come", "nahi aa paungi", "nahi aa paunga")
+LEAVE = (
+    "chhutti",
+    "chutti",
+    "chuti",
+    "chhuti",
+    "leave",
+    "holiday",
+    "off",
+    "band",
+    "absent",
+    "छुट्टी",
+    "बंद",
+    "nahi aayenge",
+    "nahi aayengi",
+    "nahi aaungi",
+    "nahi aaunga",
+    "nahi aayega",
+    "nahi aayegi",
+    "nahin aayengi",
+    "nahin aayenge",
+    "not coming",
+    "won't come",
+    "nahi aa paungi",
+    "nahi aa paunga",
+)
 QUERY = ("appointments", "appointment", "schedule", "bookings", "booking", "patients", "list")
-CONFIRM = ("haan", "ha", "haa", "han", "yes", "y", "ok", "okay", "theek", "theek hai", "sahi", "sahi hai", "हाँ", "हां", "confirm")
+CONFIRM = (
+    "haan",
+    "ha",
+    "haa",
+    "han",
+    "yes",
+    "y",
+    "ok",
+    "okay",
+    "theek",
+    "theek hai",
+    "sahi",
+    "sahi hai",
+    "हाँ",
+    "हां",
+    "confirm",
+)
 REJECT = ("nahi", "nahin", "na", "no", "n", "mat", "cancel", "नहीं")
 
 
@@ -94,22 +134,49 @@ def parse_rules(text: str, s: dict, today: date) -> Command | None:
     if re.search(r"walk[\s-]?in", t):
         if not phone_m:
             return None
-        before = t[re.search(r"walk[\s-]?in", t).end():phone_m.start()]
-        name = " ".join(w.capitalize() for w in re.findall(r"[a-zऀ-ॿ]+", before) if w not in ("ka", "ki", "ke", "naam", "name"))
-        rest = t[phone_m.end():]
+        before = t[re.search(r"walk[\s-]?in", t).end() : phone_m.start()]
+        name = " ".join(
+            w.capitalize()
+            for w in re.findall(r"[a-zऀ-ॿ]+", before)
+            if w not in ("ka", "ki", "ke", "naam", "name")
+        )
+        rest = t[phone_m.end() :]
         d = parse_date(rest, today) or today
         tm = parse_time(re.sub(r"\b(?:dr\.?|doctor)\s+[a-z]+", " ", rest))
         doc = _doctor_in(s, rest)
         if not name or not tm:
             return None
-        return Command(intent="walk_in", name=name, phone=ph.normalize(phone_m[0]), date=d.isoformat(), time=tm,
-                       doctor_id=doc["id"] if doc else None)
+        return Command(
+            intent="walk_in",
+            name=name,
+            phone=ph.normalize(phone_m[0]),
+            date=d.isoformat(),
+            time=tm,
+            doctor_id=doc["id"] if doc else None,
+        )
 
-    fee_m = re.search(r"(.*?)\b(?:fee|fees|fees?\s+ab|charge)\b\s*(?:ab|ko|=|:|kar\s+do|is)?\s*(?:₹|rs\.?|rupees?)?\s*(\d{2,6})", t)
+    fee_m = re.search(
+        r"(.*?)\b(?:fee|fees|fees?\s+ab|charge)\b\s*(?:ab|ko|=|:|kar\s+do|is)?\s*(?:₹|rs\.?|rupees?)?\s*(\d{2,6})",
+        t,
+    )
     if fee_m:
         wanted = fee_m[1].strip() or "consultation"
-        svc = next((x for x in s["services"] if wanted in x["name"].lower() or x["name"].lower() in wanted), None)
-        svc = svc or next((x for x in s["services"] if any(w in x["name"].lower() for w in wanted.split() if len(w) > 3)), None)
+        svc = next(
+            (
+                x
+                for x in s["services"]
+                if wanted in x["name"].lower() or x["name"].lower() in wanted
+            ),
+            None,
+        )
+        svc = svc or next(
+            (
+                x
+                for x in s["services"]
+                if any(w in x["name"].lower() for w in wanted.split() if len(w) > 3)
+            ),
+            None,
+        )
         if not svc:
             return None
         return Command(intent="set_fee", service=svc["name"], fee=int(fee_m[2]))
@@ -121,13 +188,26 @@ def parse_rules(text: str, s: dict, today: date) -> Command | None:
 
     t_no_doc = re.sub(r"\b(?:dr\.?|doctor)\s+[a-z]+", " ", t)
     # Strip "28/10" and "28 oct" so the date's number isn't read as the hour.
-    no_dates = re.sub(r"\b\d{1,2}[/-]\d{1,2}\b|\b\d{1,2}\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b",
-                      " ", t_no_doc)
+    no_dates = re.sub(
+        r"\b\d{1,2}[/-]\d{1,2}\b|\b\d{1,2}\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b",
+        " ",
+        t_no_doc,
+    )
     tm = parse_time(no_dates) if re.search(r"\d|baje|बजे", no_dates) else None
     if tm and _words(t, "se", "from", "after", "baad", "से"):
-        return Command(intent="late_start", date=(d or today).isoformat(), time=tm, doctor_id=doc["id"] if doc else None)
+        return Command(
+            intent="late_start",
+            date=(d or today).isoformat(),
+            time=tm,
+            doctor_id=doc["id"] if doc else None,
+        )
     if tm and _words(t, "tak", "till", "until", "upto", "तक"):
-        return Command(intent="early_close", date=(d or today).isoformat(), time=tm, doctor_id=doc["id"] if doc else None)
+        return Command(
+            intent="early_close",
+            date=(d or today).isoformat(),
+            time=tm,
+            doctor_id=doc["id"] if doc else None,
+        )
     if _words(t, *LEAVE) and d:
         return Command(intent="block_day", date=d.isoformat(), doctor_id=doc["id"] if doc else None)
     return None
@@ -137,10 +217,16 @@ def parse_llm(text: str, s: dict, today: date) -> Command | None:
     """Fail closed: anything that isn't a valid known command returns None."""
     if not config.env("GROQ_API_KEY"):
         return None
-    template = (config.VERTICAL_DIR / "whatsapp-parse-prompt.md").read_text(encoding="utf-8").split("\n---\n", 1)[-1]
-    system = (template.replace("{today}", f"{today.isoformat()} ({today:%A})")
-              .replace("{doctors}", ", ".join(f"{d['id']}: {d['name']}" for d in s["doctors"]))
-              .replace("{services}", ", ".join(x["name"] for x in s["services"])))
+    template = (
+        (config.VERTICAL_DIR / "whatsapp-parse-prompt.md")
+        .read_text(encoding="utf-8")
+        .split("\n---\n", 1)[-1]
+    )
+    system = (
+        template.replace("{today}", f"{today.isoformat()} ({today:%A})")
+        .replace("{doctors}", ", ".join(f"{d['id']}: {d['name']}" for d in s["doctors"]))
+        .replace("{services}", ", ".join(x["name"] for x in s["services"]))
+    )
     raw = groq.complete_json(system, text)
     if not raw:
         return None
@@ -153,11 +239,16 @@ def parse_llm(text: str, s: dict, today: date) -> Command | None:
         return None
     if cmd.doctor_id and not cs.doctor(s, cmd.doctor_id):
         return None
-    if cmd.intent in ("block_day", "late_start", "early_close", "walk_in", "query_day") and not cmd.date:
+    if (
+        cmd.intent in ("block_day", "late_start", "early_close", "walk_in", "query_day")
+        and not cmd.date
+    ):
         return None
     if cmd.intent in ("late_start", "early_close", "walk_in") and not cmd.time:
         return None
-    if cmd.intent == "set_fee" and (not cmd.fee or not any(x["name"] == cmd.service for x in s["services"])):
+    if cmd.intent == "set_fee" and (
+        not cmd.fee or not any(x["name"] == cmd.service for x in s["services"])
+    ):
         return None
     if cmd.intent == "walk_in" and not (cmd.name and ph.normalize(cmd.phone)):
         return None
@@ -165,6 +256,7 @@ def parse_llm(text: str, s: dict, today: date) -> Command | None:
 
 
 # ---------- wording ----------
+
 
 def day_word(d: date, today: date) -> str:
     rel = {0: "aaj", 1: "kal", 2: "parso"}.get((d - today).days)
@@ -175,15 +267,17 @@ def who(s: dict, doctor_id: str | None) -> str:
     return cs.doctor_name(s, doctor_id) if doctor_id else "Poori clinic"
 
 
-HELP = ("Commands:\n"
-        "• aaj / kal ke appointments\n"
-        "• callbacks\n"
-        "• summary\n"
-        "• kal chhutti  |  Dr Asha kal nahi aayengi\n"
-        "• aaj 11 baje se  |  aaj 6 baje tak\n"
-        "• consultation fee 400\n"
-        "• walk-in Ramesh 9876543210 aaj 5 baje\n"
-        "Har badlav pehle preview hoga; 'Haan' bhejne par hi lagega.")
+HELP = (
+    "Commands:\n"
+    "• aaj / kal ke appointments\n"
+    "• callbacks\n"
+    "• summary\n"
+    "• kal chhutti  |  Dr Asha kal nahi aayengi\n"
+    "• aaj 11 baje se  |  aaj 6 baje tak\n"
+    "• consultation fee 400\n"
+    "• walk-in Ramesh 9876543210 aaj 5 baje\n"
+    "Har badlav pehle preview hoga; 'Haan' bhejne par hi lagega."
+)
 
 
 def preview(conn: sqlite3.Connection, s: dict, cmd: Command, today: date) -> str | None:
@@ -240,7 +334,10 @@ def apply(conn: sqlite3.Connection, s: dict, cmd: Command) -> str:
         try:
             bk.book(conn, s, doc["id"], d, cmd.time, cmd.name, cmd.phone, "whatsapp")
         except bk.BookingError as e:
-            alt = ", ".join(f"{spoken_time(a.time)} {cs.doctor_name(s, a.resource_id)}" for a in e.alternatives[:3])
+            alt = ", ".join(
+                f"{spoken_time(a.time)} {cs.doctor_name(s, a.resource_id)}"
+                for a in e.alternatives[:3]
+            )
             return "Yeh slot free nahi hai." + (f" Free: {alt}." if alt else "")
         return f"Done ✅ {cmd.name} — {short_date(d)}, {spoken_time(cmd.time)}, {doc['name']}. Desk par dikh raha hai."
     start, end = _block_range(cmd)
@@ -248,8 +345,14 @@ def apply(conn: sqlite3.Connection, s: dict, cmd: Command) -> str:
     kind = {"block_day": "holiday" if not cmd.doctor_id else "leave"}.get(cmd.intent, cmd.intent)
     bk.add_block(conn, d, kind, "whatsapp", cmd.doctor_id, start, end)
     for b in affected:
-        inbox.create(conn, "callback", name=b["name"], phone=b["phone"], reason="other",
-                     note=f"Booking {short_date(d)} {spoken_time(b['time'])} affected by schedule change; offer a new time.")
+        inbox.create(
+            conn,
+            "callback",
+            name=b["name"],
+            phone=b["phone"],
+            reason="other",
+            note=f"Booking {short_date(d)} {spoken_time(b['time'])} affected by schedule change; offer a new time.",
+        )
     extra = f" {len(affected)} patient(s) callback list mein." if affected else ""
     return f"Done ✅ Live hai.{extra}"
 
@@ -266,11 +369,14 @@ def answer_read(conn: sqlite3.Connection, s: dict, cmd: Command, today: date) ->
         lines = [f"Pending ({len(items)}):"]
         for it in items[:10]:
             mark = "🔴 " if it["urgent"] else "• "
-            lines.append(f"{mark}{it['name'] or 'No name'} {ph.spoken(it['phone'])} — {(it['note'] or it['reason'] or '')[:80]}")
+            lines.append(
+                f"{mark}{it['name'] or 'No name'} {ph.spoken(it['phone'])} — {(it['note'] or it['reason'] or '')[:80]}"
+            )
         return "\n".join(lines)
     d = date.fromisoformat(cmd.date)
     rows = conn.execute(
-        "SELECT * FROM bookings WHERE date = ? AND status != 'cancelled' ORDER BY time", (d.isoformat(),)
+        "SELECT * FROM bookings WHERE date = ? AND status != 'cancelled' ORDER BY time",
+        (d.isoformat(),),
     ).fetchall()
     word = day_word(d, today)
     head = f"{word[0].upper()}{word[1:]} ke appointments ({len(rows)}):"
@@ -279,17 +385,27 @@ def answer_read(conn: sqlite3.Connection, s: dict, cmd: Command, today: date) ->
     lines = [head]
     for doc in s["doctors"]:
         mine = [r for r in rows if r["resource_id"] == doc["id"]]
-        listing = "; ".join(f"{spoken_time(r['time'])} {r['name']}" + ("" if r["status"] == "booked" else f" ({r['status']})")
-                            for r in mine) or "koi nahi"
+        listing = (
+            "; ".join(
+                f"{spoken_time(r['time'])} {r['name']}"
+                + ("" if r["status"] == "booked" else f" ({r['status']})")
+                for r in mine
+            )
+            or "koi nahi"
+        )
         lines.append(f"{doc['name']}: {listing}")
     for b in bk.blocks_on(conn, d):
-        lines.append(f"⛔ {who(s, b['resource_id'])}: {b['kind'].replace('_', ' ')}" + (f" {b['start']}–{b['end']}" if b["start"] else ""))
+        lines.append(
+            f"⛔ {who(s, b['resource_id'])}: {b['kind'].replace('_', ' ')}"
+            + (f" {b['start']}–{b['end']}" if b["start"] else "")
+        )
     pending = len(inbox.open_items(conn))
     lines.append(f"Pending callbacks: {pending}")
     return "\n".join(lines)
 
 
 # ---------- conversation state ----------
+
 
 def save_pending(conn: sqlite3.Connection, sender: str, cmd: Command) -> None:
     with conn:
@@ -313,7 +429,10 @@ def take_pending(conn: sqlite3.Connection, s: dict, sender: str) -> Command | No
 
 
 def has_pending(conn: sqlite3.Connection, sender: str) -> bool:
-    return conn.execute("SELECT 1 FROM pending_actions WHERE sender = ?", (sender,)).fetchone() is not None
+    return (
+        conn.execute("SELECT 1 FROM pending_actions WHERE sender = ?", (sender,)).fetchone()
+        is not None
+    )
 
 
 def handle(conn: sqlite3.Connection, sender: str, text: str) -> tuple[str, bool]:
@@ -334,7 +453,9 @@ def handle(conn: sqlite3.Connection, sender: str, text: str) -> tuple[str, bool]
     cmd = parse_rules(text, s, today) or parse_llm(text, s, today)
     if cmd is None:
         # The message text goes to the inbox (DB) so our team can act on it the same day; never to logs.
-        inbox.create(conn, "ops", phone=sender, reason="whatsapp_unparsed", note=f"WhatsApp: {text[:300]}")
+        inbox.create(
+            conn, "ops", phone=sender, reason="whatsapp_unparsed", note=f"WhatsApp: {text[:300]}"
+        )
         return "Samajh nahi aaya — team dekh legi.", False
     if cmd.intent in READ_INTENTS:
         return answer_read(conn, s, cmd, today), False

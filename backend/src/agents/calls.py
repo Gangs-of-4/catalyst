@@ -1,4 +1,5 @@
 """One row per call: flags raised by tools, outcome and report from the end-of-call message (C10)."""
+
 import json
 import sqlite3
 
@@ -10,7 +11,9 @@ FLAGS = ("booked", "changed", "escalated", "callback")
 
 def touch(conn: sqlite3.Connection, call_id: str) -> None:
     with conn:
-        conn.execute("INSERT OR IGNORE INTO calls (id, started_at) VALUES (?, ?)", (call_id, db.stamp()))
+        conn.execute(
+            "INSERT OR IGNORE INTO calls (id, started_at) VALUES (?, ?)", (call_id, db.stamp())
+        )
 
 
 def flag(conn: sqlite3.Connection, call_id: str | None, name: str) -> None:
@@ -81,5 +84,7 @@ def end_of_call(conn: sqlite3.Connection, message: dict) -> str | None:
             ),
         )
         if message.get("startedAt"):
-            conn.execute("UPDATE calls SET started_at = ? WHERE id = ?", (message["startedAt"], call_id))
+            conn.execute(
+                "UPDATE calls SET started_at = ? WHERE id = ?", (message["startedAt"], call_id)
+            )
     return result

@@ -1,4 +1,5 @@
 """App logger with a redaction filter: anything that looks like a phone number is masked."""
+
 import logging
 import re
 

@@ -13,9 +13,25 @@ def client(isolated):
 
 def current(client):
     s = client.get("/api/setup").json()["settings"]
-    return {k: s[k] for k in ("name", "city", "address", "landmark", "sessions", "closed_weekdays", "slot_min",
-                              "doctors", "services", "faqs", "red_flags", "emergency_instruction",
-                              "whatsapp_numbers", "voice")}
+    return {
+        k: s[k]
+        for k in (
+            "name",
+            "city",
+            "address",
+            "landmark",
+            "sessions",
+            "closed_weekdays",
+            "slot_min",
+            "doctors",
+            "services",
+            "faqs",
+            "red_flags",
+            "emergency_instruction",
+            "whatsapp_numbers",
+            "voice",
+        )
+    }
 
 
 def test_save_without_agent_says_so(client):
@@ -27,8 +43,11 @@ def test_save_without_agent_says_so(client):
 
 
 def test_save_syncs_agent_and_reports_error(client, isolated, monkeypatch):
-    isolated.write_text("VAPI_PRIVATE_KEY=k\nVAPI_ASSISTANT_ID=a1\nPUBLIC_URL=https://x.trycloudflare.com\n"
-                        "CATALYST_TOOL_SECRET=s\n", encoding="utf-8")
+    isolated.write_text(
+        "VAPI_PRIVATE_KEY=k\nVAPI_ASSISTANT_ID=a1\nPUBLIC_URL=https://x.trycloudflare.com\n"
+        "CATALYST_TOOL_SECRET=s\n",
+        encoding="utf-8",
+    )
     calls = []
 
     def fake(method, url, json=None, **kw):
@@ -42,20 +61,32 @@ def test_save_syncs_agent_and_reports_error(client, isolated, monkeypatch):
     assert (method, url) == ("PATCH", "https://api.vapi.ai/assistant/a1")
     assert payload["voice"]["voiceId"] == "hi-IN-MadhurNeural"
 
-    monkeypatch.setattr(httpx, "request", lambda m, u, **k: httpx.Response(
-        400, text='{"message":"bad voice"}', request=httpx.Request(m, u)))
+    monkeypatch.setattr(
+        httpx,
+        "request",
+        lambda m, u, **k: httpx.Response(
+            400, text='{"message":"bad voice"}', request=httpx.Request(m, u)
+        ),
+    )
     r = client.put("/api/setup", json=current(client)).json()
     assert "failed" in r["agent"] and "bad voice" in r["agent"]
 
 
-@pytest.mark.parametrize("change, message", [
-    ({"sessions": [["14:00", "10:00"]]}, "start before end"),
-    ({"whatsapp_numbers": ["12345"]}, "not a 10-digit"),
-    ({"doctors": []}, ""),
-])
+@pytest.mark.parametrize(
+    "change, message",
+    [
+        ({"sessions": [["14:00", "10:00"]]}, "start before end"),
+        ({"whatsapp_numbers": ["12345"]}, "not a 10-digit"),
+        ({"doctors": []}, ""),
+    ],
+)
 def test_validation_is_readable(client, change, message):
     r = client.put("/api/setup", json={**current(client), **change})
-    assert r.status_code == 422 and isinstance(r.json()["detail"], str) and message in r.json()["detail"]
+    assert (
+        r.status_code == 422
+        and isinstance(r.json()["detail"], str)
+        and message in r.json()["detail"]
+    )
 
 
 def test_new_doctor_gets_stable_id_and_old_ids_kept(client):

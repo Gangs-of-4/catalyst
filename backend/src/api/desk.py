@@ -1,4 +1,5 @@
 """Receptionist desk: pages and APIs behind DESK_PASSWORD (C7, C10)."""
+
 import json
 import sqlite3
 from datetime import date
@@ -30,7 +31,8 @@ def desk_page() -> FileResponse:
 def meta(conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     s = cs.load(conn)
     return {
-        "clinic": s["name"], "city": s.get("city", ""),
+        "clinic": s["name"],
+        "city": s.get("city", ""),
         "authOpen": not env("DESK_PASSWORD"),
         "twilio": twilio_whatsapp.configured(),
         "whatsappNumbers": len(alerts.recipients(s)),
@@ -42,11 +44,13 @@ def _day(value: str | None) -> date:
     try:
         return date.fromisoformat(value) if value else config.now().date()
     except ValueError:
-        raise HTTPException(400, "Date must be YYYY-MM-DD")
+        raise HTTPException(400, "Date must be YYYY-MM-DD") from None
 
 
 @router.get("/api/desk/day")
-def day(date_: str | None = Query(None, alias="date"), conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+def day(
+    date_: str | None = Query(None, alias="date"), conn: sqlite3.Connection = Depends(get_conn)
+) -> dict:
     d = _day(date_)
     grid = bk.day_grid(conn, cs.load(conn), d)
     today = config.now().date()
@@ -72,11 +76,17 @@ def add_booking(body: WalkIn, conn: sqlite3.Connection = Depends(get_conn)) -> d
         raise HTTPException(422, "Source must be walk_in or whatsapp.")
     s = cs.load(conn)
     try:
-        bid = bk.book(conn, s, body.doctor_id, _day(body.date), body.time, body.name, phone, body.source)
+        bid = bk.book(
+            conn, s, body.doctor_id, _day(body.date), body.time, body.name, phone, body.source
+        )
     except bk.BookingError as e:
-        alt = ", ".join(f"{spoken_time(a.time)} {cs.doctor_name(s, a.resource_id)}" for a in e.alternatives[:3])
+        alt = ", ".join(
+            f"{spoken_time(a.time)} {cs.doctor_name(s, a.resource_id)}" for a in e.alternatives[:3]
+        )
         status = 409 if e.code == "SLOT_TAKEN" else 422
-        raise HTTPException(status, "That slot isn't free." + (f" Free nearby: {alt}." if alt else ""))
+        raise HTTPException(
+            status, "That slot isn't free." + (f" Free nearby: {alt}." if alt else "")
+        ) from e
     return {"id": bid}
 
 
@@ -85,11 +95,13 @@ class StatusChange(BaseModel):
 
 
 @router.post("/api/desk/bookings/{booking_id}/status")
-def set_status(booking_id: int, body: StatusChange, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+def set_status(
+    booking_id: int, body: StatusChange, conn: sqlite3.Connection = Depends(get_conn)
+) -> dict:
     try:
         bk.set_status(conn, booking_id, body.status)
     except bk.BookingError as e:
-        raise HTTPException(409 if e.code == "SLOT_TAKEN" else 422, str(e))
+        raise HTTPException(409 if e.code == "SLOT_TAKEN" else 422, str(e)) from e
     return {"ok": True}
 
 
@@ -128,7 +140,11 @@ def send_summary(conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     today = config.now().date()
     text = summary.summary_text(s["name"], today, summary.day_stats(conn, today))
     if not alerts.recipients(s):
-        return {"sent": 0, "text": text, "note": "No WhatsApp numbers in settings. Add them on the setup page."}
+        return {
+            "sent": 0,
+            "text": text,
+            "note": "No WhatsApp numbers in settings. Add them on the setup page.",
+        }
     sent = alerts.broadcast(s, text)
     note = None if sent else "Twilio isn't configured or the send failed; check the server log."
     return {"sent": sent, "text": text, "note": note}
