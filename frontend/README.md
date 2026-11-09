@@ -2,7 +2,7 @@
 
 **Demo build (ADR-0035):** plain HTML, CSS and JS served by the backend. There is no build step and nothing to `npm install`. The planned Next.js app replaces this before the pilot.
 
-**Hosting (ADR-0036):** the same files are deployed to Vercel by `.github/workflows/deploy-frontend.yml` on every push to `main` that touches `frontend/`. See [Deploying to Vercel](#deploying-to-vercel).
+**Hosting (ADR-0036):** the same files are deployed to Vercel by `.github/workflows/deploy-frontend.yml` after CI passes on every push to `main`. See [Deploying to Vercel](#deploying-to-vercel).
 
 | Page | File | Who | Capability |
 |---|---|---|---|
