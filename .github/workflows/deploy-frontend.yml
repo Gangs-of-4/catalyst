@@ -1,8 +1,7 @@
 # Deploy frontend/ to Vercel production (ADR-0036).
-# build runs while .git exists; .git is then removed from this runner's temporary checkout
-# so Vercel Hobby receives no commit-author metadata and any teammate's merge deploys.
-# Commit authors and history are never changed. GitHub records github.sha under the
-# `production` environment.
+# The repo is public, so Vercel Hobby deploys any teammate's commit with its real Git
+# metadata. Keep the repo public: Hobby can't deploy a private org repo (ADR-0036).
+# GitHub records github.sha under the `production` environment.
 name: Deploy frontend (Vercel)
 
 on:
@@ -44,11 +43,8 @@ jobs:
       - name: Pull Vercel production settings and env vars
         run: npx --yes vercel@65.1.0 pull --yes --environment=production --token="$VERCEL_TOKEN"
 
-      - name: Build (while .git is still present)
+      - name: Build
         run: npx --yes vercel@65.1.0 build --prod --token="$VERCEL_TOKEN"
-
-      - name: Remove Git metadata from the runner checkout
-        run: rm -rf .git
 
       - name: Deploy prebuilt output to production
         id: deploy

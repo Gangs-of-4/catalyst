@@ -31,7 +31,7 @@ Then copy `vapi.bundle.js` into `frontend/static/`. Don't move to 3.x without te
 
 ## Deploying to Vercel
 
-Production deploys come only from GitHub Actions (`.github/workflows/deploy-frontend.yml`); Vercel's Git integration is off (`vercel.json`). The workflow runs `vercel pull`, then `vercel build --prod` while `.git` exists, then deletes `.git` from the runner's temporary checkout and runs `vercel deploy --prebuilt --prod`. Vercel then sees no commit author, so a merge by any teammate deploys on the Hobby plan. Commits and history are untouched; GitHub records the deployed SHA under the `production` environment.
+Production deploys come only from GitHub Actions (`.github/workflows/deploy-frontend.yml`); Vercel's Git integration is off (`vercel.json`). The workflow runs `vercel pull`, `vercel build --prod` and `vercel deploy --prebuilt --prod`. Because the repo is public, Vercel Hobby deploys a merge by any teammate (its commit-author check applies only to private org repos). **Keep the repo public**; see ADR-0036. GitHub records the deployed SHA under the `production` environment.
 
 - `vercel.json` runs `node build.mjs`, which copies the pages and `static/` into `dist/` and writes `dist/static/config.js` from `NEXT_PUBLIC_API_URL`.
 - `NEXT_PUBLIC_API_URL` is the backend's public HTTPS URL, set in the Vercel project's **Production** environment variables. Empty = same-origin `/api` (local FastAPI behaviour). The backend must list the Vercel domain in `CORS_ALLOWED_ORIGINS`.
