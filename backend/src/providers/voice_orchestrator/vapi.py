@@ -79,7 +79,7 @@ def _request(method: str, path: str, body: dict | None = None) -> dict:
             method, API + path, json=body, timeout=20, headers={"Authorization": f"Bearer {key}"}
         )
     except httpx.HTTPError as e:
-        raise VapiError(f"Could not reach Vapi: {type(e).__name__}")
+        raise VapiError(f"Could not reach Vapi: {type(e).__name__}") from e
     if r.status_code >= 300:
         raise VapiError(f"Vapi said HTTP {r.status_code}: {r.text[:1500]}")
     return r.json() if r.content else {}

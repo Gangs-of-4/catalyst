@@ -207,12 +207,12 @@ def book(
         )
         if _commit:
             conn.commit()
-    except sqlite3.IntegrityError:
+    except sqlite3.IntegrityError as e:
         if _commit:
             conn.rollback()
         raise BookingError(
             "SLOT_TAKEN", "That slot was just taken", find_slots(conn, s, d, time, None)
-        )
+        ) from e
     return cur.lastrowid
 
 
@@ -240,8 +240,8 @@ def set_status(conn: sqlite3.Connection, booking_id: int, status: str) -> None:
                 "UPDATE bookings SET status = ?, updated_at = ? WHERE id = ?",
                 (status, db.stamp(), booking_id),
             )
-    except sqlite3.IntegrityError:
-        raise BookingError("SLOT_TAKEN", "Another booking now holds that slot")
+    except sqlite3.IntegrityError as e:
+        raise BookingError("SLOT_TAKEN", "Another booking now holds that slot") from e
 
 
 def cancel(conn: sqlite3.Connection, booking_id: int) -> sqlite3.Row:

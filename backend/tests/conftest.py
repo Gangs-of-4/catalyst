@@ -2,9 +2,9 @@ from datetime import datetime
 
 import pytest
 
+from src import seed
 from src.core import config, db
 from src.core import settings as cs
-from src import seed
 
 # Tuesday 27 Oct 2026, 09:00 IST: before clinic hours, so all of today's slots are open.
 FIXED_NOW = datetime(2026, 10, 27, 9, 0, tzinfo=config.IST)

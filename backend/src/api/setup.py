@@ -177,7 +177,7 @@ def add_block(body: BlockIn, conn: sqlite3.Connection = Depends(get_conn)) -> di
     try:
         d = date.fromisoformat(body.date)
     except ValueError:
-        raise HTTPException(422, "Pick a date.")
+        raise HTTPException(422, "Pick a date.") from None
     if d < config.now().date():
         raise HTTPException(422, "That date has passed.")
     if body.doctor_id and not cs.doctor(s, body.doctor_id):

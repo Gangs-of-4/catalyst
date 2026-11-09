@@ -5,9 +5,9 @@ Results state the resolved day and date so the agent reads back exactly what was
 
 import sqlite3
 import traceback
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Callable
 
 from .. import inbox
 from ..booking import service as bk

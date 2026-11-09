@@ -44,7 +44,7 @@ def _day(value: str | None) -> date:
     try:
         return date.fromisoformat(value) if value else config.now().date()
     except ValueError:
-        raise HTTPException(400, "Date must be YYYY-MM-DD")
+        raise HTTPException(400, "Date must be YYYY-MM-DD") from None
 
 
 @router.get("/api/desk/day")
@@ -86,7 +86,7 @@ def add_booking(body: WalkIn, conn: sqlite3.Connection = Depends(get_conn)) -> d
         status = 409 if e.code == "SLOT_TAKEN" else 422
         raise HTTPException(
             status, "That slot isn't free." + (f" Free nearby: {alt}." if alt else "")
-        )
+        ) from e
     return {"id": bid}
 
 
@@ -101,7 +101,7 @@ def set_status(
     try:
         bk.set_status(conn, booking_id, body.status)
     except bk.BookingError as e:
-        raise HTTPException(409 if e.code == "SLOT_TAKEN" else 422, str(e))
+        raise HTTPException(409 if e.code == "SLOT_TAKEN" else 422, str(e)) from e
     return {"ok": True}
 
 

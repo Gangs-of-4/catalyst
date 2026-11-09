@@ -43,15 +43,18 @@ async def incoming(
     raw = (await request.body()).decode("utf-8", errors="replace")
     params = dict(parse_qsl(raw, keep_blank_values=True))
     token, public = env("TWILIO_AUTH_TOKEN"), env("PUBLIC_URL").rstrip("/")
-    if token and public:
-        # Behind the tunnel Twilio signs the public URL, not the local one.
-        if not signature_ok(
+    # Behind the tunnel Twilio signs the public URL, not the local one.
+    if (
+        token
+        and public
+        and not signature_ok(
             request.headers.get("x-twilio-signature"), public + "/whatsapp/incoming", params, token
-        ):
-            log.warning(
-                "whatsapp: bad Twilio signature (is PUBLIC_URL current and the sandbox URL the same?)"
-            )
-            return Response(status_code=403)
+        )
+    ):
+        log.warning(
+            "whatsapp: bad Twilio signature (is PUBLIC_URL current and the sandbox URL the same?)"
+        )
+        return Response(status_code=403)
 
     sender = ph.normalize(params.get("From", ""))
     text = (params.get("Body") or "").strip()

@@ -3,7 +3,7 @@
 import base64
 import hmac
 import sqlite3
-from typing import Iterator
+from collections.abc import Iterator
 
 from fastapi import HTTPException, Request
 

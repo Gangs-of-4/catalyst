@@ -25,7 +25,7 @@ def inbox_alert_text(item: dict) -> str:
     else:
         head = "Callback requested"
     lines = (item.get("note") or item.get("reason") or "").strip().splitlines()
-    summary = "\n".join(l.strip() for l in lines if l.strip())[:220]
+    summary = "\n".join(line.strip() for line in lines if line.strip())[:220]
     who = f"Name: {item.get('name') or 'not given'}  Phone: {ph.spoken(item.get('phone')) or 'not given'}"
     return f"{head}\n{who}\n{summary}\nDesk par 'Mark done' karein."
 

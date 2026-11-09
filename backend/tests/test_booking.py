@@ -29,9 +29,8 @@ def test_db_index_refuses_double_booking_even_without_app_checks(conn):
     )
     with conn:
         conn.execute(sql)
-    with pytest.raises(sqlite3.IntegrityError):
-        with other:
-            other.execute(sql)
+    with pytest.raises(sqlite3.IntegrityError), other:
+        other.execute(sql)
     other.close()
 
 
@@ -92,6 +91,7 @@ def test_late_start_and_early_close(conn, settings):
 
 def test_past_times_today_are_excluded(conn, settings, monkeypatch):
     from datetime import datetime
+
     from src.core import config
 
     monkeypatch.setattr(config, "now", lambda: datetime(2026, 10, 27, 12, 10, tzinfo=config.IST))

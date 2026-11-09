@@ -186,7 +186,9 @@ def test_twilio_signature(client, isolated):
         headers={"content-type": "application/x-www-form-urlencoded", "x-twilio-signature": "bad"},
     )
     assert r.status_code == 403
-    import base64, hashlib, hmac
+    import base64
+    import hashlib
+    import hmac
 
     url = "https://demo.trycloudflare.com/whatsapp/incoming"
     sig = base64.b64encode(

@@ -68,7 +68,7 @@ async def webhook(
     try:
         body = await request.json()
     except (json.JSONDecodeError, UnicodeDecodeError):
-        raise HTTPException(400, "Body must be JSON")
+        raise HTTPException(400, "Body must be JSON") from None
     message = body.get("message") if isinstance(body, dict) else None
     if not isinstance(message, dict):
         raise HTTPException(400, "Missing message")
@@ -83,7 +83,7 @@ async def webhook(
             conn=conn,
             settings=cs.load(conn),
             call_id=call_id,
-            caller_phone=ph.normalize(((call.get("customer") or {}).get("number"))),
+            caller_phone=ph.normalize((call.get("customer") or {}).get("number")),
         )
         results = []
         for tc in tool_call_list(message):
