@@ -1,0 +1,65 @@
+# Deploy frontend/ to Vercel production (ADR-0036).
+# build runs while .git exists; .git is then removed from this runner's temporary checkout
+# so Vercel Hobby receives no commit-author metadata and any teammate's merge deploys.
+# Commit authors and history are never changed. GitHub records github.sha under the
+# `production` environment.
+name: Deploy frontend (Vercel)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: vercel-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build and deploy to Vercel production
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Pull Vercel production settings and env vars
+        run: npx --yes vercel@65.1.0 pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build (while .git is still present)
+        run: npx --yes vercel@65.1.0 build --prod --token="$VERCEL_TOKEN"
+
+      - name: Remove Git metadata from the runner checkout
+        run: rm -rf .git
+
+      - name: Deploy prebuilt output to production
+        id: deploy
+        run: |
+          url="$(npx --yes vercel@65.1.0 deploy --prebuilt --prod --token="$VERCEL_TOKEN")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Record deployed commit
+        run: |
+          {
+            echo "### Vercel production deployment"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- URL: ${{ steps.deploy.outputs.url }}"
+          } >> "$GITHUB_STEP_SUMMARY"

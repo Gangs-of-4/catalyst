@@ -16,10 +16,12 @@ const h = (tag, attrs = {}, ...children) => {
   return node;
 };
 
+const API_BASE = String(window.CATALYST_API_URL || "").replace(/\/+$/, "");
+
 async function api(path, options = {}) {
   const opts = { headers: { "Content-Type": "application/json" }, credentials: "same-origin", ...options };
   if (opts.body && typeof opts.body !== "string") opts.body = JSON.stringify(opts.body);
-  const res = await fetch(path, opts);
+  const res = await fetch(API_BASE + path, opts);
   const text = await res.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = { detail: text }; }
