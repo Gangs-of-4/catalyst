@@ -1,4 +1,5 @@
 """Loads verticals/clinic/ config. Only loads and shapes; no behaviour."""
+
 from pathlib import Path
 from typing import Any
 

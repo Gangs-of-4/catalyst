@@ -1,4 +1,5 @@
 """Push changed clinic settings to the voice agent, so it never quotes stale facts."""
+
 from ..core import db
 from ..core.config import env
 from ..core.log import log
@@ -12,7 +13,9 @@ def agent_configured() -> bool:
 def sync_agent() -> str:
     """Returns a one-line result. Never raises: settings are saved either way."""
     if not agent_configured():
-        return "Saved. The agent isn't set up yet (run scripts/setup_vapi.py), so nothing to update."
+        return (
+            "Saved. The agent isn't set up yet (run scripts/setup_vapi.py), so nothing to update."
+        )
     conn = db.connect()
     try:
         result = vapi.sync(conn)

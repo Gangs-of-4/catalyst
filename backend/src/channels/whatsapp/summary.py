@@ -1,4 +1,5 @@
 """Day stats and the doctor's WhatsApp summary (C10). Counts only; no patient details."""
+
 import sqlite3
 from datetime import date
 
@@ -15,9 +16,12 @@ def day_stats(conn: sqlite3.Connection, d: date) -> dict:
     for c in calls:
         if c["outcome"] in outcomes:
             outcomes[c["outcome"]] += 1
-    sources = dict(conn.execute(
-        "SELECT source, COUNT(*) FROM bookings WHERE date = ? AND status != 'cancelled' GROUP BY source", (day,)
-    ).fetchall())
+    sources = dict(
+        conn.execute(
+            "SELECT source, COUNT(*) FROM bookings WHERE date = ? AND status != 'cancelled' GROUP BY source",
+            (day,),
+        ).fetchall()
+    )
     open_items = conn.execute(
         "SELECT SUM(urgent = 1), SUM(urgent = 0 AND kind = 'callback') FROM inbox WHERE done_at IS NULL"
     ).fetchone()
@@ -37,8 +41,11 @@ def day_stats(conn: sqlite3.Connection, d: date) -> dict:
 def stats_sentence(st: dict) -> str:
     def n(count: int, word: str) -> str:
         return f"{count} {word}" + ("" if count == 1 else "s")
-    return (f"Today: {n(st['calls'], 'call')}, {st['booked_calls']} booked, {st['urgent_open']} urgent, "
-            f"{n(st['callbacks_open'], 'callback')} open.")
+
+    return (
+        f"Today: {n(st['calls'], 'call')}, {st['booked_calls']} booked, {st['urgent_open']} urgent, "
+        f"{n(st['callbacks_open'], 'callback')} open."
+    )
 
 
 def summary_text(clinic: str, d: date, st: dict) -> str:

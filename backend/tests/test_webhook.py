@@ -29,7 +29,9 @@ def tool_calls(name, args, call_id="call-1", tc_id="tc-1", legacy=False, custome
     item = {"id": tc_id, "type": "function", "function": {"name": name, "arguments": args}}
     msg = {"type": "tool-calls", "call": call}
     if legacy:
-        msg["toolWithToolCallList"] = [{"type": "function", "function": {"name": name}, "toolCall": item}]
+        msg["toolWithToolCallList"] = [
+            {"type": "function", "function": {"name": name}, "toolCall": item}
+        ]
     else:
         msg["toolCallList"] = [item]
     return {"message": msg}
@@ -56,7 +58,10 @@ def test_missing_or_wrong_secret_is_401(client):
 
 def test_unset_secret_rejects_everything(client, isolated):
     isolated.write_text("", encoding="utf-8")
-    assert post(client, tool_calls("find_slots", {"date": "kal"}), secret="anything").status_code == 401
+    assert (
+        post(client, tool_calls("find_slots", {"date": "kal"}), secret="anything").status_code
+        == 401
+    )
 
 
 def test_find_slots_current_shape(client):
@@ -79,10 +84,20 @@ def test_unknown_question_says_not_found(client):
 
 
 def test_book_then_double_book_then_cancel(client):
-    args = {"name": "Caller One", "phone": "98765 43210", "date": "kal", "time": "5 baje", "doctor": "Dr Asha"}
+    args = {
+        "name": "Caller One",
+        "phone": "98765 43210",
+        "date": "kal",
+        "time": "5 baje",
+        "doctor": "Dr Asha",
+    }
     r = result(post(client, tool_calls("book", args, tc_id="b1")))
     assert r["result"].startswith("BOOKED") and "Wednesday, 28 October 2026, 5 PM" in r["result"]
-    r2 = result(post(client, tool_calls("book", {**args, "name": "Caller Two"}, call_id="call-2", tc_id="b2")))
+    r2 = result(
+        post(
+            client, tool_calls("book", {**args, "name": "Caller Two"}, call_id="call-2", tc_id="b2")
+        )
+    )
     assert r2["result"].startswith("NOT BOOKED") and "alternatives" in r2["result"]
     found = result(post(client, tool_calls("find_booking", {"phone": "9876543210"}, tc_id="f1")))
     assert "booking 1" in found["result"]
@@ -104,16 +119,45 @@ def test_caller_id_is_default_phone(client):
 
 
 def test_reschedule(client):
-    post(client, tool_calls("book", {"name": "A", "phone": "9876543210", "date": "kal", "time": "11",
-                                     "doctor": "Asha"}, tc_id="b"))
-    r = result(post(client, tool_calls("reschedule", {"phone": "9876543210", "new_date": "parso",
-                                                      "new_time": "saade 5"}, tc_id="r")))
-    assert r["result"].startswith("MOVED") and "Thursday, 29 October 2026, 5:30 PM with Dr. Asha Verma" in r["result"]
+    post(
+        client,
+        tool_calls(
+            "book",
+            {"name": "A", "phone": "9876543210", "date": "kal", "time": "11", "doctor": "Asha"},
+            tc_id="b",
+        ),
+    )
+    r = result(
+        post(
+            client,
+            tool_calls(
+                "reschedule",
+                {"phone": "9876543210", "new_date": "parso", "new_time": "saade 5"},
+                tc_id="r",
+            ),
+        )
+    )
+    assert (
+        r["result"].startswith("MOVED")
+        and "Thursday, 29 October 2026, 5:30 PM with Dr. Asha Verma" in r["result"]
+    )
 
 
 def test_escalate_creates_urgent_inbox_item(client):
-    r = result(post(client, tool_calls("escalate", {"category": "red_flag", "summary": "Swelling up to the eye",
-                                                    "name": "A", "phone": "9876543210"})))
+    r = result(
+        post(
+            client,
+            tool_calls(
+                "escalate",
+                {
+                    "category": "red_flag",
+                    "summary": "Swelling up to the eye",
+                    "name": "A",
+                    "phone": "9876543210",
+                },
+            ),
+        )
+    )
     assert r["result"].startswith("ESCALATED") and "108" in r["result"]
     conn = db.connect()
     row = conn.execute("SELECT kind, urgent FROM inbox").fetchone()
@@ -122,23 +166,46 @@ def test_escalate_creates_urgent_inbox_item(client):
 
 
 def test_end_of_call_report_sets_outcome(client):
-    post(client, tool_calls("book", {"name": "A", "phone": "9876543210", "date": "kal", "time": "11",
-                                     "doctor": "Asha"}, call_id="call-9"))
-    report = {"message": {
-        "type": "end-of-call-report",
-        "call": {"id": "call-9", "type": "webCall"},
-        "artifact": {"transcript": "AI: Namaste\nUser: kal 11 baje\nAI: Booked.", "recordingUrl": "https://x/rec.wav"},
-        "analysis": {"summary": "Caller booked for tomorrow 11 AM."},
-        "startedAt": "2026-10-27T09:00:00Z", "endedAt": "2026-10-27T09:02:00Z",
-    }}
+    post(
+        client,
+        tool_calls(
+            "book",
+            {"name": "A", "phone": "9876543210", "date": "kal", "time": "11", "doctor": "Asha"},
+            call_id="call-9",
+        ),
+    )
+    report = {
+        "message": {
+            "type": "end-of-call-report",
+            "call": {"id": "call-9", "type": "webCall"},
+            "artifact": {
+                "transcript": "AI: Namaste\nUser: kal 11 baje\nAI: Booked.",
+                "recordingUrl": "https://x/rec.wav",
+            },
+            "analysis": {"summary": "Caller booked for tomorrow 11 AM."},
+            "startedAt": "2026-10-27T09:00:00Z",
+            "endedAt": "2026-10-27T09:02:00Z",
+        }
+    }
     assert post(client, report).status_code == 200
-    row = db.connect().execute("SELECT outcome, summary, safety_review FROM calls WHERE id = 'call-9'").fetchone()
+    row = (
+        db.connect()
+        .execute("SELECT outcome, summary, safety_review FROM calls WHERE id = 'call-9'")
+        .fetchone()
+    )
     assert tuple(row) == ("booked", "Caller booked for tomorrow 11 AM.", 0)
 
 
 def test_end_of_call_without_tools_is_answered_or_hung_up(client):
     def report(cid, transcript):
-        return {"message": {"type": "end-of-call-report", "call": {"id": cid}, "artifact": {"transcript": transcript}}}
+        return {
+            "message": {
+                "type": "end-of-call-report",
+                "call": {"id": cid},
+                "artifact": {"transcript": transcript},
+            }
+        }
+
     post(client, report("c-a", "AI: Namaste\nUser: timing kya hai?\nAI: 10 se 2."))
     post(client, report("c-h", "AI: Namaste"))
     conn = db.connect()
@@ -147,20 +214,43 @@ def test_end_of_call_without_tools_is_answered_or_hung_up(client):
 
 
 def test_end_of_call_flags_unsafe_assistant_line(client):
-    msg = {"message": {"type": "end-of-call-report", "call": {"id": "c-s"}, "artifact": {
-        "messages": [{"role": "assistant", "message": "Aap ek painkiller le lijiye."},
-                     {"role": "user", "message": "theek hai"}]}}}
+    msg = {
+        "message": {
+            "type": "end-of-call-report",
+            "call": {"id": "c-s"},
+            "artifact": {
+                "messages": [
+                    {"role": "assistant", "message": "Aap ek painkiller le lijiye."},
+                    {"role": "user", "message": "theek hai"},
+                ]
+            },
+        }
+    }
     post(client, msg)
-    row = db.connect().execute("SELECT safety_review, safety_hits FROM calls WHERE id = 'c-s'").fetchone()
+    row = (
+        db.connect()
+        .execute("SELECT safety_review, safety_hits FROM calls WHERE id = 'c-s'")
+        .fetchone()
+    )
     assert row[0] == 1 and "painkiller" in row[1]
 
 
 def test_other_message_types_are_ok(client):
-    assert post(client, {"message": {"type": "status-update", "status": "in-progress"}}).json() == {"ok": True}
+    assert post(client, {"message": {"type": "status-update", "status": "in-progress"}}).json() == {
+        "ok": True
+    }
 
 
 def test_fee_question_returns_fees_only(client):
-    r = result(post(client, tool_calls("get_clinic_info", {"question": "consultation fee kitni hai?"})))
-    assert "Consultation ₹300" in r["result"] and "Parking" not in r["result"] and "lekar" not in r["result"]
-    r = result(post(client, tool_calls("get_clinic_info", {"question": "Parking hai kya?"}, tc_id="tc-2")))
+    r = result(
+        post(client, tool_calls("get_clinic_info", {"question": "consultation fee kitni hai?"}))
+    )
+    assert (
+        "Consultation ₹300" in r["result"]
+        and "Parking" not in r["result"]
+        and "lekar" not in r["result"]
+    )
+    r = result(
+        post(client, tool_calls("get_clinic_info", {"question": "Parking hai kya?"}, tc_id="tc-2"))
+    )
     assert "Two-wheeler" in r["result"] and "Fees" not in r["result"]

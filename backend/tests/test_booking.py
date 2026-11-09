@@ -6,9 +6,9 @@ import pytest
 from src.booking import service as bk
 from src.core import db
 
-TODAY = date(2026, 10, 27)      # Tuesday
+TODAY = date(2026, 10, 27)  # Tuesday
 TOMORROW = date(2026, 10, 28)
-SUNDAY = date(2026, 11, 1)      # closed in the demo clinic
+SUNDAY = date(2026, 11, 1)  # closed in the demo clinic
 
 
 def test_same_slot_cannot_be_booked_twice(conn, settings):
@@ -23,8 +23,10 @@ def test_same_slot_cannot_be_booked_twice(conn, settings):
 def test_db_index_refuses_double_booking_even_without_app_checks(conn):
     """Two connections insert the same slot directly; the partial unique index lets only one through."""
     other = db.connect()
-    sql = ("INSERT INTO bookings (resource_id, date, time, status, source, name, created_at, updated_at)"
-           " VALUES ('dr-a', '2026-10-28', '17:00', 'booked', 'phone', 'X', 't', 't')")
+    sql = (
+        "INSERT INTO bookings (resource_id, date, time, status, source, name, created_at, updated_at)"
+        " VALUES ('dr-a', '2026-10-28', '17:00', 'booked', 'phone', 'X', 't', 't')"
+    )
     with conn:
         conn.execute(sql)
     with pytest.raises(sqlite3.IntegrityError):
@@ -45,9 +47,13 @@ def test_race_between_check_and_insert_maps_to_slot_taken(conn, settings, monkey
 
 def test_cancel_frees_the_slot(conn, settings):
     bid = bk.book(conn, settings, "dr-a", TOMORROW, "17:00", "A", None, "phone")
-    assert ("dr-a", "17:00") not in {(s.resource_id, s.time) for s in bk.free_slots(conn, settings, TOMORROW)}
+    assert ("dr-a", "17:00") not in {
+        (s.resource_id, s.time) for s in bk.free_slots(conn, settings, TOMORROW)
+    }
     bk.cancel(conn, bid)
-    assert ("dr-a", "17:00") in {(s.resource_id, s.time) for s in bk.free_slots(conn, settings, TOMORROW)}
+    assert ("dr-a", "17:00") in {
+        (s.resource_id, s.time) for s in bk.free_slots(conn, settings, TOMORROW)
+    }
     bk.book(conn, settings, "dr-a", TOMORROW, "17:00", "B", None, "phone")
 
 
@@ -87,6 +93,7 @@ def test_late_start_and_early_close(conn, settings):
 def test_past_times_today_are_excluded(conn, settings, monkeypatch):
     from datetime import datetime
     from src.core import config
+
     monkeypatch.setattr(config, "now", lambda: datetime(2026, 10, 27, 12, 10, tzinfo=config.IST))
     times = {s.time for s in bk.free_slots(conn, settings, TODAY)}
     assert "12:00" not in times and "12:30" in times

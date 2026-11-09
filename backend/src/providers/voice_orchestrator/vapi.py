@@ -2,6 +2,7 @@
 
 Field names checked against the @vapi-ai/web 2.7.1 type definitions. VERIFY again if Vapi rejects a field.
 """
+
 import secrets
 import sqlite3
 
@@ -50,9 +51,13 @@ def payload(conn: sqlite3.Connection, secret: str) -> dict:
             "model": env("VAPI_MODEL", "gpt-4.1-mini"),
             "temperature": 0.3,
             "messages": [{"role": "system", "content": system}],
-            "tools": [{"type": "function", "function": fn, "server": server} for fn in TOOLS] + [{"type": "endCall"}],
+            "tools": [{"type": "function", "function": fn, "server": server} for fn in TOOLS]
+            + [{"type": "endCall"}],
         },
-        "voice": {"provider": env("VAPI_VOICE_PROVIDER", "azure"), "voiceId": env("VAPI_VOICE_ID", VOICES[voice])},
+        "voice": {
+            "provider": env("VAPI_VOICE_PROVIDER", "azure"),
+            "voiceId": env("VAPI_VOICE_ID", VOICES[voice]),
+        },
         "transcriber": {
             "provider": env("VAPI_TRANSCRIBER_PROVIDER", "deepgram"),
             "model": env("VAPI_TRANSCRIBER_MODEL", "nova-3"),
@@ -66,10 +71,13 @@ def payload(conn: sqlite3.Connection, secret: str) -> dict:
 def _request(method: str, path: str, body: dict | None = None) -> dict:
     key = env("VAPI_PRIVATE_KEY")
     if not key:
-        raise VapiError("VAPI_PRIVATE_KEY is not set in .env (Vapi dashboard → API Keys → Private key).")
+        raise VapiError(
+            "VAPI_PRIVATE_KEY is not set in .env (Vapi dashboard → API Keys → Private key)."
+        )
     try:
-        r = httpx.request(method, API + path, json=body, timeout=20,
-                          headers={"Authorization": f"Bearer {key}"})
+        r = httpx.request(
+            method, API + path, json=body, timeout=20, headers={"Authorization": f"Bearer {key}"}
+        )
     except httpx.HTTPError as e:
         raise VapiError(f"Could not reach Vapi: {type(e).__name__}")
     if r.status_code >= 300:
@@ -84,7 +92,9 @@ def get_assistant(assistant_id: str) -> dict:
 def sync(conn: sqlite3.Connection) -> str:
     """Create the assistant on first run, update it after. Returns a one-line status. Raises VapiError."""
     if not public_url().startswith("https://"):
-        raise VapiError("PUBLIC_URL must be the https:// tunnel URL (see README), so Vapi can reach the webhook.")
+        raise VapiError(
+            "PUBLIC_URL must be the https:// tunnel URL (see README), so Vapi can reach the webhook."
+        )
     body = payload(conn, ensure_secret())
     assistant_id = env("VAPI_ASSISTANT_ID")
     if assistant_id:

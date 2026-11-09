@@ -1,4 +1,5 @@
 """Indian mobile numbers to E.164. Never log the result."""
+
 import re
 
 _DEVANAGARI_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")

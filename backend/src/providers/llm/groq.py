@@ -1,4 +1,5 @@
 """Groq chat completion over its OpenAI-compatible API (no SDK). Returns raw text or None; callers validate."""
+
 import httpx
 
 from ...core.config import env
@@ -20,7 +21,10 @@ def complete_json(system: str, user: str, timeout: float = 8) -> str | None:
                 "model": env("GROQ_MODEL", DEFAULT_MODEL),
                 "temperature": 0,
                 "response_format": {"type": "json_object"},
-                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
             },
             timeout=timeout,
         )
