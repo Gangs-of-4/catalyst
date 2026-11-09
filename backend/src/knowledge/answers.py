@@ -1,4 +1,5 @@
 """Clinic-approved answers (C3). Built live from settings; nothing here is invented."""
+
 import re
 import sqlite3
 from datetime import date, timedelta
@@ -11,12 +12,65 @@ from ..core import settings as cs
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 TOPIC_WORDS = {
-    "hours": ["time", "timing", "timings", "open", "close", "closed", "khula", "khulta", "band", "kab", "hours",
-              "sunday", "ravivar", "itvar", "samay", "baje", "chhutti", "holiday", "leave", "खुला", "बंद", "कब"],
-    "location": ["where", "address", "location", "kahan", "kidhar", "pata", "landmark", "rasta", "map", "कहाँ", "कहां", "पता"],
+    "hours": [
+        "time",
+        "timing",
+        "timings",
+        "open",
+        "close",
+        "closed",
+        "khula",
+        "khulta",
+        "band",
+        "kab",
+        "hours",
+        "sunday",
+        "ravivar",
+        "itvar",
+        "samay",
+        "baje",
+        "chhutti",
+        "holiday",
+        "leave",
+        "खुला",
+        "बंद",
+        "कब",
+    ],
+    "location": [
+        "where",
+        "address",
+        "location",
+        "kahan",
+        "kidhar",
+        "pata",
+        "landmark",
+        "rasta",
+        "map",
+        "कहाँ",
+        "कहां",
+        "पता",
+    ],
     "doctors": ["doctor", "doctors", "dr", "daktar", "dentist", "kaun", "डॉक्टर"],
-    "fees": ["fee", "fees", "charge", "charges", "cost", "price", "kitna", "kitni", "kitne", "paisa", "paise", "rate",
-             "rupees", "rs", "₹", "फीस", "कितना", "कितनी"],
+    "fees": [
+        "fee",
+        "fees",
+        "charge",
+        "charges",
+        "cost",
+        "price",
+        "kitna",
+        "kitni",
+        "kitne",
+        "paisa",
+        "paise",
+        "rate",
+        "rupees",
+        "rs",
+        "₹",
+        "फीस",
+        "कितना",
+        "कितनी",
+    ],
 }
 
 
@@ -47,12 +101,18 @@ def upcoming_changes(conn: sqlite3.Connection, s: dict, days: int = 7) -> list[s
 
 def facts(conn: sqlite3.Connection, s: dict) -> dict[str, str]:
     """Every approved fact, keyed by topic. FAQs are keyed faq:<n>."""
-    location = f"{s['name']}, {s['address']}" + (f", near {s['landmark']}" if s.get("landmark") else "") + "."
+    location = (
+        f"{s['name']}, {s['address']}"
+        + (f", near {s['landmark']}" if s.get("landmark") else "")
+        + "."
+    )
     out = {
         "hours": hours_text(s) + " " + " ".join(upcoming_changes(conn, s)),
         "location": location,
         "doctors": "Doctors: " + ", ".join(d["name"] for d in s["doctors"]) + ".",
-        "fees": "Fees: " + "; ".join(f"{x['name']} {x['fee']}" for x in s["services"]) + ". Final cost depends on the doctor's check-up.",
+        "fees": "Fees: "
+        + "; ".join(f"{x['name']} {x['fee']}" for x in s["services"])
+        + ". Final cost depends on the doctor's check-up.",
     }
     for i, f in enumerate(s.get("faqs", [])):
         out[f"faq:{i}"] = f"Q: {f['q']} A: {f['a']}"
@@ -60,13 +120,55 @@ def facts(conn: sqlite3.Connection, s: dict) -> dict[str, str]:
 
 
 # Filler words that would make every FAQ look like a match ("... hai?").
-STOP = {"hai", "hain", "kya", "ko", "ka", "ki", "ke", "se", "mein", "me", "aur", "ya", "to", "toh", "bhi", "the", "is",
-        "are", "a", "an", "do", "does", "can", "i", "you", "your", "what", "how", "chahiye", "hoga", "hogi", "ji",
-        "है", "क्या", "का", "की", "के", "में", "से"}
+STOP = {
+    "hai",
+    "hain",
+    "kya",
+    "ko",
+    "ka",
+    "ki",
+    "ke",
+    "se",
+    "mein",
+    "me",
+    "aur",
+    "ya",
+    "to",
+    "toh",
+    "bhi",
+    "the",
+    "is",
+    "are",
+    "a",
+    "an",
+    "do",
+    "does",
+    "can",
+    "i",
+    "you",
+    "your",
+    "what",
+    "how",
+    "chahiye",
+    "hoga",
+    "hogi",
+    "ji",
+    "है",
+    "क्या",
+    "का",
+    "की",
+    "के",
+    "में",
+    "से",
+}
 
 
 def _words(text: str) -> set[str]:
-    return {w for w in re.split(r"[^\wऀ-ॿ₹]+", text.lower()) if (len(w) > 1 or w == "₹") and w not in STOP}
+    return {
+        w
+        for w in re.split(r"[^\wऀ-ॿ₹]+", text.lower())
+        if (len(w) > 1 or w == "₹") and w not in STOP
+    }
 
 
 def lookup(conn: sqlite3.Connection, s: dict, question: str) -> list[str]:

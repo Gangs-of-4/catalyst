@@ -82,7 +82,7 @@ cd backend
 pytest
 ```
 
-All Vapi and Twilio traffic is mocked in tests. No keys are needed.
+All Vapi and Twilio traffic is mocked in tests. No keys are needed. CI also runs Ruff, Black and a provider boundary check on every PR; see `backend/README.md` for the local commands.
 
 ### Pages
 

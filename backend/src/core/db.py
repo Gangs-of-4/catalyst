@@ -1,4 +1,5 @@
 """SQLite storage for the demo build (ADR-0035). Single clinic, no tenant_id yet."""
+
 import json
 import sqlite3
 from typing import Any

@@ -1,4 +1,5 @@
 """Clinic settings page and API (C12). Saving re-syncs the voice agent and reports the result."""
+
 import re
 import sqlite3
 from datetime import date
@@ -56,7 +57,9 @@ class SettingsIn(BaseModel):
     def _sessions(cls, v):
         for start, end in v:
             if not (HHMM.match(start) and HHMM.match(end)) or start >= end:
-                raise ValueError(f"Clinic hours '{start}-{end}' must look like 10:00-14:00, start before end.")
+                raise ValueError(
+                    f"Clinic hours '{start}-{end}' must look like 10:00-14:00, start before end."
+                )
         return sorted(v)
 
     @field_validator("closed_weekdays")
@@ -88,7 +91,10 @@ class SettingsIn(BaseModel):
 
 
 def _slug(name: str, taken: set[str]) -> str:
-    base = "dr-" + (re.sub(r"[^a-z0-9]+", "-", name.lower().replace("dr.", "").replace("dr ", "")).strip("-") or "x")
+    base = "dr-" + (
+        re.sub(r"[^a-z0-9]+", "-", name.lower().replace("dr.", "").replace("dr ", "")).strip("-")
+        or "x"
+    )
     slug, n = base, 2
     while slug in taken:
         slug, n = f"{base}-{n}", n + 1
@@ -104,9 +110,18 @@ def _blocks(conn: sqlite3.Connection, s: dict) -> list[dict]:
     out = []
     for b in bk.list_blocks(conn):
         d = date.fromisoformat(b["date"])
-        what = {"leave": "Leave", "holiday": "Clinic closed", "late_start": f"In from {spoken_time(b['end'] or '00:00')}",
-                "early_close": f"Leaves at {spoken_time(b['start'] or '23:59')}"}.get(b["kind"], b["kind"])
-        out.append({**b, "label": f"{short_date(d)} · {cs.doctor_name(s, b['resource_id']) if b['resource_id'] else 'Whole clinic'} · {what}"})
+        what = {
+            "leave": "Leave",
+            "holiday": "Clinic closed",
+            "late_start": f"In from {spoken_time(b['end'] or '00:00')}",
+            "early_close": f"Leaves at {spoken_time(b['start'] or '23:59')}",
+        }.get(b["kind"], b["kind"])
+        out.append(
+            {
+                **b,
+                "label": f"{short_date(d)} · {cs.doctor_name(s, b['resource_id']) if b['resource_id'] else 'Whole clinic'} · {what}",
+            }
+        )
     return out
 
 
@@ -122,7 +137,11 @@ def save_setup(body: SettingsIn, conn: sqlite3.Connection = Depends(get_conn)) -
     old_ids = {d["id"] for d in s["doctors"]}
     doctors, taken = [], set()
     for d in body.doctors:
-        did = d.id if d.id and re.fullmatch(r"[a-z0-9-]{1,40}", d.id) else _slug(d.name, taken | old_ids)
+        did = (
+            d.id
+            if d.id and re.fullmatch(r"[a-z0-9-]{1,40}", d.id)
+            else _slug(d.name, taken | old_ids)
+        )
         if did in taken:
             raise HTTPException(422, f"Two doctors share the id '{did}'.")
         taken.add(did)
@@ -130,10 +149,15 @@ def save_setup(body: SettingsIn, conn: sqlite3.Connection = Depends(get_conn)) -
         doctors.append({**prev, "id": did, "name": d.name.strip()})
     today = config.now().date().isoformat()
     for gone in old_ids - taken:
-        n = conn.execute("SELECT COUNT(*) FROM bookings WHERE resource_id = ? AND date >= ? AND status = 'booked'",
-                         (gone, today)).fetchone()[0]
+        n = conn.execute(
+            "SELECT COUNT(*) FROM bookings WHERE resource_id = ? AND date >= ? AND status = 'booked'",
+            (gone, today),
+        ).fetchone()[0]
         if n:
-            raise HTTPException(422, f"{cs.doctor_name(s, gone)} has {n} upcoming booking(s). Move or cancel them before removing the doctor.")
+            raise HTTPException(
+                422,
+                f"{cs.doctor_name(s, gone)} has {n} upcoming booking(s). Move or cancel them before removing the doctor.",
+            )
     s.update(body.model_dump(exclude={"doctors"}))
     s["doctors"] = doctors
     s["sessions"] = [list(x) for x in body.sessions]
@@ -153,14 +177,18 @@ def add_block(body: BlockIn, conn: sqlite3.Connection = Depends(get_conn)) -> di
     try:
         d = date.fromisoformat(body.date)
     except ValueError:
-        raise HTTPException(422, "Pick a date.")
+        raise HTTPException(422, "Pick a date.") from None
     if d < config.now().date():
         raise HTTPException(422, "That date has passed.")
     if body.doctor_id and not cs.doctor(s, body.doctor_id):
         raise HTTPException(422, "Unknown doctor.")
     affected = bk.affected_bookings(conn, s, d, body.doctor_id)
     bk.add_block(conn, d, "leave" if body.doctor_id else "holiday", "setup", body.doctor_id)
-    note = f"{len(affected)} booking(s) that day still stand; the desk shows them so staff can move them." if affected else None
+    note = (
+        f"{len(affected)} booking(s) that day still stand; the desk shows them so staff can move them."
+        if affected
+        else None
+    )
     return {"blocks": _blocks(conn, s), "note": note, "agent": sync_agent()}
 
 

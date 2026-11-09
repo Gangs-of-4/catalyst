@@ -1,4 +1,5 @@
 """FastAPI app: agent webhook, WhatsApp webhook, staff APIs and the static pages."""
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -44,7 +45,9 @@ app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="stati
 async def readable_422(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Pages show `detail` as-is, so make it one plain sentence."""
     msgs = [str(e.get("msg", "")).removeprefix("Value error, ") for e in exc.errors()]
-    return JSONResponse({"detail": " ".join(dict.fromkeys(msgs)) or "Invalid input."}, status_code=422)
+    return JSONResponse(
+        {"detail": " ".join(dict.fromkeys(msgs)) or "Invalid input."}, status_code=422
+    )
 
 
 @app.get("/healthz")

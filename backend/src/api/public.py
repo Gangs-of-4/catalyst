@@ -1,4 +1,5 @@
 """Public routes: the Try-it page, its config and the clinic register shown beside the call."""
+
 import sqlite3
 from datetime import timedelta
 
@@ -51,12 +52,29 @@ def register(conn: sqlite3.Connection = Depends(get_conn)) -> dict:
             slots = []
             for sl in col["slots"]:
                 b = next((x for x in sl["bookings"] if x["status"] in bk.ACTIVE), None)
-                slots.append({
-                    "time": sl["time"], "state": sl["state"], "past": sl["past"], "block": sl["block"],
-                    "booking": {"id": b["id"], "name": _mask(b["name"]), "source": b["source"]} if b else None,
-                })
+                slots.append(
+                    {
+                        "time": sl["time"],
+                        "state": sl["state"],
+                        "past": sl["past"],
+                        "block": sl["block"],
+                        "booking": (
+                            {"id": b["id"], "name": _mask(b["name"]), "source": b["source"]}
+                            if b
+                            else None
+                        ),
+                    }
+                )
             cols.append({"doctor": col["doctor"]["name"], "slots": slots})
         label = "Today" if d == today else "Tomorrow"
-        days.append({"date": d.isoformat(), "label": label, "short": short_date(d), "long": spoken_date(d),
-                     "closed": grid["closed"], "columns": cols})
+        days.append(
+            {
+                "date": d.isoformat(),
+                "label": label,
+                "short": short_date(d),
+                "long": spoken_date(d),
+                "closed": grid["closed"],
+                "columns": cols,
+            }
+        )
     return {"clinic": s["name"], "days": days}

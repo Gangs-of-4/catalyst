@@ -1,4 +1,5 @@
 """Slots, bookings and blocks for one clinic. The DB index is the double-booking lock (C4)."""
+
 import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -91,10 +92,15 @@ def day_grid(conn: sqlite3.Connection, s: dict, d: date) -> dict:
                 state = "past"
             else:
                 state = "free"
-            slots.append({
-                "time": t, "state": state, "past": past, "bookings": bookings,
-                "block": (block["kind"] if block else ("closed" if closed else None)),
-            })
+            slots.append(
+                {
+                    "time": t,
+                    "state": state,
+                    "past": past,
+                    "bookings": bookings,
+                    "block": (block["kind"] if block else ("closed" if closed else None)),
+                }
+            )
         columns.append({"doctor": doc, "slots": slots})
     # bookings at times outside the grid (e.g. after a slot-length change) still show
     grid_times = set(session_times(s))
@@ -102,7 +108,9 @@ def day_grid(conn: sqlite3.Connection, s: dict, d: date) -> dict:
     return {"date": d.isoformat(), "closed": closed, "columns": columns, "stray": stray}
 
 
-def free_slots(conn: sqlite3.Connection, s: dict, d: date, resource_id: str | None = None) -> list[Slot]:
+def free_slots(
+    conn: sqlite3.Connection, s: dict, d: date, resource_id: str | None = None
+) -> list[Slot]:
     if is_closed(s, d):
         return []
     step = int(s["slot_min"])
@@ -113,7 +121,8 @@ def free_slots(conn: sqlite3.Connection, s: dict, d: date, resource_id: str | No
     taken = {
         (r["resource_id"], r["time"])
         for r in conn.execute(
-            f"SELECT resource_id, time FROM bookings WHERE date = ? AND status IN {ACTIVE}", (d.isoformat(),)
+            f"SELECT resource_id, time FROM bookings WHERE date = ? AND status IN {ACTIVE}",
+            (d.isoformat(),),
         )
     }
     doctors = [doc["id"] for doc in s["doctors"] if resource_id in (None, doc["id"])]
@@ -128,8 +137,12 @@ def free_slots(conn: sqlite3.Connection, s: dict, d: date, resource_id: str | No
 
 
 def find_slots(
-    conn: sqlite3.Connection, s: dict, day: date, pref_time: str | None = None,
-    resource_id: str | None = None, limit: int = 3,
+    conn: sqlite3.Connection,
+    s: dict,
+    day: date,
+    pref_time: str | None = None,
+    resource_id: str | None = None,
+    limit: int = 3,
 ) -> list[Slot]:
     """The `limit` slots nearest to the preferred time on `day`, or on the next open day within a week."""
     for offset in range(SEARCH_DAYS + 1):
@@ -142,14 +155,24 @@ def find_slots(
         for sl in slots:
             by_time.setdefault(sl.time, sl)
         target = _minutes(pref_time) if pref_time else 0
-        ordered = sorted(by_time.values(), key=lambda sl: (abs(_minutes(sl.time) - target), sl.time))
+        ordered = sorted(
+            by_time.values(), key=lambda sl: (abs(_minutes(sl.time) - target), sl.time)
+        )
         return sorted(ordered[:limit], key=lambda sl: sl.time)
     return []
 
 
 def book(
-    conn: sqlite3.Connection, s: dict, resource_id: str, d: date, time: str, name: str,
-    phone: str | None, source: str, reason: str | None = None, call_id: str | None = None,
+    conn: sqlite3.Connection,
+    s: dict,
+    resource_id: str,
+    d: date,
+    time: str,
+    name: str,
+    phone: str | None,
+    source: str,
+    reason: str | None = None,
+    call_id: str | None = None,
     _commit: bool = True,
 ) -> int:
     """Insert a booking. Raises BookingError('SLOT_TAKEN', alternatives=…) if the slot is gone."""
@@ -169,15 +192,27 @@ def book(
         cur = conn.execute(
             "INSERT INTO bookings (resource_id, date, time, status, source, name, phone, reason, call_id,"
             " created_at, updated_at) VALUES (?, ?, ?, 'booked', ?, ?, ?, ?, ?, ?, ?)",
-            (resource_id, d.isoformat(), time, source, name.strip(), phone,
-             (reason or "").strip()[:80] or None, call_id, ts, ts),
+            (
+                resource_id,
+                d.isoformat(),
+                time,
+                source,
+                name.strip(),
+                phone,
+                (reason or "").strip()[:80] or None,
+                call_id,
+                ts,
+                ts,
+            ),
         )
         if _commit:
             conn.commit()
-    except sqlite3.IntegrityError:
+    except sqlite3.IntegrityError as e:
         if _commit:
             conn.rollback()
-        raise BookingError("SLOT_TAKEN", "That slot was just taken", find_slots(conn, s, d, time, None))
+        raise BookingError(
+            "SLOT_TAKEN", "That slot was just taken", find_slots(conn, s, d, time, None)
+        ) from e
     return cur.lastrowid
 
 
@@ -201,9 +236,12 @@ def set_status(conn: sqlite3.Connection, booking_id: int, status: str) -> None:
         raise BookingError("NOT_FOUND", "No such booking")
     try:
         with conn:
-            conn.execute("UPDATE bookings SET status = ?, updated_at = ? WHERE id = ?", (status, db.stamp(), booking_id))
-    except sqlite3.IntegrityError:
-        raise BookingError("SLOT_TAKEN", "Another booking now holds that slot")
+            conn.execute(
+                "UPDATE bookings SET status = ?, updated_at = ? WHERE id = ?",
+                (status, db.stamp(), booking_id),
+            )
+    except sqlite3.IntegrityError as e:
+        raise BookingError("SLOT_TAKEN", "Another booking now holds that slot") from e
 
 
 def cancel(conn: sqlite3.Connection, booking_id: int) -> sqlite3.Row:
@@ -215,16 +253,35 @@ def cancel(conn: sqlite3.Connection, booking_id: int) -> sqlite3.Row:
 
 
 def reschedule(
-    conn: sqlite3.Connection, s: dict, booking_id: int, resource_id: str, d: date, time: str,
+    conn: sqlite3.Connection,
+    s: dict,
+    booking_id: int,
+    resource_id: str,
+    d: date,
+    time: str,
 ) -> int:
     """Book the new slot and cancel the old one in one transaction. Returns the new booking id."""
     old = get(conn, booking_id)
     if not old or old["status"] != "booked":
         raise BookingError("NOT_FOUND", "No active booking to move")
     try:
-        new_id = book(conn, s, resource_id, d, time, old["name"], old["phone"], old["source"],
-                      old["reason"], old["call_id"], _commit=False)
-        conn.execute("UPDATE bookings SET status = 'cancelled', updated_at = ? WHERE id = ?", (db.stamp(), booking_id))
+        new_id = book(
+            conn,
+            s,
+            resource_id,
+            d,
+            time,
+            old["name"],
+            old["phone"],
+            old["source"],
+            old["reason"],
+            old["call_id"],
+            _commit=False,
+        )
+        conn.execute(
+            "UPDATE bookings SET status = 'cancelled', updated_at = ? WHERE id = ?",
+            (db.stamp(), booking_id),
+        )
         conn.commit()
     except Exception:
         conn.rollback()
@@ -233,8 +290,13 @@ def reschedule(
 
 
 def add_block(
-    conn: sqlite3.Connection, d: date, kind: str, source: str, resource_id: str | None = None,
-    start: str | None = None, end: str | None = None,
+    conn: sqlite3.Connection,
+    d: date,
+    kind: str,
+    source: str,
+    resource_id: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
 ) -> int:
     with conn:
         cur = conn.execute(
@@ -251,11 +313,20 @@ def remove_block(conn: sqlite3.Connection, block_id: int) -> None:
 
 def list_blocks(conn: sqlite3.Connection, from_date: date | None = None) -> list[dict]:
     since = (from_date or config.now().date()).isoformat()
-    return [dict(r) for r in conn.execute("SELECT * FROM blocks WHERE date >= ? ORDER BY date, id", (since,))]
+    return [
+        dict(r)
+        for r in conn.execute("SELECT * FROM blocks WHERE date >= ? ORDER BY date, id", (since,))
+    ]
 
 
-def affected_bookings(conn: sqlite3.Connection, s: dict, d: date, resource_id: str | None,
-                      start: str | None = None, end: str | None = None) -> list[sqlite3.Row]:
+def affected_bookings(
+    conn: sqlite3.Connection,
+    s: dict,
+    d: date,
+    resource_id: str | None,
+    start: str | None = None,
+    end: str | None = None,
+) -> list[sqlite3.Row]:
     """Active bookings a new block would cover."""
     rows = conn.execute(
         "SELECT * FROM bookings WHERE date = ? AND status = 'booked'", (d.isoformat(),)

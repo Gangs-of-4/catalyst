@@ -15,26 +15,51 @@ TODAY = date(2026, 10, 27)
 DOCTOR = "+919000000100"
 
 
-@pytest.mark.parametrize("text, expected", [
-    ("help", {"intent": "help"}),
-    ("aaj ke appointments", {"intent": "query_day", "date": "2026-10-27"}),
-    ("kal ke appointments?", {"intent": "query_day", "date": "2026-10-28"}),
-    ("callbacks", {"intent": "callbacks"}),
-    ("summary", {"intent": "summary"}),
-    ("kal chhutti", {"intent": "block_day", "date": "2026-10-28", "doctor_id": None}),
-    ("kal chhutti hai", {"intent": "block_day", "date": "2026-10-28", "doctor_id": None}),
-    ("Dr Asha kal nahi aayengi", {"intent": "block_day", "date": "2026-10-28", "doctor_id": "dr-a"}),
-    ("Vikram parso leave", {"intent": "block_day", "date": "2026-10-29", "doctor_id": "dr-b"}),
-    ("aaj 11 baje se", {"intent": "late_start", "date": "2026-10-27", "time": "11:00"}),
-    ("Dr Vikram kal 11 baje se", {"intent": "late_start", "date": "2026-10-28", "time": "11:00", "doctor_id": "dr-b"}),
-    ("aaj 6 baje tak", {"intent": "early_close", "date": "2026-10-27", "time": "18:00"}),
-    ("consultation fee 400", {"intent": "set_fee", "service": "Consultation", "fee": 400}),
-    ("cleaning fee ₹900", {"intent": "set_fee", "service": "Cleaning and scaling", "fee": 900}),
-    ("walk-in Ramesh 9876543210 aaj 5 baje",
-     {"intent": "walk_in", "name": "Ramesh", "phone": "+919876543210", "date": "2026-10-27", "time": "17:00"}),
-    ("walk in Sita Devi 98765 43210 kal 11 baje Dr Asha",
-     {"intent": "walk_in", "name": "Sita Devi", "date": "2026-10-28", "time": "11:00", "doctor_id": "dr-a"}),
-])
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("help", {"intent": "help"}),
+        ("aaj ke appointments", {"intent": "query_day", "date": "2026-10-27"}),
+        ("kal ke appointments?", {"intent": "query_day", "date": "2026-10-28"}),
+        ("callbacks", {"intent": "callbacks"}),
+        ("summary", {"intent": "summary"}),
+        ("kal chhutti", {"intent": "block_day", "date": "2026-10-28", "doctor_id": None}),
+        ("kal chhutti hai", {"intent": "block_day", "date": "2026-10-28", "doctor_id": None}),
+        (
+            "Dr Asha kal nahi aayengi",
+            {"intent": "block_day", "date": "2026-10-28", "doctor_id": "dr-a"},
+        ),
+        ("Vikram parso leave", {"intent": "block_day", "date": "2026-10-29", "doctor_id": "dr-b"}),
+        ("aaj 11 baje se", {"intent": "late_start", "date": "2026-10-27", "time": "11:00"}),
+        (
+            "Dr Vikram kal 11 baje se",
+            {"intent": "late_start", "date": "2026-10-28", "time": "11:00", "doctor_id": "dr-b"},
+        ),
+        ("aaj 6 baje tak", {"intent": "early_close", "date": "2026-10-27", "time": "18:00"}),
+        ("consultation fee 400", {"intent": "set_fee", "service": "Consultation", "fee": 400}),
+        ("cleaning fee ₹900", {"intent": "set_fee", "service": "Cleaning and scaling", "fee": 900}),
+        (
+            "walk-in Ramesh 9876543210 aaj 5 baje",
+            {
+                "intent": "walk_in",
+                "name": "Ramesh",
+                "phone": "+919876543210",
+                "date": "2026-10-27",
+                "time": "17:00",
+            },
+        ),
+        (
+            "walk in Sita Devi 98765 43210 kal 11 baje Dr Asha",
+            {
+                "intent": "walk_in",
+                "name": "Sita Devi",
+                "date": "2026-10-28",
+                "time": "11:00",
+                "doctor_id": "dr-a",
+            },
+        ),
+    ],
+)
 def test_rules_parse(conn, settings, text, expected):
     cmd = parse_rules(text, settings, TODAY)
     assert cmd is not None, text
@@ -55,8 +80,11 @@ def client(isolated):
 
 def send(client, body, sender=DOCTOR, headers=None):
     data = urlencode({"From": f"whatsapp:{sender}", "Body": body})
-    r = client.post("/whatsapp/incoming", content=data,
-                    headers={"content-type": "application/x-www-form-urlencoded", **(headers or {})})
+    r = client.post(
+        "/whatsapp/incoming",
+        content=data,
+        headers={"content-type": "application/x-www-form-urlencoded", **(headers or {})},
+    )
     assert r.status_code == 200, r.text
     assert r.text.startswith('<?xml version="1.0" encoding="UTF-8"?><Response><Message>')
     return r.text
@@ -75,12 +103,19 @@ def test_preview_then_haan_applies(client):
     reply = send(client, "kal chhutti")
     assert "Poori clinic" in reply and "Wed, 28 Oct" in reply and "Haan/Nahi" in reply
     conn = db.connect()
-    assert conn.execute("SELECT COUNT(*) FROM blocks").fetchone()[0] == 0, "nothing changes before Haan"
+    assert (
+        conn.execute("SELECT COUNT(*) FROM blocks").fetchone()[0] == 0
+    ), "nothing changes before Haan"
     assert "Done ✅" in send(client, "Haan")
     assert conn.execute("SELECT kind FROM blocks").fetchone()[0] == "holiday"
     assert bk.free_slots(conn, cs.load(conn), date(2026, 10, 28)) == []
     # the seeded bookings that day went to the callback list
-    assert conn.execute("SELECT COUNT(*) FROM inbox WHERE note LIKE '%affected by schedule change%'").fetchone()[0] == 2
+    assert (
+        conn.execute(
+            "SELECT COUNT(*) FROM inbox WHERE note LIKE '%affected by schedule change%'"
+        ).fetchone()[0]
+        == 2
+    )
 
 
 def test_preview_then_nahi_discards(client):
@@ -88,7 +123,9 @@ def test_preview_then_nahi_discards(client):
     send(client, "consultation fee 450")
     assert "kuch nahi badla" in send(client, "nahi")
     conn = db.connect()
-    assert next(x for x in cs.load(conn)["services"] if x["name"] == "Consultation")["fee"] == "₹300"
+    assert (
+        next(x for x in cs.load(conn)["services"] if x["name"] == "Consultation")["fee"] == "₹300"
+    )
     assert "koi badlav pending nahi" in send(client, "haan")
 
 
@@ -97,7 +134,9 @@ def test_fee_change_applies(client):
     send(client, "consultation fee 450")
     send(client, "ok")
     conn = db.connect()
-    assert next(x for x in cs.load(conn)["services"] if x["name"] == "Consultation")["fee"] == "₹450"
+    assert (
+        next(x for x in cs.load(conn)["services"] if x["name"] == "Consultation")["fee"] == "₹450"
+    )
 
 
 def test_walk_in_from_whatsapp(client):
@@ -137,40 +176,88 @@ def test_xml_is_escaped(client):
 
 
 def test_twilio_signature(client, isolated):
-    isolated.write_text("TWILIO_AUTH_TOKEN=tok\nPUBLIC_URL=https://demo.trycloudflare.com\n", encoding="utf-8")
+    isolated.write_text(
+        "TWILIO_AUTH_TOKEN=tok\nPUBLIC_URL=https://demo.trycloudflare.com\n", encoding="utf-8"
+    )
     params = {"From": f"whatsapp:{DOCTOR}", "Body": "help"}
-    r = client.post("/whatsapp/incoming", content=urlencode(params),
-                    headers={"content-type": "application/x-www-form-urlencoded", "x-twilio-signature": "bad"})
+    r = client.post(
+        "/whatsapp/incoming",
+        content=urlencode(params),
+        headers={"content-type": "application/x-www-form-urlencoded", "x-twilio-signature": "bad"},
+    )
     assert r.status_code == 403
-    import base64, hashlib, hmac
+    import base64
+    import hashlib
+    import hmac
+
     url = "https://demo.trycloudflare.com/whatsapp/incoming"
-    sig = base64.b64encode(hmac.new(b"tok", (url + "Bodyhelp" + f"Fromwhatsapp:{DOCTOR}").encode(), hashlib.sha1).digest()).decode()
+    sig = base64.b64encode(
+        hmac.new(
+            b"tok", (url + "Bodyhelp" + f"Fromwhatsapp:{DOCTOR}").encode(), hashlib.sha1
+        ).digest()
+    ).decode()
     assert signature_ok(sig, url, params, "tok")
-    r = client.post("/whatsapp/incoming", content=urlencode(params),
-                    headers={"content-type": "application/x-www-form-urlencoded", "x-twilio-signature": sig})
+    r = client.post(
+        "/whatsapp/incoming",
+        content=urlencode(params),
+        headers={"content-type": "application/x-www-form-urlencoded", "x-twilio-signature": sig},
+    )
     assert r.status_code == 200 and "Commands" in r.text
 
 
 def test_llm_fallback_fails_closed(client, isolated, monkeypatch):
     from src.providers.llm import groq
+
     isolated.write_text("GROQ_API_KEY=k\n", encoding="utf-8")
     allow([DOCTOR])
-    monkeypatch.setattr(groq, "complete_json", lambda system, user: '{"intent": "block_day", "date": "not-a-date"}')
+    monkeypatch.setattr(
+        groq, "complete_json", lambda system, user: '{"intent": "block_day", "date": "not-a-date"}'
+    )
     assert "Samajh nahi aaya" in send(client, "doctor sahab agle hafte bahar")
-    monkeypatch.setattr(groq, "complete_json", lambda system, user: '{"intent": "block_day", "date": "2026-10-29", "doctor_id": "dr-b"}')
+    monkeypatch.setattr(
+        groq,
+        "complete_json",
+        lambda system, user: '{"intent": "block_day", "date": "2026-10-29", "doctor_id": "dr-b"}',
+    )
     assert "Dr. Vikram Saxena" in send(client, "doctor sahab agle hafte bahar")
 
 
 def test_escalation_sends_urgent_alert_to_every_number(client, isolated, monkeypatch):
     from src.providers.messaging import twilio_whatsapp
+
     sent = []
     monkeypatch.setattr(twilio_whatsapp, "send", lambda to, body: sent.append((to, body)) or True)
     isolated.write_text("CATALYST_TOOL_SECRET=s\n", encoding="utf-8")
     allow([DOCTOR, "+919000000101"])
-    payload = {"message": {"type": "tool-calls", "call": {"id": "c1"}, "toolCallList": [{"id": "t1", "function": {
-        "name": "escalate", "arguments": {"category": "red_flag", "name": "Caller", "phone": "9000000200",
-                                          "summary": "Swelling up to the eye since morning.\nWants a doctor today."}}}]}}
-    assert client.post("/vapi/webhook", json=payload, headers={"x-catalyst-secret": "s"}).status_code == 200
+    payload = {
+        "message": {
+            "type": "tool-calls",
+            "call": {"id": "c1"},
+            "toolCallList": [
+                {
+                    "id": "t1",
+                    "function": {
+                        "name": "escalate",
+                        "arguments": {
+                            "category": "red_flag",
+                            "name": "Caller",
+                            "phone": "9000000200",
+                            "summary": "Swelling up to the eye since morning.\nWants a doctor today.",
+                        },
+                    },
+                }
+            ],
+        }
+    }
+    assert (
+        client.post("/vapi/webhook", json=payload, headers={"x-catalyst-secret": "s"}).status_code
+        == 200
+    )
     assert [to for to, _ in sent] == [DOCTOR, "+919000000101"]
     body = sent[0][1]
-    assert body.startswith("🔴 URGENT") and "Caller" in body and "90000 00200" in body and "Swelling" in body
+    assert (
+        body.startswith("🔴 URGENT")
+        and "Caller" in body
+        and "90000 00200" in body
+        and "Swelling" in body
+    )

@@ -2,6 +2,10 @@
 
 Ops CLIs that our team runs, not end users. Run them from the repo root with the backend venv active.
 
+## CI
+
+- `python scripts/check_provider_boundary.py` fails if any file in `backend/src/` outside `providers/` imports a vendor SDK or names a vendor API host. CI runs it on every PR.
+
 ## Demo build (ADR-0035)
 
 - `python scripts/setup_vapi.py` creates the clinic's Vapi assistant on the first run and updates it after. It writes `VAPI_ASSISTANT_ID` and `CATALYST_TOOL_SECRET` into `.env` and prints the page and Twilio webhook URLs. Rerun it whenever the tunnel URL changes.

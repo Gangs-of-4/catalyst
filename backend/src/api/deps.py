@@ -1,8 +1,9 @@
 """Shared request dependencies: a DB connection per request, and staff auth."""
+
 import base64
 import hmac
 import sqlite3
-from typing import Iterator
+from collections.abc import Iterator
 
 from fastapi import HTTPException, Request
 
@@ -31,7 +32,9 @@ def require_staff(request: Request) -> None:
             given = ""
         if hmac.compare_digest(given.encode(), password.encode()):
             return
-    raise HTTPException(401, "Password required", headers={"WWW-Authenticate": 'Basic realm="Clinic desk"'})
+    raise HTTPException(
+        401, "Password required", headers={"WWW-Authenticate": 'Basic realm="Clinic desk"'}
+    )
 
 
 def secret_ok(given: str | None, name: str) -> bool:

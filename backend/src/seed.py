@@ -1,4 +1,5 @@
 """First-run setup: schema, default settings and a few fictional bookings so screens aren't empty."""
+
 import sqlite3
 from datetime import timedelta
 
@@ -34,8 +35,17 @@ def _demo_data(conn: sqlite3.Connection, s: dict) -> None:
             conn.execute(
                 "INSERT OR IGNORE INTO bookings (resource_id, date, time, status, source, name, phone, reason,"
                 " created_at, updated_at) VALUES (?, ?, ?, 'booked', ?, ?, ?, ?, ?, ?)",
-                (b["doctor"], open_days[b["day"]].isoformat(), b["time"], b.get("source", "phone"),
-                 b["name"], b["phone"], b.get("reason"), ts, ts),
+                (
+                    b["doctor"],
+                    open_days[b["day"]].isoformat(),
+                    b["time"],
+                    b.get("source", "phone"),
+                    b["name"],
+                    b["phone"],
+                    b.get("reason"),
+                    ts,
+                    ts,
+                ),
             )
         for c in seed.get("callbacks", []):
             conn.execute(

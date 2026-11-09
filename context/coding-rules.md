@@ -37,7 +37,7 @@ Each module's `README.md` states its purpose, the capabilities it serves, the co
 
 ## Architecture rules
 
-- **[MVP] No vendor SDK import outside `backend/src/providers/`.** Business logic depends only on our interfaces (`architecture.md` §8). *Enforcement:* an import-boundary check in CI (import-linter or a Ruff rule) once CI exists. Until then, code review.
+- **[MVP] No vendor SDK import outside `backend/src/providers/`.** Business logic depends only on our interfaces (`architecture.md` §8). *Enforcement:* `scripts/check_provider_boundary.py` in CI fails on a vendor SDK import or a vendor API host (the backend calls vendors over `httpx`) anywhere in `backend/src/` outside `providers/`.
 - **[MVP] The voice layer talks to us only through the agent tools API** (`contracts.md` §1). No business logic lives in voice-platform config or prompts.
 - **[MVP] Every DB query is tenant-scoped.** A dependency sets the RLS session variable once per request, and RLS is the backstop. Every table ships with `tenant_id` + RLS in its first migration.
 - **[MVP] Core code never branches on vertical or tenant.** No `if vertical == "clinic"` and no `if tenant_id == …`. Anything that varies lives in `verticals/<name>/` or tenant config. *Check:* the `demo_coaching` fixture loads with no core change.
@@ -50,7 +50,7 @@ Each module's `README.md` states its purpose, the capabilities it serves, the co
 
 - Python 3.12 and FastAPI. Async for I/O.
 - **Pydantic models for every external payload:** webhooks (WhatsApp, voice platform, telephony), tool requests, and LLM structured output.
-- Ruff + Black in CI once CI exists.
+- Ruff + Black in CI (`.github/workflows/ci.yml`), settings in `backend/pyproject.toml`, versions pinned in `backend/requirements-dev.txt`. Run `ruff check .` and `black .` from `backend/` before pushing.
 - **Before adding a dependency,** record its licence and any free-tier ceiling in `open-source/open-source.md`. Flag copyleft licences.
 - **[Post-MVP]** `mypy --strict` as a merge gate. Type hints are still expected in the MVP.
 

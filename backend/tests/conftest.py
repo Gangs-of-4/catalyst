@@ -2,9 +2,9 @@ from datetime import datetime
 
 import pytest
 
+from src import seed
 from src.core import config, db
 from src.core import settings as cs
-from src import seed
 
 # Tuesday 27 Oct 2026, 09:00 IST: before clinic hours, so all of today's slots are open.
 FIXED_NOW = datetime(2026, 10, 27, 9, 0, tzinfo=config.IST)
@@ -17,8 +17,15 @@ def isolated(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
     env_file.write_text("", encoding="utf-8")
     monkeypatch.setenv("CATALYST_ENV_FILE", str(env_file))
-    for name in ("CATALYST_TOOL_SECRET", "DESK_PASSWORD", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN",
-                 "GROQ_API_KEY", "VAPI_PRIVATE_KEY", "PUBLIC_URL"):
+    for name in (
+        "CATALYST_TOOL_SECRET",
+        "DESK_PASSWORD",
+        "TWILIO_ACCOUNT_SID",
+        "TWILIO_AUTH_TOKEN",
+        "GROQ_API_KEY",
+        "VAPI_PRIVATE_KEY",
+        "PUBLIC_URL",
+    ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(config, "now", lambda: FIXED_NOW)
     yield env_file

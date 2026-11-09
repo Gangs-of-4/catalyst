@@ -1,0 +1,4 @@
+# CI and local lint tools. Pinned so a new release can't turn CI red without a code change.
+-r requirements.txt
+ruff==0.17.4
+black==26.10.1

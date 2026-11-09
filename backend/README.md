@@ -23,5 +23,19 @@ From `backend/` with the venv active: `uvicorn src.main:app --port 8000`. The da
 
 `pytest` from `backend/`. No keys needed; Vapi, Twilio and Groq are mocked.
 
+## Lint and CI
+
+CI (`.github/workflows/ci.yml`) runs on every PR to `main` and every push to `main`: Ruff and Black, the provider boundary check, and pytest on Python 3.12. To run the same checks locally, from `backend/`:
+
+```
+pip install -r requirements-dev.txt
+ruff check .
+black --check .
+python ../scripts/check_provider_boundary.py
+pytest
+```
+
+`ruff check --fix .` and `black .` fix most findings. mypy is not in CI yet; `mypy --strict` becomes a merge gate after the MVP (`context/coding-rules.md`).
+
 
 `backend/tests/` holds unit and contract tests. The safety-suite scripts live in `verticals/<name>/tests/`, and the test-only `demo_coaching` vertical lives in `tests/fixtures/verticals/`.

@@ -1,4 +1,5 @@
 """Clinic settings, stored as one JSON document."""
+
 import difflib
 import re
 import sqlite3
@@ -36,7 +37,11 @@ def match_doctor(s: dict, text: str | None) -> dict | None:
     for d in s["doctors"]:
         if t == d["id"].lower():
             return d
-    t = re.sub(r"\b(dr|doctor|doc|daktar|madam|mam|maam|sir|ji|sahab|saheb|se|ke|ko|wali|wale)\b\.?", " ", t)
+    t = re.sub(
+        r"\b(dr|doctor|doc|daktar|madam|mam|maam|sir|ji|sahab|saheb|se|ke|ko|wali|wale)\b\.?",
+        " ",
+        t,
+    )
     words = [w for w in re.split(r"[\s.,-]+", t) if len(w) > 1]
     if not words:
         letter = re.sub(r"\W", "", t)
@@ -48,7 +53,8 @@ def match_doctor(s: dict, text: str | None) -> dict | None:
     for d in s["doctors"]:
         name_words = [w for w in re.split(r"[\s.,-]+", d["name"].lower()) if w not in ("dr", "")]
         score = max(
-            (difflib.SequenceMatcher(None, w, n).ratio() for w in words for n in name_words), default=0
+            (difflib.SequenceMatcher(None, w, n).ratio() for w in words for n in name_words),
+            default=0,
         )
         if score > best_score:
             best, best_score = d, score

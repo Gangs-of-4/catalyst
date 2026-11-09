@@ -2,6 +2,7 @@
 
 Every tool result states the resolved day so the agent can read it back (C2).
 """
+
 import re
 from datetime import date, timedelta
 
@@ -14,16 +15,35 @@ WEEKDAYS = [  # index = date.weekday()
     ["monday", "mon", "somvar", "somvaar", "somwar", "सोमवार"],
     ["tuesday", "tue", "tues", "mangalvar", "mangalvaar", "mangalwar", "मंगलवार"],
     ["wednesday", "wed", "budhvar", "budhvaar", "budhwar", "budh", "बुधवार"],
-    ["thursday", "thu", "thurs", "guruvar", "guruvaar", "guruwar", "brihaspativar", "veervar", "गुरुवार", "बृहस्पतिवार"],
+    [
+        "thursday",
+        "thu",
+        "thurs",
+        "guruvar",
+        "guruvaar",
+        "guruwar",
+        "brihaspativar",
+        "veervar",
+        "गुरुवार",
+        "बृहस्पतिवार",
+    ],
     ["friday", "fri", "shukravar", "shukravaar", "shukrvar", "shukrawar", "शुक्रवार"],
     ["saturday", "sat", "shanivar", "shanivaar", "shaniwar", "शनिवार"],
     ["sunday", "ravivar", "ravivaar", "raviwar", "itvar", "itwar", "itvaar", "रविवार", "इतवार"],
 ]
 MONTHS = [
-    ["january", "jan", "जनवरी"], ["february", "feb", "फरवरी"], ["march", "mar", "मार्च"],
-    ["april", "apr", "अप्रैल"], ["may", "मई"], ["june", "jun", "जून"], ["july", "jul", "जुलाई"],
-    ["august", "aug", "अगस्त"], ["september", "sep", "sept", "सितंबर", "सितम्बर"],
-    ["october", "oct", "अक्टूबर"], ["november", "nov", "नवंबर", "नवम्बर"], ["december", "dec", "दिसंबर", "दिसम्बर"],
+    ["january", "jan", "जनवरी"],
+    ["february", "feb", "फरवरी"],
+    ["march", "mar", "मार्च"],
+    ["april", "apr", "अप्रैल"],
+    ["may", "मई"],
+    ["june", "jun", "जून"],
+    ["july", "jul", "जुलाई"],
+    ["august", "aug", "अगस्त"],
+    ["september", "sep", "sept", "सितंबर", "सितम्बर"],
+    ["october", "oct", "अक्टूबर"],
+    ["november", "nov", "नवंबर", "नवम्बर"],
+    ["december", "dec", "दिसंबर", "दिसम्बर"],
 ]
 RELATIVE = [
     (2, ["day after tomorrow", "parso", "parson", "parsoon", "parsun", "परसों", "परसो"]),
@@ -33,23 +53,80 @@ RELATIVE = [
 NEXT_WORDS = ["next", "agle", "agla", "अगले", "अगला"]
 
 NUMBER_WORDS = {
-    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
-    "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
-    "ek": 1, "do": 2, "teen": 3, "char": 4, "chaar": 4, "paanch": 5, "panch": 5, "chhe": 6, "chhah": 6,
-    "che": 6, "saat": 7, "aath": 8, "nau": 9, "das": 10, "gyarah": 11, "barah": 12, "baarah": 12,
-    "एक": 1, "दो": 2, "तीन": 3, "चार": 4, "पांच": 5, "पाँच": 5, "छह": 6, "छः": 6, "सात": 7, "आठ": 8,
-    "नौ": 9, "दस": 10, "ग्यारह": 11, "बारह": 12,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "ek": 1,
+    "do": 2,
+    "teen": 3,
+    "char": 4,
+    "chaar": 4,
+    "paanch": 5,
+    "panch": 5,
+    "chhe": 6,
+    "chhah": 6,
+    "che": 6,
+    "saat": 7,
+    "aath": 8,
+    "nau": 9,
+    "das": 10,
+    "gyarah": 11,
+    "barah": 12,
+    "baarah": 12,
+    "एक": 1,
+    "दो": 2,
+    "तीन": 3,
+    "चार": 4,
+    "पांच": 5,
+    "पाँच": 5,
+    "छह": 6,
+    "छः": 6,
+    "सात": 7,
+    "आठ": 8,
+    "नौ": 9,
+    "दस": 10,
+    "ग्यारह": 11,
+    "बारह": 12,
 }
 PERIODS = {
-    "morning": "am", "subah": "am", "subha": "am", "सुबह": "am",
-    "afternoon": "noon", "dopahar": "noon", "dopehar": "noon", "dophar": "noon", "दोपहर": "noon",
-    "evening": "pm", "shaam": "pm", "sham": "pm", "शाम": "pm",
-    "night": "night", "raat": "night", "रात": "night",
+    "morning": "am",
+    "subah": "am",
+    "subha": "am",
+    "सुबह": "am",
+    "afternoon": "noon",
+    "dopahar": "noon",
+    "dopehar": "noon",
+    "dophar": "noon",
+    "दोपहर": "noon",
+    "evening": "pm",
+    "shaam": "pm",
+    "sham": "pm",
+    "शाम": "pm",
+    "night": "night",
+    "raat": "night",
+    "रात": "night",
 }
 FRACTIONS = {  # (minutes, hour offset)
-    "saade": (30, 0), "sade": (30, 0), "saadhe": (30, 0), "साढ़े": (30, 0), "साढे": (30, 0),
-    "sawa": (15, 0), "sava": (15, 0), "सवा": (15, 0),
-    "paune": (45, -1), "pone": (45, -1), "पौने": (45, -1),
+    "saade": (30, 0),
+    "sade": (30, 0),
+    "saadhe": (30, 0),
+    "साढ़े": (30, 0),
+    "साढे": (30, 0),
+    "sawa": (15, 0),
+    "sava": (15, 0),
+    "सवा": (15, 0),
+    "paune": (45, -1),
+    "pone": (45, -1),
+    "पौने": (45, -1),
 }
 SPECIAL = {"dedh": "01:30", "डेढ़": "01:30", "dhai": "02:30", "dhaai": "02:30", "ढाई": "02:30"}
 
@@ -81,9 +158,9 @@ def parse_date(text: str | None, today: date) -> date | None:
         return _dm(int(m[1]), int(m[2]), m[3], today)
     for i, names in enumerate(MONTHS):
         for name in names:
-            m = re.search(r"(\d{1,2})(?:st|nd|rd|th)?\s*" + _L + re.escape(name) + _R, t) or re.search(
-                _L + re.escape(name) + _R + r"\s*(\d{1,2})(?:st|nd|rd|th)?\b", t
-            )
+            m = re.search(
+                r"(\d{1,2})(?:st|nd|rd|th)?\s*" + _L + re.escape(name) + _R, t
+            ) or re.search(_L + re.escape(name) + _R + r"\s*(\d{1,2})(?:st|nd|rd|th)?\b", t)
             if m:
                 return _dm(int(m[1]), i + 1, None, today)
     for i, names in enumerate(WEEKDAYS):
