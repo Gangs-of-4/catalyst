@@ -1,4 +1,5 @@
 import json
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -100,7 +101,8 @@ def test_book_then_double_book_then_cancel(client):
     )
     assert r2["result"].startswith("NOT BOOKED") and "alternatives" in r2["result"]
     found = result(post(client, tool_calls("find_booking", {"phone": "9876543210"}, tc_id="f1")))
-    assert "booking 1" in found["result"]
+    # Row ids differ between SQLite (restarts at 1) and Postgres (sequence), so don't pin the number.
+    assert re.search(r"booking \d+:", found["result"]) and "28 October 2026" in found["result"]
     c = result(post(client, tool_calls("cancel", {"phone": "+91 98765 43210"}, tc_id="c1")))
     assert c["result"].startswith("CANCELLED")
 
