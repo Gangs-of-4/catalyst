@@ -4,6 +4,10 @@ A shared map, not a task tracker. Milestones carry capability checklists (C1–C
 
 Milestones are not strictly sequential. M4 can run alongside M1, and anyone can pick up anything (`context/team.md`).
 
+## Phase 2 program deliverable (due 15 Nov 2026)
+
+The multi-business build (clinic + wholesale templates, self-serve onboarding, WhatsApp per business, usage evidence) follows its own milestones, **Phase 2 M0–M12**, in [`context/phase2-plan.md`](phase2-plan.md). They are separate from the M0–M5 below. Progress is tracked in that file's table. Tick capabilities here only when their "done when" in `mvp.md` is met.
+
 ## Now
 
 ### M0 — Foundation and spikes

@@ -2,6 +2,8 @@
 
 Entry point for any agent working in this repo. Read this, then `context/mvp.md`, before planning work.
 
+**Phase 2 (program deliverable, due 15 Nov 2026):** also read `context/phase2-plan.md`. It is the approved build plan: milestones M0–M12, the track split and the 2-person split, the cut order, risks, and the team lead's answers. Its milestones (M0–M12) are separate from the roadmap's M0–M5.
+
 ## What we're building
 
 **Catalyst** is an AI front-desk assistant for small Indian businesses. It answers the phone like a polite receptionist. Our team sets it up, and the owner controls it from WhatsApp, never from a dashboard.
@@ -90,7 +92,7 @@ Tags: **[MVP]** applies now. **[Post-MVP]** applies once that part exists. The f
 ```
 context/       mvp.md (source of truth) · feature-backlog · contracts · architecture
                decisions (ADRs + D1–D7) · roadmap (M0–M5) · go-live-checklist · spikes
-               coding-rules · team (work areas) · glossary
+               coding-rules · team (work areas) · glossary · phase2-plan (Phase 2 build plan)
 verticals/     _template/ (copy to start) · clinic/ (DRAFT)
 backend/src/   api core models workers providers/{llm,stt,tts,voice_orchestrator,telephony}
                agents knowledge booking safety channels/whatsapp verticals compliance
