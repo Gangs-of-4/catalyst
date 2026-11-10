@@ -22,12 +22,10 @@ BYPASSES = {
     "schema-qualified table": "SELECT * FROM public.bookings WHERE id = ?",
     "comma join": "SELECT * FROM tenants t, bookings b WHERE t.id = ?",
     "second table unfiltered": (
-        "SELECT * FROM orders o JOIN order_items i ON i.order_id = o.id "
-        "WHERE o.tenant_id = ?"
+        "SELECT * FROM orders o JOIN order_items i ON i.order_id = o.id " "WHERE o.tenant_id = ?"
     ),
     "subquery unfiltered": (
-        "SELECT * FROM bookings WHERE tenant_id = ? "
-        "AND id IN (SELECT id FROM inbox)"
+        "SELECT * FROM bookings WHERE tenant_id = ? " "AND id IN (SELECT id FROM inbox)"
     ),
     "insert without tenant column": "INSERT INTO inbox (kind, created_at) VALUES (?, ?)",
     "delete without filter": "DELETE FROM blocks WHERE id = ?",
