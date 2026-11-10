@@ -16,6 +16,14 @@ languages:
   default: hi-en
   supported: [hi-en, en]
 
+modules: [bookings]
+tools: [get_clinic_info, find_slots, book, find_booking, reschedule, cancel, create_callback, escalate, transfer, log_call_outcome]
+onboarding:
+  slot_min: 60
+  sessions: [["16:00", "20:00"]]
+  closed_weekdays: [6]
+  emergency_instruction: ""
+
 booking:
   default_slot_min: 60
   offer_slots: 3

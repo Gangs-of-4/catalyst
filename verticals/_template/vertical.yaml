@@ -17,6 +17,16 @@ languages:
   default: hi-en           # hi-en (Hinglish) | en | hi
   supported: [hi-en, en, hi]
 
+modules: [bookings]        # bookings | orders — picks the desk board and data model (ADR-0037)
+tools:                     # agent tools served for this vertical (contracts.md §1.10, §1.11)
+  [get_clinic_info, find_slots, book, find_booking, reschedule, cancel, create_callback, escalate, transfer, log_call_outcome]
+onboarding:                # create-business form defaults (ADR-0038)
+  slot_min: 15
+  sessions: [["10:00", "14:00"], ["17:00", "20:00"]]
+  closed_weekdays: [6]     # 0 = Monday … 6 = Sunday
+  emergency_instruction: ""
+
+# booking: is required when modules has bookings; orders: when modules has orders.
 booking:
   default_slot_min: 15
   offer_slots: 3           # nearest free slots offered (C4)

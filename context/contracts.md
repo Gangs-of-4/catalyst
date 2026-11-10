@@ -2,15 +2,16 @@
 
 Shared interfaces that the four work areas build against. **If your change touches this file, say so clearly in the PR description** — other members depend on it.
 
-Status: **v0.1 draft, 2026-10-26.** Shapes are a starting point for M0 stubs; field names may change in review, but change them here first, then in code.
+Status: **v0.2 draft, 2026-11-10.** v0.2 adds multi-business tenancy, the wholesale template, owner custom instructions, usage events, feedback and the browser API (Phase 2 program deliverable; ADR-0037, ADR-0038). Field names may change in review, but change them here first, then in code.
 
-Contents: 1. Agent tools API · 2. Custom-LLM endpoint · 3. Booking schema · 4. WhatsApp command format · 5. Alert and summary formats.
+Contents: 1. Agent tools API (1.10 Vapi transport, 1.11 wholesale tools) · 2. Custom-LLM endpoint · 3. Booking schema (3.1 Phase 2 tables) · 4. WhatsApp command format · 5. Alert and summary formats · 6. Browser API.
 
 Conventions everywhere:
 - Times are ISO 8601 with offset, clinic-local (`Asia/Kolkata`), e.g. `2026-11-03T17:00:00+05:30`.
 - Phone numbers are E.164 (`+91…`) in storage and APIs. **Never logged** — log IDs only.
 - IDs are UUIDs as strings.
-- `tenant_id` is never sent by the voice layer or the LLM. The backend resolves it from the call session or the authenticated user.
+- `tenant_id` is never sent by the voice layer, the LLM or the browser. The backend resolves it from the webhook path (`public_id`), the session cookie, or the WhatsApp sender number.
+- Money is integer paise in storage (`rate_paise`); APIs send paise and pages format ₹.
 
 ---
 
@@ -182,8 +183,10 @@ Looks up the caller's upcoming bookings before `reschedule` or `cancel`, so the 
 
 The demo build serves the same tools through **one** Vapi endpoint instead of `/v1/tools/<name>`. The pilot returns to §1.
 
-- **Endpoint:** `POST /vapi/webhook` for both tool calls and server messages.
-- **Auth:** header `x-catalyst-secret: <CATALYST_TOOL_SECRET>`, set by `scripts/setup_vapi.py` on each tool and on the assistant's server. Missing or wrong → `401`. If the secret is unset on our side, everything is rejected.
+- **Endpoint (v0.2):** `POST /vapi/webhook/{public_id}` for both tool calls and server messages. `public_id` is the business's random URL slug (§3.1 `tenants.public_id`); the backend resolves the tenant from it. Unknown `public_id` → `404`. The single-tenant `POST /vapi/webhook` is removed once every assistant is re-synced.
+- **Auth (v0.2):** header `x-catalyst-secret: <tenants.tool_secret>`, a per-business secret generated when the business is created and set on each tool and on that business's assistant. Missing or wrong → `401`. A secret for business A never authorises business B. (v0.1 used one global `CATALYST_TOOL_SECRET` from `.env`.)
+- **Assistants:** one Vapi assistant per business, created on signup and PATCHed when that business's settings or instructions change. Only that business's assistant is touched. Every assistant sets `maxDurationSeconds: 180` (`VAPI_MAX_CALL_SECONDS`).
+- **Call caps:** before the browser starts a web call it asks `POST /api/try/{public_id}/start` (§6). The backend allows at most `DEMO_CALLS_PER_DAY` (default 20) web calls per day across all businesses, plus a per-business daily cap (`CALLS_PER_BUSINESS_PER_DAY`, default 10). Over the cap it answers `429 {"code": "MINUTES_USED_UP"}` and the page shows a friendly "minutes used up for today" state.
 - **Tool call request** (VERIFY against the Vapi docs if Vapi changes it; checked against `@vapi-ai/web` 2.7.1 types):
   ```json
   { "message": { "type": "tool-calls",
@@ -197,6 +200,29 @@ The demo build serves the same tools through **one** Vapi endpoint instead of `/
 - **Outcome:** `log_call_outcome` is a stub. The backend derives the outcome from what the tools did during the call, then the `end-of-call-report` server message adds the summary, transcript and recording URL. Priority: `escalated` > `booked` > `changed` > `callback` > `answered` > `hung_up`. (`changed` = moved or cancelled; demo-only value.)
 - **`transfer`** is a stub: web calls cannot transfer. `escalate` raises the urgent inbox item and the WhatsApp alert instead.
 - **Booking `source`** stays `phone` for agent bookings, as in §3.
+- **Tools per template:** each vertical lists its tools in `vertical.yaml` (`tools:`). The backend only registers and serves those; a tool not in the list returns the error text "Tool not available".
+
+### 1.11 Wholesale tools (added 2026-11-10, v0.2)
+
+Same transport, auth, idempotency (`toolCallId`) and plain-text result rule as §1.10. Arguments below are what the voice LLM sends; results are plain text for the LLM, shown here as the facts they must contain.
+
+| Tool | Arguments | Result must contain | Errors (stated in the text) |
+|---|---|---|---|
+| `get_business_info` | `question` | Approved answers only (C3), or "not found" | — |
+| `get_catalog` | `query` (optional words) | Up to 10 matching products: name, pack size, rate in ₹, in stock yes/no | — |
+| `check_stock` | `product` | Matched product name, pack size, in stock yes/no, rate | `UNKNOWN_PRODUCT` with up to 3 close name matches *of the same product name* (spelling help, never a substitute) |
+| `create_order` | `shop_name`, `contact_name`, `phone`, `items: [{product, qty}]`, `notes` | Order number, each line as name × qty × rate, total | `UNKNOWN_PRODUCT`, `OUT_OF_STOCK` (offer a callback), `VALIDATION` (qty must be a whole number 1–9999) |
+| `order_status` | `order_number` or `phone` | Status of the matching order(s) and created date | `NOT_FOUND` |
+| `create_callback` | as §1.6 / §1.10 | Callback ID | — |
+| `escalate` | as §1.7 / §1.10 | What happens next | — |
+
+`get_clinic_info` (§1.1) and `get_business_info` are the same function; the clinic template exposes the first name, the wholesale template the second.
+
+Rules the wholesale prompt and tools enforce together:
+- **Rates come only from the catalogue.** The agent never states a rate, discount or total that a tool did not return. Unknown → `create_callback` with reason `unanswered_question`.
+- **Read-back before saving.** The agent reads each line (name, pack size, quantity) back to the caller and gets a yes **before** calling `create_order`.
+- **No medical advice, even though the products are medicines.** No dosage, use, side effects, or "X ki jagah Y" (substitutes). Such questions → polite refusal + `create_callback`. Conflicts never offer another product as an alternative: out of stock offers a callback; a duplicate order points to the existing order number.
+- `source` is `phone` for agent orders, as for bookings.
 
 ---
 
@@ -254,6 +280,36 @@ A conflicting insert raises an exclusion violation, which the API maps to `SLOT_
 - `contact_chain.phone` must differ from every number that forwards to the agent.
 - `whatsapp_senders` must be non-empty before go-live.
 
+### 3.1 Phase 2 tables (v0.2, 2026-11-10)
+
+Phase 2 runs on one thin SQL layer: SQLite locally and in tests, Postgres (`DATABASE_URL`) in production (ADR-0039). The SQL stays in the subset both support: text IDs generated by the app, ISO-8601 text dates, integer money, `ON CONFLICT`, partial unique indexes. Isolation is enforced in app code by one scoping helper plus tests that business A can never read or change business B's data; Postgres RLS is a stretch goal (ADR-0016 departure recorded in ADR-0039).
+
+Every table below except `tenants` has `tenant_id`, and every query on it filters by `tenant_id`.
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `tenants` | one business | `id`, `public_id` (random URL slug, unique), `name`, `template` (`clinic` \| `wholesale`), `city`, `address`, `landmark`, `settings` (JSON: hours, closed days, resources, services, FAQs, emergency text, minimum order, delivery area), `owner_whatsapp` (E.164, **unique across businesses**), `vapi_assistant_id`, `tool_secret`, `is_demo`, `created_at` |
+| `users` | the owner's login | `id`, `tenant_id`, `name`, `email` (unique, lowercased), `password_hash` (`hashlib.scrypt`, per-user salt), `failed_logins`, `locked_until`, `last_active_at`, `created_at` |
+| `sessions` | logins | `token_hash` (SHA-256 of the cookie token), `user_id`, `tenant_id` (null for admin), `kind` (`user` \| `admin`), `expires_at`, `created_at` |
+| `bookings`, `blocks`, `inbox`, `calls`, `tool_calls`, `pending_actions` | as today (demo schema) | + `tenant_id`. Slot lock: unique (`tenant_id`, `resource_id`, `date`, `time`) where status is active. `tool_calls` key (`tenant_id`, `id`). |
+| `products` | wholesale catalogue | `id`, `tenant_id`, `name`, `name_key` (normalised, unique per tenant), `pack_size`, `rate_paise`, `in_stock`, `active`, `updated_at` |
+| `orders` | one order | `id`, `tenant_id`, `number` (per-tenant counter, unique per tenant), `shop_name`, `contact_name`, `phone`, `notes`, `status`, `source`, `call_id`, `idempotency_key` (unique per tenant), `created_at`, `updated_at` |
+| `order_items` | order lines | `id`, `tenant_id`, `order_id`, `product_id`, `name`, `pack_size`, `qty`, `rate_paise` (name and rate are copied at order time) |
+| `instruction_versions` | owner custom instructions | `id`, `tenant_id`, `text` (accepted lines only, ≤ 500 chars), `rejected` (JSON list of `{line, reason}`), `source` (`web` \| `whatsapp`), `active`, `created_at` |
+| `events` | usage evidence | `id`, `tenant_id`, `user_id` (nullable), `type`, `created_at`. **No payload column**, so counts can never carry names or numbers. |
+| `feedback` | in-app feedback | `id`, `tenant_id`, `person_name`, `person_role`, `text`, `type`, `decision`, `decision_reason`, `shipped_on`, `evidence_url`, `partner_reaction`, `created_at` |
+| `schema_version` | migrations | `version` |
+
+Enums:
+- `tenants.template`: one folder name under `verticals/` that is not `_template`.
+- `orders.status`: `new` → `confirmed` → `dispatched` → `delivered`; `new` or `confirmed` → `cancelled`. Any other transition is `INVALID_TRANSITION`.
+- `orders.source`: `phone`, `whatsapp`, `walk_in` (same as bookings).
+- `events.type`: `signup`, `login`, `booking_created`, `booking_status`, `order_created`, `order_status`, `callback_created`, `call_ended`, `wa_command`, `settings_saved`, `instructions_saved`, `catalog_updated`, `feedback_sent`.
+- `feedback.type`: `bug`, `feature`, `usability`, `data_integration`, `pricing_business`.
+- `feedback.decision`: `shipped`, `in_progress`, `planned`, `wont_do` (needs `decision_reason`).
+
+Personal data kept: business details, the owner's name, email and WhatsApp, and patient/shop **name and phone** on bookings and orders. No medical data: booking `reason` stays short and non-clinical (§1.3); order `notes` are delivery notes.
+
 ---
 
 ## 4. WhatsApp command format
@@ -279,6 +335,23 @@ Rules:
 - If a write affects existing bookings, the preview says how many and what happens to them.
 - If the intent is `unknown` or confidence is below a configured threshold, the reply is "Samajh nahi aaya — hamari team aaj hi dekh legi." An ops task is created, and our team handles it manually the same day (C8).
 - Each vertical enables commands in `vertical.yaml` (`whatsapp.commands`).
+
+**Routing (v0.2).** One Twilio sandbox number serves every business. The backend finds the business by the sender's number (`tenants.owner_whatsapp`, unique across businesses). An unknown number gets: "Yeh number kisi Catalyst business se juda nahi hai. {PUBLIC_APP_URL}/signup par apna front desk banaiye, ya Settings mein yahi WhatsApp number daaliye." Nothing else happens, and the attempt is logged by ID only.
+
+**Wholesale commands (v0.2).** Rule-parsed first; the LLM parser is a fallback. Every write is previewed.
+
+| Owner says | Intent | Write? | Preview / reply |
+|---|---|---|---|
+| "aaj ke orders" | `orders_today` | no | Today's orders: number, shop, item count, status |
+| "rate Paracetamol 500 42" / "rate <item> <price>" | `set_rate` | yes | "Paracetamol 500 (10x10): ₹38 → ₹42. Sahi hai? Haan/Nahi" |
+| "stock khatam <item>" | `stock_out` | yes | "<item> ko out of stock kar dein? Agent naye orders mein yeh nahi lega. Haan/Nahi" |
+| "stock aa gaya <item>" | `stock_in` | yes | "<item> ko in stock kar dein? Haan/Nahi" |
+| "order 42 dispatch" | `order_dispatch` | yes | "Order 42 (<shop>) ko dispatched mark karein? Haan/Nahi". An invalid transition replies with the current status and changes nothing. |
+| "summary" | `summary` | no | Today's and this week's counts |
+
+An item name that matches no product, or several, replies with the closest names and asks again; it never guesses.
+
+**Custom instructions on WhatsApp (both templates).** "agent ko bolo <text>" → intent `add_instruction`. The text goes through the same screening as the settings page (§6). The preview shows what will be added and any rejected line with its reason; on "Haan" a new `instruction_versions` row is saved, the prompt is rebuilt, and only that business's assistant is PATCHed. "Ho gaya — agent ab yeh maanega." If every line is rejected, nothing is saved and no preview is offered.
 
 Patient-side:
 - Reminder replies of `STOP` (case-insensitive; also "band karo") set `contacts.reminder_opt_out_at` permanently and send one confirmation.
@@ -324,3 +397,49 @@ Pending callbacks: {pending}.
 - reminder sends failing.
 
 The channel is the team's WhatsApp/ops group; the exact channel is TBD with D7.
+
+---
+
+## 6. Browser API (v0.2, 2026-11-10)
+
+The static pages call these. Built and consumed in parallel by the backend and frontend tracks; change here first.
+
+- **Origin.** In production the pages call `/api/...` on their own (Vercel) origin and Vercel rewrites it to the backend (ADR-0041), so the session cookie is first-party. Locally FastAPI serves pages and API on one origin.
+- **Session cookie.** `catalyst_session`: random token signed with HMAC-SHA256 (`SESSION_SECRET`), `HttpOnly`, `Secure` (except on `http://localhost`), `SameSite=Lax`, `Path=/`, 30-day expiry. The DB stores only the token's SHA-256 hash. Logout deletes the row.
+- **CSRF.** Every write is a JSON `POST`/`PUT`/`DELETE` (multipart only for CSV upload) and must carry header `X-Requested-With: catalyst`; the backend rejects writes without it (`403`). Together with `SameSite=Lax` this blocks cross-site form posts.
+- **Errors.** Every non-2xx body is `{ "detail": "<one plain sentence for the page>", "code": "<CODE>", "fields": {"<field>": "<message>"}?, "alternatives": [ ... ]? }`. Pages show `detail` as-is. Never a stack trace.
+
+Common codes: `VALIDATION` (422, with `fields`), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `EMAIL_TAKEN`, `WHATSAPP_TAKEN`, `SLOT_TAKEN` (409, `alternatives` = up to 3 free slots), `DUPLICATE_ORDER` (409, `alternatives` = the existing order), `INVALID_TRANSITION` (409), `LOCKED` (429, too many failed logins), `MINUTES_USED_UP` (429), `VOICE_NOT_CONFIGURED` (503), `INTERNAL` (500, generic sentence).
+
+### 6.1 Endpoints
+
+Auth column: **public**, **user** (session, scoped to the user's business), **admin** (admin session).
+
+| Method + path | Auth | Purpose |
+|---|---|---|
+| `GET /api/templates` | public | Templates with labels and onboarding defaults (from `verticals/*/`) |
+| `GET /api/templates/{template}/sample-catalog.csv` | public | Sample catalogue CSV |
+| `POST /api/signup` | public | Account + business in one step (onboarding form). Body: `user {name, email, password}`, `business {template, name, city, address, landmark, hours, closed_weekdays, owner_whatsapp, consent: true}`, template section, optional `faqs`, `instructions`. Creates the assistant (failure is not fatal: the business is created and the test page shows `VOICE_NOT_CONFIGURED` with a retry). Sets the cookie. Returns `{public_id, template}`. |
+| `POST /api/login` / `POST /api/logout` | public / user | Email + password. 5 failures → 15 min lock (`LOCKED`). |
+| `GET /api/me` | user | User name, business name, template, labels, `public_id` |
+| `GET /api/try/{public_id}` | public | Name, template, labels, Vapi public key + assistant ID (or `VOICE_NOT_CONFIGURED`), "try saying" lines |
+| `POST /api/try/{public_id}/start` | public | Call-cap check before a web call (§1.10); `429 MINUTES_USED_UP` over the cap |
+| `GET /api/try/{public_id}/board` | public | Today's register or order board with names masked ("Ramesh G."), no phones |
+| `GET /api/desk/day?date=` · `POST /api/desk/bookings` · `POST /api/desk/bookings/{id}/status` | user | Schedule (bookings template) |
+| `GET /api/orders?status=&date=` · `POST /api/orders` · `POST /api/orders/{id}/status` | user | Order board (orders template). `POST /api/orders` takes `idempotency_key` from the page so a resend after a lost connection never duplicates. |
+| `GET /api/catalog` · `POST /api/catalog` · `PUT /api/catalog/{id}` · `POST /api/catalog/import` (CSV) | user | Catalogue. Import keeps good rows and returns `{added, updated, errors: [{row, message}]}`. CSV columns: `name,pack_size,rate,in_stock`. |
+| `GET /api/inbox` · `POST /api/inbox/{id}/done` · `GET /api/calls` · `GET /api/stats` | user | Shared desk panels |
+| `GET /api/settings` · `PUT /api/settings` | user | Business settings; save rebuilds the prompt and PATCHes only this business's assistant. Returns `{saved: true, agent: "updated" \| "not_configured" \| "failed"}`. |
+| `POST /api/settings/blocks` · `DELETE /api/settings/blocks/{id}` | user | Leave and holidays (bookings template) |
+| `GET /api/instructions` · `PUT /api/instructions` · `POST /api/instructions/undo` | user | Custom instructions: current text, history, rejected lines. `PUT` body `{text}` (≤ 500 chars) → `{accepted, rejected: [{line, reason}], version_id, agent}`. Undo reactivates the previous version. |
+| `GET /api/settings/whatsapp` | user | Sandbox number and join steps (`join <TWILIO_SANDBOX_JOIN_CODE>`) |
+| `POST /api/feedback` | user | `{person_name, person_role, text, type}` |
+| `POST /api/admin/login` · `GET /api/admin/businesses` · `GET /api/admin/businesses/{id}/usage.csv` · `GET /api/admin/feedback` · `PUT /api/admin/feedback/{id}` · `GET /api/admin/feedback.csv` · `POST /api/admin/reset-demo` | admin | Usage evidence and feedback log (below) |
+
+### 6.2 Admin usage and CSV formats
+
+`GET /api/admin/businesses` returns, per business: `template`, `created_at`, `users`, `records` (bookings or orders created), `calls`, `wa_commands`, `last_active` (latest `events.created_at` or `users.last_active_at`), `is_demo`, and `weeks`: the last 4 ISO weeks (Monday start, IST), oldest first, each `{week_start, events, records, calls, wa_commands}`.
+
+`usage.csv` columns (counts only — never names or phone numbers): `week_start,events,records,calls,wa_commands,logins`, one row per week for the last 4 weeks, plus a `total` row.
+
+`feedback.csv` columns, newest first, matching the team's feedback Google Sheet: `Date,Partner and person,What they said,Type,Decision,Shipped on,Evidence,Partner's reaction`. "Partner and person" is `<business name> — <person name> (<role>)`. "Decision" for `wont_do` includes the reason.

@@ -17,6 +17,18 @@ languages:
   default: hi-en
   supported: [hi-en, en, hi]
 
+modules: [bookings]
+tools: [get_clinic_info, find_slots, book, find_booking, reschedule, cancel, create_callback, escalate, transfer, log_call_outcome]
+onboarding:                  # create-business form defaults (ADR-0038); the owner checks and edits
+  slot_min: 15
+  sessions: [["10:00", "14:00"], ["17:00", "20:00"]]
+  closed_weekdays: [6]
+  services:
+    - {name: Consultation, fee: "₹300"}
+  emergency_instruction: >-
+    Agar saans lene ya nigalne mein dikkat hai, sujan tezi se badh rahi hai, ya khoon ruk nahi raha,
+    to turant nazdeeki hospital ki emergency mein jaaiye ya 108 par call kijiye.
+
 booking:
   default_slot_min: 15       # VERIFY with the pilot clinic
   offer_slots: 3

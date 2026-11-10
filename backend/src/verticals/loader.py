@@ -13,6 +13,61 @@ def load_yaml(name: str, base: Path = VERTICAL_DIR) -> Any:
         return yaml.safe_load(f)
 
 
+MODULES = {"bookings": "booking", "orders": "orders"}  # module -> its required config section
+TOOLS = {
+    "get_clinic_info",
+    "get_business_info",
+    "find_slots",
+    "book",
+    "find_booking",
+    "reschedule",
+    "cancel",
+    "create_callback",
+    "escalate",
+    "transfer",
+    "log_call_outcome",
+    "get_catalog",
+    "check_stock",
+    "create_order",
+    "order_status",
+}
+REQUIRED = (
+    "name",
+    "status",
+    "version",
+    "modules",
+    "tools",
+    "onboarding",
+    "labels",
+    "languages",
+    "whatsapp",
+    "knowledge",
+    "safety",
+)
+
+
+def validate(base: Path) -> dict:
+    """Load vertical.yaml from `base` and check the keys core code relies on. Raises ValueError."""
+    v = load_yaml("vertical.yaml", base)
+    if not isinstance(v, dict):
+        raise ValueError(f"{base.name}: vertical.yaml is not a mapping")
+    missing = [k for k in REQUIRED if k not in v]
+    if missing:
+        raise ValueError(f"{base.name}: missing keys {missing}")
+    if v["name"] != base.name:
+        raise ValueError(f"{base.name}: name is {v['name']!r}, must match the folder")
+    modules = v["modules"]
+    if not modules or any(m not in MODULES for m in modules):
+        raise ValueError(f"{base.name}: modules must be a non-empty subset of {sorted(MODULES)}")
+    for m in modules:
+        if MODULES[m] not in v:
+            raise ValueError(f"{base.name}: module {m!r} needs a {MODULES[m]!r} section")
+    unknown = set(v["tools"]) - TOOLS
+    if unknown:
+        raise ValueError(f"{base.name}: unknown tools {sorted(unknown)}")
+    return v
+
+
 def prompt_template(base: Path = VERTICAL_DIR) -> str:
     """The prompt body of agent-prompt.md: everything after the first '---' rule."""
     text = (base / "agent-prompt.md").read_text(encoding="utf-8")
