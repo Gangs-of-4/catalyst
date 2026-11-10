@@ -26,7 +26,7 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 | ADR-0010 | Self-hosted Postgres + pgvector over Supabase/managed DB | Accepted | Free |
 | ADR-0011 | Self-hosted Langfuse over Langfuse Cloud | Accepted | Free |
 | ADR-0012 | Cloudflare R2 free tier, 30-day audio lifecycle | Accepted | Free tier with limits |
-| ADR-0013 | Cloudflare Pages for frontend hosting | Accepted | Free tier with limits |
+| ADR-0013 | Cloudflare Pages for frontend hosting | **Superseded by ADR-0036** | Free tier with limits |
 | ADR-0014 | Provider abstraction layer as the free-to-paid migration mechanism | Accepted | Free (enables cheap Deferred paid later) |
 | ADR-0015 | Accept 1.2-2s latency as the price of zero budget | Accepted — *MVP targets <~1 s; challenged by ADR-0029 (Proposed)* | Free |
 | ADR-0016 | Multi-tenancy via tenant_id + RLS from day one | Accepted | Free |
@@ -48,7 +48,8 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 | ADR-0032 | Backend owns the brain: agent tools API, safety guard in our code | Accepted | Free |
 | ADR-0033 | Verticals are config; generic booking model with exclusion constraint | Accepted | Free |
 | ADR-0034 | WhatsApp is its own channel module; preview-and-confirm on every write | Accepted — extends ADR-0017 | Free tier with limits (per-message pricing, D5) |
-| ADR-0035 | Demo build simplifications | Accepted — *revisit before the first real clinic pilot* | Free tier with limits (Vapi, Twilio sandbox trial credit) |
+| ADR-0035 | Demo build simplifications | Accepted — *revisit before the first real clinic pilot*; frontend hosting amended by ADR-0036 | Free tier with limits (Vapi, Twilio sandbox trial credit) |
+| ADR-0036 | Vercel for frontend hosting, deployed from GitHub Actions | Accepted — **supersedes ADR-0013** | Free tier with limits (Vercel Hobby — non-commercial terms, see Consequences) |
 
 ---
 
@@ -222,20 +223,6 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 
 ---
 
-### ADR-0013: Cloudflare Pages for frontend hosting
-
-- **Date:** 2026-09-12
-- **Status:** Accepted
-- **Cost implication:** Free tier with limits.
-
-**Context:** The ops dashboard and thin client view (Next.js) need hosting; a paid frontend host is unnecessary at current scale.
-
-**Decision:** Deploy the Next.js frontend to Cloudflare Pages free tier.
-
-**Consequences:** Subject to Cloudflare Pages' free-tier build-minute and bandwidth limits — ample for an internal ops tool and a small client-facing view at 15-30 clients.
-
----
-
 ### ADR-0014: Provider abstraction layer as the free-to-paid migration mechanism
 
 - **Date:** 2026-09-12
@@ -405,7 +392,7 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 |---|---|---|
 | SQLite file (`backend/data/clinic.db`) | Postgres + pgvector (ADR-0010) | Docker on Windows would eat the day. The double-booking lock is kept as a **partial unique index** on `(resource_id, date, time)` for active bookings, so the DB, not app code, still refuses a double booking. It only covers fixed-length aligned slots; the overlap exclusion constraint (ADR-0033) returns with Postgres. |
 | Single clinic, no `tenant_id` / RLS | ADR-0016 | One fictional clinic. Keep a `clinic_id` seam in mind; add `tenant_id` + RLS with the Postgres migration. |
-| Plain HTML, CSS and JS served by FastAPI | Next.js on Cloudflare Pages (ADR-0013) | No build step. The Vapi Web SDK is bundled once with esbuild and committed. |
+| Plain HTML, CSS and JS served by FastAPI | Next.js on Cloudflare Pages (ADR-0013) | No build step. The Vapi Web SDK is bundled once with esbuild and committed. *Amended 2026-11-09 by ADR-0036:* the same static files are also deployed to Vercel; FastAPI still serves them for local runs. |
 | Cloudflare quick tunnel | A hosted VM | Public HTTPS URL for Vapi and Twilio webhooks; the URL changes on every restart. |
 | Vapi web calls | A phone number (ADR-0030, still Proposed) | Prospects talk to the agent from our web page. Live transfer is impossible on web calls, so `transfer` is a stub. |
 | One `POST /vapi/webhook` with `x-catalyst-secret` | `POST /v1/tools/<name>` with `X-Catalyst-Tool-Key` (`contracts.md` §1) | Vapi sends every tool call and server message to one URL. Tool logic is the same; see `contracts.md` §1.10. |
@@ -413,6 +400,30 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 | Twilio WhatsApp sandbox, rule-based commands | Meta WhatsApp Business Platform (D5) | Free-text alerts work inside the sandbox's 24-hour window only. Preview-and-confirm (ADR-0034) is kept. |
 
 **Consequences:** The demo must never take real patient calls. Moving to the pilot means: Postgres with `tenant_id` + RLS and the exclusion constraint, the custom-LLM guard, the `/v1/tools/*` transport, a real number (ADR-0030), and Meta WhatsApp templates.
+
+---
+
+### ADR-0036: Vercel for frontend hosting, deployed from GitHub Actions
+
+- **Date:** 2026-11-09
+- **Status:** Accepted — **supersedes ADR-0013**; amends the frontend row of ADR-0035
+- **Cost implication:** Free tier with limits — Vercel Hobby plan (VERIFY limits in `open-source/open-source.md` §2). Hobby is licensed for **non-commercial use only**; moving to Pro is a **Deferred paid** cost that must happen before the frontend serves a paying client.
+
+**Context:** Nothing is deployed yet. ADR-0013 picked Cloudflare Pages for a future Next.js app; ADR-0035 has FastAPI serve the demo's static pages. The team wants the frontend on Vercel. The repo is public and owned by a 4-member GitHub organisation; the Vercel account is one person's Hobby account. Vercel's commit-author check on Hobby (only the owner's commits deploy) applies to **private** repositories in a GitHub organisation; for public repositories "collaboration is free" (Vercel docs: *Deploying Git Repositories*, *Troubleshoot project collaboration*). Backend hosting is **not decided** (D3).
+
+**Decision:**
+1. **All frontend hosting is Vercel** — the current static pages (`frontend/`) now, and the planned Next.js app later.
+2. **Deploys run from GitHub Actions** (`.github/workflows/deploy-frontend.yml`) after the `CI` workflow succeeds on a push to `main` (`workflow_run`; it deploys exactly the commit CI tested, and runs on every merge because `workflow_run` can't filter by path), with the Vercel CLI pinned to `vercel@65.1.0`: `vercel pull` → `vercel build --prod` → `vercel deploy --prebuilt --prod`, with the real Git metadata. Because the repo is public, any teammate's merge deploys. The real commit SHA is recorded on the GitHub side: the job is a GitHub `production` environment deployment, and the job summary records the deployed SHA and URL.
+3. **Vercel's own Git integration stays off** (`"git": {"deploymentEnabled": false}` in `frontend/vercel.json`), so Actions is the only path to production — no duplicate deployments.
+4. **The browser calls the backend directly.** The backend's public HTTPS URL is the Vercel environment variable `NEXT_PUBLIC_API_URL`, injected at build time (into `static/config.js` for the static pages; natively for Next.js later). The backend allows the Vercel domain via `CORS_ALLOWED_ORIGINS`. Vercel serves only static files and **never proxies API traffic** — no rewrites to the backend.
+
+**Consequences:**
+- *Data residency (rule 4):* holds — patient data goes browser ↔ backend and never passes through Vercel, which is not India-hosted. Do not add Vercel rewrites, serverless functions or edge middleware that touch API data; that would route personal data through non-India infrastructure.
+- *Until D3 is decided* `NEXT_PUBLIC_API_URL` stays empty and the deployed pages call `/api` on their own origin, which does not exist on Vercel — so the Vercel site shows the pages but no live data. Set it (and `CORS_ALLOWED_ORIGINS` on the backend) once the backend has a stable public HTTPS URL; a Cloudflare quick tunnel URL changes on every restart and would need a redeploy each time.
+- *`/desk` and `/setup` auth:* they use HTTP Basic auth (`DESK_PASSWORD`). Browsers do not show a Basic-auth prompt for cross-origin `fetch`, so with a password set these pages will not work cross-origin. They need a login form or token auth before the Vercel-hosted desk is used — a follow-up, not done here.
+- *The repo must stay public.* On Hobby, Vercel cannot deploy a private repository in a GitHub organisation. Making it private means Vercel Pro or another host. Hiding commit authors (for example deleting `.git` before deploying) is **rejected**: it would circumvent a documented Vercel restriction, which their fair use guidelines treat as a violation. Going private would also, on GitHub Free for organisations, likely drop the required-review rule on `main` and limit Actions minutes.
+- *Licence:* Vercel Hobby is non-commercial only, and Vercel counts "advertising the sale of a product or service" as commercial. The public Try-it page shows our service to prospective clinics, so it likely counts as commercial use already. Move to Pro, or revisit hosting (Cloudflare Pages has no such limit on its free plan, VERIFY its terms), before using the Vercel site to market to clinics.
+- *Manual setup:* repo secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`; Vercel project Root Directory = `frontend`, not connected to the Git repo.
 
 ---
 
@@ -485,6 +496,20 @@ Not yet decided. Do not resolve these in code; keep the relevant part behind an 
 ---
 
 ## Superseded
+
+### ADR-0013: Cloudflare Pages for frontend hosting
+
+- **Date:** 2026-09-12
+- **Status:** Superseded by ADR-0036 (2026-11-09)
+- **Cost implication:** Free tier with limits.
+
+**Context:** The ops dashboard and thin client view (Next.js) need hosting; a paid frontend host is unnecessary at current scale.
+
+**Decision:** Deploy the Next.js frontend to Cloudflare Pages free tier.
+
+**Consequences:** Subject to Cloudflare Pages' free-tier build-minute and bandwidth limits — ample for an internal ops tool and a small client-facing view at 15-30 clients.
+
+---
 
 ### ADR-0020: Reject self-hosting speech models (Whisper/Piper)
 

@@ -34,3 +34,7 @@ transcripts/
 
 # Local SQLite database (demo build)
 backend/data/
+
+# Vercel (ADR-0036)
+.vercel/
+frontend/dist/
