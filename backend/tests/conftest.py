@@ -55,6 +55,8 @@ def isolated(tmp_path, monkeypatch):
         "PUBLIC_URL",
     ):
         monkeypatch.delenv(name, raising=False)
+    # Tests rewrite .env freely, so the cookie secret comes from the process environment.
+    monkeypatch.setenv("SESSION_SECRET", "test-session-secret")
     monkeypatch.setattr(config, "now", lambda: FIXED_NOW)
     yield env_file
 

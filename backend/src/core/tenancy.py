@@ -77,8 +77,11 @@ def set_assistant(conn: db.Conn, assistant_id: str) -> None:
 
 
 def delete(conn: db.Conn, tid: str) -> None:
-    """Remove a business that was created but never finished (signup race). Nothing else points at it."""
+    """Remove a business whose signup never finished, with any owner and session made for it."""
+    scoped = conn.for_tenant(tid)
     with conn:
+        scoped.execute("DELETE FROM sessions WHERE tenant_id = ?", (tid,))
+        scoped.execute("DELETE FROM users WHERE tenant_id = ?", (tid,))
         conn.execute("DELETE FROM tenants WHERE id = ?", (tid,))
 
 

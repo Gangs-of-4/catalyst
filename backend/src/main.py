@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import seed
+from . import accounts, seed
 from .api import auth, desk, errors, onboarding, public, setup, vapi, whatsapp
 from .core import db
 from .core.config import FRONTEND_DIR, env
@@ -14,6 +14,7 @@ from .core.config import FRONTEND_DIR, env
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    accounts.ensure_session_secret()
     conn = db.connect()
     seed.ensure(conn)
     conn.close()

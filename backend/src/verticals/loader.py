@@ -5,9 +5,8 @@ from typing import Any
 
 import yaml
 
-from ..core.config import REPO_ROOT, VERTICAL_DIR
-
-REPO_VERTICALS = REPO_ROOT / "verticals"
+from ..core.config import VERTICAL_DIR
+from ..core.tenancy import VERTICALS_DIR
 
 
 def load_yaml(name: str, base: Path = VERTICAL_DIR) -> Any:
@@ -121,7 +120,7 @@ def default_settings(base: Path = VERTICAL_DIR) -> dict:
 
 
 def template_dir(template: str) -> Path:
-    return REPO_VERTICALS / template
+    return VERTICALS_DIR / template
 
 
 def template_defaults(template: str) -> dict:

@@ -71,14 +71,22 @@ def normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
+def ensure_session_secret() -> None:
+    """Run once at startup. With Postgres (a deployed host) SESSION_SECRET must be set, so refuse to
+    start without it: generating one there would differ per worker and vanish on each deploy. For
+    local SQLite dev, generate one into `.env` once, here, rather than during a request."""
+    if env("SESSION_SECRET"):
+        return
+    if db.dialect() == "postgres":
+        raise RuntimeError("SESSION_SECRET is not set. Set it in the host's environment.")
+    set_env({"SESSION_SECRET": secrets.token_urlsafe(32)})
+    log.warning("accounts: SESSION_SECRET was not set; generated one in .env (local dev only)")
+
+
 def session_secret() -> bytes:
-    """SESSION_SECRET from the environment. If unset, make one and keep it in `.env` (local dev).
-    On a host with an ephemeral disk set it in the dashboard, or every restart logs people out."""
     value = env("SESSION_SECRET")
     if not value:
-        value = secrets.token_urlsafe(32)
-        set_env({"SESSION_SECRET": value})
-        log.warning("accounts: SESSION_SECRET was not set; generated one in .env")
+        raise RuntimeError("SESSION_SECRET is not set (ensure_session_secret runs at startup).")
     return value.encode()
 
 
@@ -147,32 +155,46 @@ def login(conn: db.Conn, email: str, password: str) -> tuple[str, str, str]:
 
     Raises BadLogin or Locked. Five wrong passwords lock that account for 15 minutes.
     """
-    now = config.now()
+    now = config.now().isoformat(timespec="seconds")
     row = conn.execute(
-        "SELECT id, tenant_id, password_hash, failed_logins, locked_until FROM users WHERE email = ?",
+        "SELECT id, tenant_id, password_hash, locked_until FROM users WHERE email = ?",
         (normalize_email(email),),
     ).fetchone()
-    if row and row["locked_until"] and row["locked_until"] > now.isoformat(timespec="seconds"):
-        raise Locked
+    # Always pay for scrypt, even when locked or unknown, so timing doesn't tell them apart.
     ok = verify_password(password, row["password_hash"] if row else _DUMMY_HASH)
+    if row and row["locked_until"] and row["locked_until"] > now:
+        raise Locked
     if not row or not ok:
         if row:
-            failed = (row["failed_logins"] or 0) + 1
-            locked = _later(minutes=LOCK_MINUTES) if failed >= MAX_FAILED else None
-            with conn:
-                conn.execute(
-                    "UPDATE users SET failed_logins = ?, locked_until = ? WHERE id = ?",
-                    (0 if locked else failed, locked, row["id"]),
-                )
-            if locked:
-                raise Locked
+            _record_failure(conn, row["id"])
         raise BadLogin
     with conn:
         conn.execute(
             "UPDATE users SET failed_logins = 0, locked_until = NULL, last_active_at = ? WHERE id = ?",
             (db.stamp(), row["id"]),
         )
+        conn.execute(  # tidy this owner's expired sessions
+            "DELETE FROM sessions WHERE user_id = ? AND tenant_id = ? AND expires_at <= ?",
+            (row["id"], row["tenant_id"], now),
+        )
     return start_session(conn, row["id"], row["tenant_id"]), row["id"], row["tenant_id"]
+
+
+def _record_failure(conn: db.Conn, user_id: str) -> None:
+    """Count one wrong password, atomically, so parallel attempts can't overwrite each other's
+    count. The attempt that reaches MAX_FAILED locks the account and raises Locked."""
+    with conn:
+        failed = conn.execute(
+            "UPDATE users SET failed_logins = failed_logins + 1 WHERE id = ? RETURNING failed_logins",
+            (user_id,),
+        ).fetchone()[0]
+        if failed >= MAX_FAILED:
+            conn.execute(
+                "UPDATE users SET failed_logins = 0, locked_until = ? WHERE id = ?",
+                (_later(minutes=LOCK_MINUTES), user_id),
+            )
+    if failed >= MAX_FAILED:
+        raise Locked
 
 
 def lookup(conn: db.Conn, cookie: str | None) -> Session | None:

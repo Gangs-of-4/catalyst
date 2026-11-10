@@ -11,6 +11,7 @@ from .. import accounts
 from ..core import db, tenancy
 from ..core import phone as ph
 from ..core import settings as cs
+from ..core.log import log
 from ..verticals import loader
 from .auth import EMAIL, set_session_cookie
 from .deps import require_csrf_header
@@ -145,12 +146,15 @@ def build_settings(t: dict, body: SignupIn) -> dict:
     """The new business's settings document, from the template defaults plus the owner's answers."""
     b = body.business
     modules = t["modules"]
-    model = DETAILS[modules[0]]
-    try:
-        d = model.model_validate(body.details)
-    except ValidationError as e:
-        fields = plain_fields(e.errors(), prefix="details")
-        raise ApiError(422, "VALIDATION", " ".join(dict.fromkeys(fields.values())), fields) from e
+    parsed: dict = {}
+    fields: dict = {}
+    for m in modules:  # each module checks its own part of `details`
+        try:
+            parsed[m] = DETAILS[m].model_validate(body.details)
+        except ValidationError as e:
+            fields.update(plain_fields(e.errors(), prefix="details"))
+    if fields:
+        raise ApiError(422, "VALIDATION", " ".join(dict.fromkeys(fields.values())), fields)
     s: dict = {
         "name": b.name.strip(),
         "city": b.city.strip(),
@@ -167,6 +171,7 @@ def build_settings(t: dict, body: SignupIn) -> dict:
         "preview_expiry_min": t["preview_expiry_min"],
     }
     if "bookings" in modules:
+        d = parsed["bookings"]
         taken: set[str] = set()
         doctors = []
         for doc in d.doctors:
@@ -186,6 +191,7 @@ def build_settings(t: dict, body: SignupIn) -> dict:
             ),
         )
     if "orders" in modules:
+        d = parsed["orders"]
         s.update(min_order=d.min_order.strip(), delivery_area=d.delivery_area.strip())
     return s
 
@@ -208,6 +214,13 @@ def templates() -> dict:
             }
         )
     return {"templates": out}
+
+
+def _undo_signup(conn: db.Conn, tid: str) -> None:
+    try:
+        tenancy.delete(conn, tid)
+    except Exception as e:  # keep the original error; this one is only logged (IDs only, no PII)
+        log.warning("signup: could not remove unfinished business %s (%s)", tid, type(e).__name__)
 
 
 @router.post("/signup")
@@ -252,16 +265,19 @@ def signup(body: SignupIn, request: Request, response: Response) -> dict:
             uid = accounts.create_user(
                 scoped, tid, body.user.name, body.user.email, body.user.password
             )
-        except accounts.EmailTaken:  # same race, on the email
-            tenancy.delete(conn, tid)
-            raise ApiError(
-                409,
-                "EMAIL_TAKEN",
-                "That email already has an account. Log in instead.",
-                {"user.email": "That email already has an account."},
-            ) from None
-        cookie = accounts.start_session(scoped, uid, tid)
-        public_id = tenancy.get(conn, tid)["public_id"]
+            cookie = accounts.start_session(scoped, uid, tid)
+            public_id = tenancy.get(conn, tid)["public_id"]
+        except Exception as e:
+            # Undo the half-made business so a retry isn't refused with WHATSAPP_TAKEN.
+            _undo_signup(conn, tid)
+            if isinstance(e, accounts.EmailTaken):  # same race, on the email
+                raise ApiError(
+                    409,
+                    "EMAIL_TAKEN",
+                    "That email already has an account. Log in instead.",
+                    {"user.email": "That email already has an account."},
+                ) from None
+            raise
     finally:
         conn.close()
 

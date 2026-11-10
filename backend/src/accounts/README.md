@@ -9,7 +9,8 @@
 **How it works.**
 - Passwords are `hashlib.scrypt` with a per-user salt. The stored form is `scrypt$n$r$p$salt$hash`.
 - The cookie `catalyst_session` is `<token>.<HMAC-SHA256 of the token>` using `SESSION_SECRET`. The database stores only the token's SHA-256, so a database leak can't be replayed as logins. Logout deletes the row.
-- Five wrong passwords lock the account for 15 minutes (`LOCKED`). A good login resets the count. Wrong email and wrong password give the same answer.
+- Five wrong passwords lock the account for 15 minutes (`LOCKED`). A good login resets the count. The count is updated atomically, so parallel guesses can't skip the lock. Wrong email and wrong password give the same answer and take the same time (scrypt always runs). Only a real account can reach `LOCKED`, so the lock does show that an email has an account; contracts §6 accepts that for a per-email lock. A per-IP limit is not here yet.
+- `SESSION_SECRET` is checked once at startup. With `DATABASE_URL` set, the backend refuses to start without it. For local SQLite dev, one is generated into `.env`.
 - Auth lookups run on `db.connect_unchecked()` because the session or email is what *tells us* the business. After that every route uses `get_user_conn`, a connection scoped to the owner's business.
 
 **Must not.** Log or return emails, passwords or tokens. Skip the tenant scope once the business is known.

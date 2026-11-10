@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src import accounts
+from src.api import onboarding, sync
 from src.core import config
 from src.main import app
 
@@ -264,8 +265,20 @@ def test_templates_endpoint_lists_both_with_defaults(client):
     assert by["wholesale"]["modules"] == ["orders"]
 
 
+def test_no_assistant_until_the_per_business_webhook_exists(client, isolated, monkeypatch):
+    """Until M3 adds /vapi/webhook/{public_id}, signup must not create an assistant pointing at it."""
+    isolated.write_text(
+        "PUBLIC_URL=https://api.example.com\nVAPI_PRIVATE_KEY=k\n", encoding="utf-8"
+    )
+    calls = []
+    monkeypatch.setattr(httpx, "request", lambda *a, **k: calls.append(a))
+    r = post(client, "/api/signup", CLINIC)
+    assert r.status_code == 200 and r.json()["agent"] == "not_configured" and calls == []
+
+
 def test_assistant_created_for_this_business_only(client, isolated, raw, monkeypatch):
     """Vapi is mocked: the assistant gets this business's own webhook path, secret and id."""
+    monkeypatch.setattr(sync, "PER_BUSINESS_WEBHOOK_READY", True)
     isolated.write_text(
         "PUBLIC_URL=https://api.example.com\nVAPI_PRIVATE_KEY=k\n", encoding="utf-8"
     )
@@ -297,6 +310,7 @@ def test_assistant_created_for_this_business_only(client, isolated, raw, monkeyp
 
 
 def test_vapi_failure_does_not_fail_signup(client, isolated, monkeypatch):
+    monkeypatch.setattr(sync, "PER_BUSINESS_WEBHOOK_READY", True)
     isolated.write_text(
         "PUBLIC_URL=https://api.example.com\nVAPI_PRIVATE_KEY=k\n", encoding="utf-8"
     )
@@ -326,3 +340,51 @@ def test_password_hash_roundtrip():
     assert not accounts.service.verify_password("s3cret-pasx", h)
     assert not accounts.service.verify_password("x", "not-a-hash")
     assert accounts.service.hash_password("s3cret-pass") != h  # per-user salt
+
+
+def test_unexpected_agent_error_does_not_fail_signup(client, isolated, monkeypatch):
+    """Not only VapiError: any error while building the assistant leaves a usable account."""
+    monkeypatch.setattr(sync, "PER_BUSINESS_WEBHOOK_READY", True)
+    isolated.write_text(
+        "PUBLIC_URL=https://api.example.com\nVAPI_PRIVATE_KEY=k\n", encoding="utf-8"
+    )
+
+    def boom(conn):
+        raise KeyError("emergency_instruction")
+
+    monkeypatch.setattr(sync.vapi, "sync_tenant", boom)
+    r = post(client, "/api/signup", CLINIC)
+    assert r.status_code == 200 and r.json()["agent"] == "failed"
+    assert client.get("/api/me").status_code == 200
+
+
+def test_signup_failing_after_the_business_is_made_can_be_retried(isolated, raw, monkeypatch):
+    real = accounts.start_session
+
+    def broken(*a, **k):
+        raise RuntimeError("db went away")
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        monkeypatch.setattr(accounts, "start_session", broken)
+        assert post(client, "/api/signup", CLINIC).status_code == 500
+        assert raw.execute("SELECT COUNT(*) FROM tenants WHERE is_demo = 0").fetchone()[0] == 0
+        assert raw.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
+        monkeypatch.setattr(accounts, "start_session", real)
+        # the retry works, instead of being refused as EMAIL_TAKEN or WHATSAPP_TAKEN
+        assert post(client, "/api/signup", CLINIC).status_code == 200
+
+
+def test_each_module_validates_its_own_details():
+    """A template with two modules checks both parts of `details`, and 422s rather than crashing."""
+    t = {**onboarding.loader.template_defaults("clinic"), "modules": ["bookings", "orders"]}
+    body = onboarding.SignupIn.model_validate(
+        copy(CLINIC, details={**CLINIC["details"], "min_order": "x" * 61})
+    )
+    with pytest.raises(onboarding.ApiError) as e:
+        onboarding.build_settings(t, body)
+    assert e.value.status == 422 and "details.min_order" in e.value.fields
+    ok = onboarding.SignupIn.model_validate(
+        copy(CLINIC, details={**CLINIC["details"], "min_order": "₹500"})
+    )
+    s = onboarding.build_settings(t, ok)
+    assert s["min_order"] == "₹500" and s["doctors"][0]["name"] == "Dr. Test One"
