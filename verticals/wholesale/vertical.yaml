@@ -1,0 +1,57 @@
+# DRAFT, team to review.
+# Wholesale distributor vertical (ADR-0037). Retailers and chemists phone in orders;
+# the agent reads the catalogue, takes orders, and sends anything else to a callback.
+# The products can be medicines: the agent never advises on use, dosage or substitutes.
+# Prompt, escalation rules, seed knowledge and safety suite land in M4.
+
+name: wholesale
+status: draft
+version: 0.1.0
+
+modules: [orders]
+tools: [get_business_info, get_catalog, check_stock, create_order, order_status, create_callback, escalate, log_call_outcome]
+onboarding:                  # create-business form defaults (ADR-0038); the owner checks and edits
+  sessions: [["09:30", "19:30"]]
+  closed_weekdays: [6]
+  min_order: ""
+  delivery_area: ""
+
+labels:
+  resource: "Salesperson"
+  resource_plural: "Salespeople"
+  contact: "Shop"
+  booking: "Order"
+  tenant: "Distributor"
+
+languages:
+  default: hi-en
+  supported: [hi-en, en, hi]
+
+orders:
+  statuses: [new, confirmed, dispatched, delivered, cancelled]
+  sources: [phone, whatsapp, walk_in]
+  max_qty: 9999
+  readback_before_create: true
+
+whatsapp:
+  commands: [orders_today, set_rate, stock_out, stock_in, order_dispatch, summary, add_instruction]
+  confirm_words: [haan, ha, yes, ok]
+  reject_words: [nahi, na, no]
+  preview_expiry_min: 30
+
+reminders:
+  enabled: false             # no reminders in Phase 2
+
+alerts:
+  repeat_minutes: 5
+
+ops:
+  silence_hours: 3
+
+knowledge:
+  answer_only_approved: true   # rates and stock come only from the catalogue
+
+safety:
+  guard: required            # no medical advice, even though products are medicines
+  escalation_rules: escalation-rules.yaml
+  prompt: agent-prompt.md

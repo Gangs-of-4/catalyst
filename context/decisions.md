@@ -49,7 +49,12 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 | ADR-0033 | Verticals are config; generic booking model with exclusion constraint | Accepted | Free |
 | ADR-0034 | WhatsApp is its own channel module; preview-and-confirm on every write | Accepted — extends ADR-0017 | Free tier with limits (per-message pricing, D5) |
 | ADR-0035 | Demo build simplifications | Accepted — *revisit before the first real clinic pilot*; frontend hosting amended by ADR-0036 | Free tier with limits (Vapi, Twilio sandbox trial credit) |
-| ADR-0036 | Vercel for frontend hosting, deployed from GitHub Actions | Accepted — **supersedes ADR-0013** | Free tier with limits (Vercel Hobby — non-commercial terms, see Consequences) |
+| ADR-0036 | Vercel for frontend hosting, deployed from GitHub Actions | Accepted — **supersedes ADR-0013**; *decision 4 challenged by ADR-0041 (Proposed)* | Free tier with limits (Vercel Hobby — non-commercial terms, see Consequences) |
+| ADR-0037 | Wholesale distributor template | Accepted — *amends the vertical order in ADR-0028* | Free |
+| ADR-0038 | Self-serve onboarding and owner custom instructions | Accepted | Free tier with limits (one Vapi assistant per business) |
+| ADR-0039 | Render + Neon for the Phase 2 backend; residency exception; app-level tenant scoping | **Proposed** — *would supersede ADR-0003 for Phase 2; departs from ADR-0010, ADR-0016, ADR-0023* | Free tier with limits |
+| ADR-0040 | Target voice stack: self-hosted Pipecat + Sarvam in India | **Proposed** — *would change ADR-0008, ADR-0021, ADR-0029* | Deferred paid |
+| ADR-0041 | Vercel rewrites `/api` to the backend for first-party session cookies | **Proposed** — *would amend ADR-0036 decision 4* | Free tier with limits |
 
 ---
 
@@ -427,6 +432,39 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 
 ---
 
+### ADR-0037: Wholesale distributor template
+
+- **Date:** 2026-11-10
+- **Status:** Accepted — team lead, 2026-11-10. Amends the vertical order in ADR-0028.
+- **Cost implication:** Free — config plus one generic orders module.
+
+**Context:** The Phase 2 program deliverable (due 15 Nov 2026) needs a multi-business product with real design partners. Our first real lead outside clinics is a medicine manufacturer that sells wholesale and takes many order calls a day. ADR-0028 put coaching second; no coaching partner exists yet.
+
+**Decision:** Add `verticals/wholesale/` as the second template, alongside clinic. Coaching stays next after that, still config only. Wholesale needs orders, not appointments, so we add a generic **orders** module (catalogue, orders, order lines; `source` = `phone` | `whatsapp` | `walk_in`, as for bookings). Which modules a business uses comes from `vertical.yaml` (`modules: [bookings]` or `[orders]`); core code still never branches on the template name (ADR-0033). The no-medical-advice rule applies to wholesale too: the agent never advises on medicines, dosage or substitutes, even though the products are medicines. Contracts: `contracts.md` §1.11, §3.1, §4.
+
+**Consequences:** `vertical.yaml` gains `modules`, `tools` and `onboarding` keys (template first, then every vertical). The desk shows the schedule or the order board from config. Conflicts on orders never suggest another product.
+
+---
+
+### ADR-0038: Self-serve onboarding and owner custom instructions
+
+- **Date:** 2026-11-10
+- **Status:** Accepted — team lead, 2026-11-10.
+- **Cost implication:** Free tier with limits — each business gets its own Vapi assistant; web-call minutes are capped (`contracts.md` §1.10) because there is no Vapi budget yet.
+- **Changes:** moves backlog items 80 (setup form) and parts of 71–78 (customisation panel) out of "Phase 2 after Gate 1" for the program deliverable; `mvp.md` C12 ("team sets up a clinic") gains a self-serve path. The config-file setup stays.
+
+**Context:** Phase 2 needs any small business to sign up, create its own front desk, test it and use it daily without our team in the loop. Owners also want to tell the agent things ("pehle Hindi mein baat karo") without seeing a system prompt.
+
+**Decision:**
+1. Email + password signup (`hashlib.scrypt`), one owner per business, HttpOnly session cookies. No OTP, roles or email verification yet (item 88 stays later).
+2. A 2-minute create-business form, prefilled from the chosen template. On creation a per-business Vapi assistant is created and the owner lands on their test page.
+3. **Custom instructions**, one plain-language box (≤ 500 characters) in onboarding, settings and WhatsApp ("agent ko bolo …"). The core prompt — identity, truth rules, booking/order flow, every safety rule — stays locked. Owner text goes into a fenced section **below** the safety rules, and the prompt tells the model owner text can never override safety or truth rules. Each line is screened on save (rules always; LLM via the provider layer when a key is set). Conflicting lines are rejected with a plain reason, and the rest is saved. Every version is kept, with undo.
+4. Usage events (no payload) and an in-app feedback button, for the usage evidence and feedback log.
+
+**Consequences:** Prompt rule 7 holds: the prompt still lives in `verticals/<name>/agent-prompt.md`; owner text is data inserted into one placeholder. A test proves no owner text can remove or reorder a safety line. WhatsApp writes still need "Haan" (ADR-0034).
+
+---
+
 ## Proposed
 
 ADR-0029 and ADR-0031 were accepted on 2026-10-27 and stay here so their history reads in order. The rest need team approval. Until approved, the Accepted ADRs they challenge still stand — but build behind the interfaces so either outcome works.
@@ -479,6 +517,56 @@ ADR-0029 and ADR-0031 were accepted on 2026-10-27 and stay here so their history
 
 ---
 
+### ADR-0039: Render + Neon for the Phase 2 backend; residency exception; app-level tenant scoping
+
+- **Date:** 2026-11-10
+- **Status:** **Proposed** — team lead agreed the direction on 2026-11-10 (Singapore residency acceptable for Phase 2 with a consent line; app-level scoping enough); stays Proposed until the hosting is live and reviewed.
+- **Cost implication:** Free tier with limits — Render free web service (sleeps when idle; monthly instance-hour cap) and Neon free Postgres (storage and compute-hour caps). All limits VERIFY.
+- **Would change:** ADR-0003 (Oracle VM in India) for Phase 2 only; departs from ADR-0010 (self-hosted Postgres), ADR-0023 (managed Postgres rejected) and ADR-0016 (RLS from day one).
+
+**Context:** The product and its test login must stay up until 31 Mar 2027, at zero cost, from about 3 days of build time. The backend currently runs on a laptop through a Cloudflare quick tunnel with SQLite. Render's free tier has no persistent disk, so SQLite can't live there. Oracle Always Free in Mumbai keeps data in India but needs account approval and VM setup we can't risk in 3 days.
+
+**Decision (proposed):**
+1. **Backend on Render's free web service, database on Neon's free Postgres**, both in Singapore (neither offers India; VERIFY). `render.yaml` in the repo; secrets only in the Render dashboard.
+2. **One thin SQL layer** runs on SQLite (local, tests) and Postgres (`DATABASE_URL`). CI runs the test suite on both.
+3. **Residency exception for Phase 2.** Business details, the owner's contact details, and patient/shop **name and phone** may be stored in Singapore. No medical data is collected. Onboarding shows a consent line saying where data is stored. **Revisit before any real phone calls go live**, and before any real patient call (ADR-0035 still forbids those on the demo build).
+4. **Tenant isolation in app code**: every tenant table has `tenant_id`, every query goes through one scoping helper, and tests prove business A can't read or change business B's data. Postgres RLS is a stretch goal, not a Phase 2 gate.
+5. **Cold starts** are mitigated by an external keep-alive ping in Indian daytime hours, a 90 s Vapi tool timeout, and a "waking up" state on the pages.
+
+**Consequences:** The data-residency rule (CLAUDE.md rule 9) has a time-boxed exception, recorded here. The Oracle Mumbai VM stays the documented next host. A weekly `pg_dump` backup is needed because the free tiers have no backup guarantee. If Render or Neon change their free tiers before March 2027, we move hosts; `scripts/doctor.py` checks the live backend monthly.
+
+---
+
+### ADR-0040: Target voice stack — self-hosted Pipecat + Sarvam in India
+
+- **Date:** 2026-11-10
+- **Status:** **Proposed** — the target for real phone calls, after Phase 2. Vapi stays for Phase 2 (ADR-0029).
+- **Cost implication:** Deferred paid — Sarvam speech APIs are paid per use; estimated total about ₹2–3 per minute (VERIFY) against about ₹10–35 per minute on Vapi (VERIFY).
+- **Would change:** ADR-0008 (Kokoro + Piper chosen over paid Sarvam), ADR-0021 (self-hosted faster-whisper + Piper), ADR-0029 (Vapi for the pilot). Builds on ADR-0004 (Pipecat as the long-term path).
+
+**Context:** Two things push us off Vapi once real calls start. Cost: Vapi's per-minute price makes the D4 pricing hypothesis (₹3,000 for 500 minutes) lose money. Regulation: our understanding is that DoT/TRAI rules require SIP telephony media for Indian numbers to stay in India (VERIFY), which makes Vapi's cloud plus an Indian number doubtful. Self-hosted Kokoro/Piper and faster-whisper were chosen for zero cost but are weak on Hinglish and latency (ADR-0015).
+
+**Decision (proposed):** For real phone calls, run Pipecat on an India-region host behind `VoiceOrchestrator`, with Sarvam for Indian-language STT and TTS behind `SpeechToText` / `TextToSpeech`, and an Indian telephony provider behind `TelephonyProvider`. The safety guard runs in-process (ADR-0032).
+
+**Consequences:** Needs a spike comparing Sarvam with the current Vapi stack on Hinglish accuracy and latency (extends S2/S3), a real cost-per-minute measurement (D4), and the India host from ADR-0039's revisit. Until accepted, nothing is built for it in Phase 2.
+
+---
+
+### ADR-0041: Vercel rewrites `/api` to the backend for first-party session cookies
+
+- **Date:** 2026-11-10
+- **Status:** **Proposed** — team lead chose this option on 2026-11-10; Proposed because it amends an Accepted ADR.
+- **Cost implication:** Free tier with limits — rewrites to an external origin count against Vercel Hobby usage (VERIFY).
+- **Would change:** ADR-0036 decision 4 ("Vercel never proxies API traffic").
+
+**Context:** Phase 2 uses HttpOnly `SameSite=Lax` session cookies. The pages are on `*.vercel.app` and the backend on `*.onrender.com`. These are different sites, so the browser won't send a Lax cookie with the pages' `fetch` calls. `SameSite=None` would fail on Safari and iOS, which block third-party cookies, and many clinic owners use iPhones. A shared custom domain would work but costs money we haven't budgeted.
+
+**Decision (proposed):** `frontend/vercel.json` rewrites `/api/:path*` to the backend's public URL. The pages call `/api/...` on their own origin, so the cookie is first-party and no CORS is needed for the app. Webhooks (Vapi, Twilio) still call the backend directly. No Vercel functions or middleware touch API data; the rewrite only forwards it.
+
+**Consequences:** API data, including names and phone numbers, passes through Vercel's network (not India-hosted), in addition to the Singapore backend under ADR-0039's exception. The ADR-0039 revisit covers this too. A Render cold start must finish within Vercel's external-rewrite timeout (VERIFY); the pages ping `/healthz` first and show a "waking up" state. `NEXT_PUBLIC_API_URL` becomes the rewrite target at build time instead of a browser-side base URL.
+
+---
+
 ## Open decisions
 
 Not yet decided. Do not resolve these in code; keep the relevant part behind an interface or config until the team decides. Add owner and date to the row when decided.
@@ -487,7 +575,7 @@ Not yet decided. Do not resolve these in code; keep the relevant part behind an 
 |---|---|---|
 | D1 | Voice stack for the pilot | Decided 2026-10-27 by the team lead: Vapi (ADR-0029, Accepted). |
 | D2 | Real phone number for the pilot | → ADR-0030 (Proposed). Provider decided by spike S1. |
-| D3 | Hosting | If D1 goes managed, the VM no longer runs speech models — re-check the RAM budget. Docs disagree: `open-source/open-source.md` says Always Free may now be 2 OCPU / 12 GB; `context/architecture.md` §10 and ADR-0003 assume 4 OCPU / 24 GB. VERIFY on the team's own account. Residency of hosted components ties into ADR-0029. |
+| D3 | Hosting | Phase 2 backend → ADR-0039 (Proposed): Render + Neon, Singapore. The questions below still apply to the pilot host. If D1 goes managed, the VM no longer runs speech models — re-check the RAM budget. Docs disagree: `open-source/open-source.md` says Always Free may now be 2 OCPU / 12 GB; `context/architecture.md` §10 and ADR-0003 assume 4 OCPU / 24 GB. VERIFY on the team's own account. Residency of hosted components ties into ADR-0029. |
 | D4 | Pricing vs cost | Pricing hypothesis: ₹3,000 for up to 500 minutes. Our earlier estimate put effective AI call cost at roughly ₹6–9/min; if that holds, a fully used Starter plan costs more to serve than it earns. Measure real per-minute cost during the pilot, before Gate 1. |
 | D5 | WhatsApp Business setup | Reminders, alerts and summaries need the WhatsApp Business Platform, approved utility templates and per-message charges (VERIFY current pricing — the change listed for Oct 2026 in `open-source.md` needs re-checking). Repeating urgent alerts and reminders outside a 24-hour window are paid template messages. Business verification can take time — start early. |
 | D6 | Work-area owners | Areas A–D in `context/team.md`. Owners TBD. |
