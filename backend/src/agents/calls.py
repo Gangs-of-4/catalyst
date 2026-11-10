@@ -1,7 +1,6 @@
 """One row per call: flags raised by tools, outcome and report from the end-of-call message (C10)."""
 
 import json
-import sqlite3
 
 from ..core import db
 from ..safety import post_call
@@ -9,22 +8,26 @@ from ..safety import post_call
 FLAGS = ("booked", "changed", "escalated", "callback")
 
 
-def touch(conn: sqlite3.Connection, call_id: str) -> None:
+def touch(conn: db.Conn, call_id: str) -> None:
     with conn:
         conn.execute(
-            "INSERT OR IGNORE INTO calls (id, started_at) VALUES (?, ?)", (call_id, db.stamp())
+            "INSERT INTO calls (tenant_id, id, started_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
+            (conn.tid, call_id, db.stamp()),
         )
 
 
-def flag(conn: sqlite3.Connection, call_id: str | None, name: str) -> None:
+def flag(conn: db.Conn, call_id: str | None, name: str) -> None:
     if not call_id or name not in FLAGS:
         return
     touch(conn, call_id)
     with conn:
-        conn.execute(f"UPDATE calls SET {name} = {name} + 1 WHERE id = ?", (call_id,))
+        conn.execute(
+            f"UPDATE calls SET {name} = {name} + 1 WHERE tenant_id = ? AND id = ?",
+            (conn.tid, call_id),
+        )
 
 
-def outcome(row: sqlite3.Row | dict, user_spoke: bool) -> str:
+def outcome(row: db.Row | dict, user_spoke: bool) -> str:
     for name in ("escalated", "booked", "changed", "callback"):
         if row[name]:
             return name
@@ -55,7 +58,7 @@ def _transcript(message: dict) -> tuple[str, list[str], list[str]]:
     return (transcript if isinstance(transcript, str) else json.dumps(transcript)), assistant, user
 
 
-def end_of_call(conn: sqlite3.Connection, message: dict) -> str | None:
+def end_of_call(conn: db.Conn, message: dict) -> str | None:
     call = message.get("call") or {}
     call_id = call.get("id")
     if not call_id:
@@ -65,12 +68,14 @@ def end_of_call(conn: sqlite3.Connection, message: dict) -> str | None:
     artifact = message.get("artifact") or {}
     analysis = message.get("analysis") or {}
     hits = post_call.scan(assistant_lines)
-    row = conn.execute("SELECT * FROM calls WHERE id = ?", (call_id,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM calls WHERE tenant_id = ? AND id = ?", (conn.tid, call_id)
+    ).fetchone()
     result = outcome(row, bool(user_lines) or "user:" in transcript.lower())
     with conn:
         conn.execute(
             "UPDATE calls SET ended_at = ?, outcome = ?, ended_reason = ?, summary = ?, transcript = ?,"
-            " recording_url = ?, safety_review = ?, safety_hits = ? WHERE id = ?",
+            " recording_url = ?, safety_review = ?, safety_hits = ? WHERE tenant_id = ? AND id = ?",
             (
                 message.get("endedAt") or call.get("endedAt") or db.stamp(),
                 result,
@@ -80,11 +85,13 @@ def end_of_call(conn: sqlite3.Connection, message: dict) -> str | None:
                 artifact.get("recordingUrl") or message.get("recordingUrl"),
                 int(bool(hits)),
                 json.dumps(hits, ensure_ascii=False) if hits else None,
+                conn.tid,
                 call_id,
             ),
         )
         if message.get("startedAt"):
             conn.execute(
-                "UPDATE calls SET started_at = ? WHERE id = ?", (message["startedAt"], call_id)
+                "UPDATE calls SET started_at = ? WHERE tenant_id = ? AND id = ?",
+                (message["startedAt"], conn.tid, call_id),
             )
     return result

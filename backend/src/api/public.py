@@ -1,6 +1,5 @@
 """Public routes: the Try-it page, its config and the clinic register shown beside the call."""
 
-import sqlite3
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends
@@ -8,7 +7,7 @@ from fastapi.responses import FileResponse
 
 from ..booking import service as bk
 from ..booking.when import short_date, spoken_date
-from ..core import config
+from ..core import config, db
 from ..core import settings as cs
 from ..core.config import FRONTEND_DIR, env
 from .deps import get_conn
@@ -22,7 +21,7 @@ def try_page() -> FileResponse:
 
 
 @router.get("/api/public-config")
-def public_config(conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+def public_config(conn: db.Conn = Depends(get_conn)) -> dict:
     s = cs.load(conn)
     missing = [k for k in ("VAPI_PUBLIC_KEY", "VAPI_ASSISTANT_ID") if not env(k)]
     return {
@@ -40,7 +39,7 @@ def _mask(name: str) -> str:
 
 
 @router.get("/api/register")
-def register(conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+def register(conn: db.Conn = Depends(get_conn)) -> dict:
     """Today and tomorrow, per doctor, with masked names."""
     s = cs.load(conn)
     today = config.now().date()

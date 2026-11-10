@@ -5,7 +5,6 @@ Every write is previewed and stored as a pending action per sender (ADR-0034). R
 
 import json
 import re
-import sqlite3
 from datetime import date, datetime, timedelta
 
 from pydantic import BaseModel, ValidationError, field_validator
@@ -280,7 +279,7 @@ HELP = (
 )
 
 
-def preview(conn: sqlite3.Connection, s: dict, cmd: Command, today: date) -> str | None:
+def preview(conn: db.Conn, s: dict, cmd: Command, today: date) -> str | None:
     """The preview text for a write, or None if it can't be applied (with the reason in an error string)."""
     if cmd.intent == "set_fee":
         old = next(x["fee"] for x in s["services"] if x["name"] == cmd.service)
@@ -313,12 +312,12 @@ def _block_range(cmd: Command) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _free_doctor(conn: sqlite3.Connection, s: dict, d: date, time: str) -> dict | None:
+def _free_doctor(conn: db.Conn, s: dict, d: date, time: str) -> dict | None:
     free = [sl for sl in bk.free_slots(conn, s, d) if sl.time == time]
     return cs.doctor(s, free[0].resource_id) if free else None
 
 
-def apply(conn: sqlite3.Connection, s: dict, cmd: Command) -> str:
+def apply(conn: db.Conn, s: dict, cmd: Command) -> str:
     """Apply a confirmed write. Returns the reply text."""
     if cmd.intent == "set_fee":
         for x in s["services"]:
@@ -357,7 +356,7 @@ def apply(conn: sqlite3.Connection, s: dict, cmd: Command) -> str:
     return f"Done ✅ Live hai.{extra}"
 
 
-def answer_read(conn: sqlite3.Connection, s: dict, cmd: Command, today: date) -> str:
+def answer_read(conn: db.Conn, s: dict, cmd: Command, today: date) -> str:
     if cmd.intent == "help":
         return HELP
     if cmd.intent == "summary":
@@ -375,8 +374,9 @@ def answer_read(conn: sqlite3.Connection, s: dict, cmd: Command, today: date) ->
         return "\n".join(lines)
     d = date.fromisoformat(cmd.date)
     rows = conn.execute(
-        "SELECT * FROM bookings WHERE date = ? AND status != 'cancelled' ORDER BY time",
-        (d.isoformat(),),
+        "SELECT * FROM bookings WHERE tenant_id = ? AND date = ? AND status != 'cancelled'"
+        " ORDER BY time",
+        (conn.tid, d.isoformat()),
     ).fetchall()
     word = day_word(d, today)
     head = f"{word[0].upper()}{word[1:]} ke appointments ({len(rows)}):"
@@ -407,19 +407,24 @@ def answer_read(conn: sqlite3.Connection, s: dict, cmd: Command, today: date) ->
 # ---------- conversation state ----------
 
 
-def save_pending(conn: sqlite3.Connection, sender: str, cmd: Command) -> None:
+def save_pending(conn: db.Conn, sender: str, cmd: Command) -> None:
     with conn:
         conn.execute(
-            "INSERT INTO pending_actions (sender, action, created_at) VALUES (?, ?, ?) "
-            "ON CONFLICT(sender) DO UPDATE SET action = excluded.action, created_at = excluded.created_at",
-            (sender, cmd.model_dump_json(), db.stamp()),
+            "INSERT INTO pending_actions (tenant_id, sender, action, created_at) VALUES (?, ?, ?, ?)"
+            " ON CONFLICT (tenant_id, sender)"
+            " DO UPDATE SET action = excluded.action, created_at = excluded.created_at",
+            (conn.tid, sender, cmd.model_dump_json(), db.stamp()),
         )
 
 
-def take_pending(conn: sqlite3.Connection, s: dict, sender: str) -> Command | None:
-    row = conn.execute("SELECT * FROM pending_actions WHERE sender = ?", (sender,)).fetchone()
+def take_pending(conn: db.Conn, s: dict, sender: str) -> Command | None:
+    row = conn.execute(
+        "SELECT * FROM pending_actions WHERE tenant_id = ? AND sender = ?", (conn.tid, sender)
+    ).fetchone()
     with conn:
-        conn.execute("DELETE FROM pending_actions WHERE sender = ?", (sender,))
+        conn.execute(
+            "DELETE FROM pending_actions WHERE tenant_id = ? AND sender = ?", (conn.tid, sender)
+        )
     if not row:
         return None
     age = config.now() - datetime.fromisoformat(row["created_at"])
@@ -428,14 +433,16 @@ def take_pending(conn: sqlite3.Connection, s: dict, sender: str) -> Command | No
     return Command.model_validate_json(row["action"])
 
 
-def has_pending(conn: sqlite3.Connection, sender: str) -> bool:
+def has_pending(conn: db.Conn, sender: str) -> bool:
     return (
-        conn.execute("SELECT 1 FROM pending_actions WHERE sender = ?", (sender,)).fetchone()
+        conn.execute(
+            "SELECT 1 FROM pending_actions WHERE tenant_id = ? AND sender = ?", (conn.tid, sender)
+        ).fetchone()
         is not None
     )
 
 
-def handle(conn: sqlite3.Connection, sender: str, text: str) -> tuple[str, bool]:
+def handle(conn: db.Conn, sender: str, text: str) -> tuple[str, bool]:
     """Reply to one message from an allowed sender. Returns (reply, settings_changed)."""
     s = cs.load(conn)
     today = config.now().date()

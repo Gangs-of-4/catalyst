@@ -2,19 +2,27 @@
 
 import base64
 import hmac
-import sqlite3
 from collections.abc import Iterator
 
 from fastapi import HTTPException, Request
 
-from ..core import db
+from ..core import db, tenancy
 from ..core.config import env
 
 
-def get_conn() -> Iterator[sqlite3.Connection]:
+def get_conn() -> Iterator[db.Conn]:
+    """A connection scoped to the public demo clinic.
+
+    Transitional (Phase 2 M1): the desk, setup, try page, Vapi and WhatsApp routes still serve the
+    single demo clinic. M2 scopes desk/setup to the logged-in business, M3 scopes the Vapi webhook by
+    its path, and M6 scopes WhatsApp by the sender's number.
+    """
     conn = db.connect()
     try:
-        yield conn
+        tid = tenancy.demo_id(conn, "clinic")
+        if tid is None:
+            raise HTTPException(503, "The demo clinic isn't set up yet. Restart the backend.")
+        yield conn.for_tenant(tid)
     finally:
         conn.close()
 

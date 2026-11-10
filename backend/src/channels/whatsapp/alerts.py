@@ -1,7 +1,7 @@
 """Outbound WhatsApp to the clinic's command numbers: urgent alerts, callbacks, summaries (C6, C10)."""
 
-import sqlite3
 
+from ...core import db
 from ...core import phone as ph
 from ...core import settings as cs
 from ...providers.messaging import twilio_whatsapp
@@ -30,8 +30,10 @@ def inbox_alert_text(item: dict) -> str:
     return f"{head}\n{who}\n{summary}\nDesk par 'Mark done' karein."
 
 
-def alert_for_inbox(conn: sqlite3.Connection, item_id: int) -> int:
-    row = conn.execute("SELECT * FROM inbox WHERE id = ?", (item_id,)).fetchone()
+def alert_for_inbox(conn: db.Conn, item_id: int) -> int:
+    row = conn.execute(
+        "SELECT * FROM inbox WHERE tenant_id = ? AND id = ?", (conn.tid, item_id)
+    ).fetchone()
     if not row:
         return 0
     return broadcast(cs.load(conn), inbox_alert_text(dict(row)))

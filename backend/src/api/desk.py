@@ -1,7 +1,6 @@
 """Receptionist desk: pages and APIs behind DESK_PASSWORD (C7, C10)."""
 
 import json
-import sqlite3
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -12,7 +11,7 @@ from .. import inbox
 from ..booking import service as bk
 from ..booking.when import short_date, spoken_date, spoken_time
 from ..channels.whatsapp import alerts, summary
-from ..core import config
+from ..core import config, db
 from ..core import phone as ph
 from ..core import settings as cs
 from ..core.config import FRONTEND_DIR, env
@@ -28,7 +27,7 @@ def desk_page() -> FileResponse:
 
 
 @router.get("/api/staff/meta")
-def meta(conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+def meta(conn: db.Conn = Depends(get_conn)) -> dict:
     s = cs.load(conn)
     return {
         "clinic": s["name"],
@@ -49,7 +48,7 @@ def _day(value: str | None) -> date:
 
 @router.get("/api/desk/day")
 def day(
-    date_: str | None = Query(None, alias="date"), conn: sqlite3.Connection = Depends(get_conn)
+    date_: str | None = Query(None, alias="date"), conn: db.Conn = Depends(get_conn)
 ) -> dict:
     d = _day(date_)
     grid = bk.day_grid(conn, cs.load(conn), d)
@@ -68,7 +67,7 @@ class WalkIn(BaseModel):
 
 
 @router.post("/api/desk/bookings")
-def add_booking(body: WalkIn, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+def add_booking(body: WalkIn, conn: db.Conn = Depends(get_conn)) -> dict:
     phone = ph.normalize(body.phone) if body.phone else None
     if body.phone and not phone:
         raise HTTPException(422, "Phone must be a 10-digit Indian mobile number.")
@@ -96,7 +95,7 @@ class StatusChange(BaseModel):
 
 @router.post("/api/desk/bookings/{booking_id}/status")
 def set_status(
-    booking_id: int, body: StatusChange, conn: sqlite3.Connection = Depends(get_conn)
+    booking_id: int, body: StatusChange, conn: db.Conn = Depends(get_conn)
 ) -> dict:
     try:
         bk.set_status(conn, booking_id, body.status)
@@ -106,20 +105,22 @@ def set_status(
 
 
 @router.get("/api/desk/inbox")
-def get_inbox(conn: sqlite3.Connection = Depends(get_conn)) -> list[dict]:
+def get_inbox(conn: db.Conn = Depends(get_conn)) -> list[dict]:
     return inbox.open_items(conn)
 
 
 @router.post("/api/desk/inbox/{item_id}/done")
-def inbox_done(item_id: int, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+def inbox_done(item_id: int, conn: db.Conn = Depends(get_conn)) -> dict:
     if not inbox.mark_done(conn, item_id):
         raise HTTPException(404, "Already done or not found.")
     return {"ok": True}
 
 
 @router.get("/api/desk/calls")
-def recent_calls(conn: sqlite3.Connection = Depends(get_conn)) -> list[dict]:
-    rows = conn.execute("SELECT * FROM calls ORDER BY started_at DESC LIMIT 25").fetchall()
+def recent_calls(conn: db.Conn = Depends(get_conn)) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM calls WHERE tenant_id = ? ORDER BY started_at DESC LIMIT 25", (conn.tid,)
+    ).fetchall()
     out = []
     for r in rows:
         c = dict(r)
@@ -129,13 +130,13 @@ def recent_calls(conn: sqlite3.Connection = Depends(get_conn)) -> list[dict]:
 
 
 @router.get("/api/desk/stats")
-def stats(conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+def stats(conn: db.Conn = Depends(get_conn)) -> dict:
     st = summary.day_stats(conn, config.now().date())
     return {**st, "sentence": summary.stats_sentence(st)}
 
 
 @router.post("/api/desk/summary/send")
-def send_summary(conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+def send_summary(conn: db.Conn = Depends(get_conn)) -> dict:
     s = cs.load(conn)
     today = config.now().date()
     text = summary.summary_text(s["name"], today, summary.day_stats(conn, today))

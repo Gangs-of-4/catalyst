@@ -1,12 +1,11 @@
 """Clinic-approved answers (C3). Built live from settings; nothing here is invented."""
 
 import re
-import sqlite3
 from datetime import date, timedelta
 
 from ..booking import service as bk
 from ..booking.when import short_date, spoken_time
-from ..core import config
+from ..core import config, db
 from ..core import settings as cs
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -81,7 +80,7 @@ def hours_text(s: dict) -> str:
     return text + (f". Closed on {', '.join(closed)}." if closed else ", all days.")
 
 
-def upcoming_changes(conn: sqlite3.Connection, s: dict, days: int = 7) -> list[str]:
+def upcoming_changes(conn: db.Conn, s: dict, days: int = 7) -> list[str]:
     today = config.now().date()
     out = []
     for b in bk.list_blocks(conn, today):
@@ -99,7 +98,7 @@ def upcoming_changes(conn: sqlite3.Connection, s: dict, days: int = 7) -> list[s
     return out
 
 
-def facts(conn: sqlite3.Connection, s: dict) -> dict[str, str]:
+def facts(conn: db.Conn, s: dict) -> dict[str, str]:
     """Every approved fact, keyed by topic. FAQs are keyed faq:<n>."""
     location = (
         f"{s['name']}, {s['address']}"
@@ -171,7 +170,7 @@ def _words(text: str) -> set[str]:
     }
 
 
-def lookup(conn: sqlite3.Connection, s: dict, question: str) -> list[str]:
+def lookup(conn: db.Conn, s: dict, question: str) -> list[str]:
     """Approved facts matching the question, best first. Empty means 'not known'."""
     q = _words(question)
     all_facts = facts(conn, s)

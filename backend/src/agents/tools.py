@@ -3,7 +3,6 @@
 Results state the resolved day and date so the agent reads back exactly what was booked (C2).
 """
 
-import sqlite3
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -28,7 +27,7 @@ FAILOVER = (
 
 @dataclass
 class Ctx:
-    conn: sqlite3.Connection
+    conn: db.Conn
     settings: dict
     call_id: str | None = None
     caller_phone: str | None = None
@@ -262,8 +261,9 @@ def cancel(ctx: Ctx, args: dict) -> str:
 
 
 def _alert(ctx: Ctx, item_id: int) -> None:
+    tid = ctx.conn.tid
     def run() -> None:
-        conn = db.connect()
+        conn = db.connect().for_tenant(tid)
         try:
             alerts.alert_for_inbox(conn, item_id)
         finally:

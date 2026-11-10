@@ -14,7 +14,7 @@ def client(isolated):
     isolated.write_text(f"CATALYST_TOOL_SECRET={SECRET}\n", encoding="utf-8")
     with TestClient(app) as c:
         # start from an empty schedule so results are predictable
-        conn = db.connect()
+        conn = db.connect_unchecked()
         with conn:
             conn.execute("DELETE FROM bookings")
             conn.execute("DELETE FROM inbox")
@@ -159,7 +159,7 @@ def test_escalate_creates_urgent_inbox_item(client):
         )
     )
     assert r["result"].startswith("ESCALATED") and "108" in r["result"]
-    conn = db.connect()
+    conn = db.connect_unchecked()
     row = conn.execute("SELECT kind, urgent FROM inbox").fetchone()
     assert tuple(row) == ("escalation", 1)
     assert conn.execute("SELECT escalated FROM calls WHERE id = 'call-1'").fetchone()[0] == 1
@@ -189,7 +189,7 @@ def test_end_of_call_report_sets_outcome(client):
     }
     assert post(client, report).status_code == 200
     row = (
-        db.connect()
+        db.connect_unchecked()
         .execute("SELECT outcome, summary, safety_review FROM calls WHERE id = 'call-9'")
         .fetchone()
     )
@@ -208,7 +208,7 @@ def test_end_of_call_without_tools_is_answered_or_hung_up(client):
 
     post(client, report("c-a", "AI: Namaste\nUser: timing kya hai?\nAI: 10 se 2."))
     post(client, report("c-h", "AI: Namaste"))
-    conn = db.connect()
+    conn = db.connect_unchecked()
     assert conn.execute("SELECT outcome FROM calls WHERE id = 'c-a'").fetchone()[0] == "answered"
     assert conn.execute("SELECT outcome FROM calls WHERE id = 'c-h'").fetchone()[0] == "hung_up"
 
@@ -228,7 +228,7 @@ def test_end_of_call_flags_unsafe_assistant_line(client):
     }
     post(client, msg)
     row = (
-        db.connect()
+        db.connect_unchecked()
         .execute("SELECT safety_review, safety_hits FROM calls WHERE id = 'c-s'")
         .fetchone()
     )

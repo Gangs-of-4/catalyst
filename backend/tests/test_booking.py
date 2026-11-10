@@ -1,4 +1,3 @@
-import sqlite3
 from datetime import date
 
 import pytest
@@ -17,20 +16,22 @@ def test_same_slot_cannot_be_booked_twice(conn, settings):
         bk.book(conn, settings, "dr-a", TOMORROW, "17:00", "Caller Two", "+910000000002", "walk_in")
     assert e.value.code == "SLOT_TAKEN"
     assert e.value.alternatives, "a conflict offers alternatives"
-    assert conn.execute("SELECT COUNT(*) FROM bookings").fetchone()[0] == 1
+    count = conn.execute("SELECT COUNT(*) FROM bookings WHERE tenant_id = ?", (conn.tid,))
+    assert count.fetchone()[0] == 1
 
 
 def test_db_index_refuses_double_booking_even_without_app_checks(conn):
     """Two connections insert the same slot directly; the partial unique index lets only one through."""
-    other = db.connect()
+    other = db.connect().for_tenant(conn.tid)
     sql = (
-        "INSERT INTO bookings (resource_id, date, time, status, source, name, created_at, updated_at)"
-        " VALUES ('dr-a', '2026-10-28', '17:00', 'booked', 'phone', 'X', 't', 't')"
+        "INSERT INTO bookings (tenant_id, resource_id, date, time, status, source, name,"
+        " created_at, updated_at) VALUES (?, 'dr-a', '2026-10-28', '17:00', 'booked', 'phone',"
+        " 'X', 't', 't')"
     )
     with conn:
-        conn.execute(sql)
-    with pytest.raises(sqlite3.IntegrityError), other:
-        other.execute(sql)
+        conn.execute(sql, (conn.tid,))
+    with pytest.raises(db.Conflict), other:
+        other.execute(sql, (other.tid,))
     other.close()
 
 
