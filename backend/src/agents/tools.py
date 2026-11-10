@@ -262,6 +262,7 @@ def cancel(ctx: Ctx, args: dict) -> str:
 
 def _alert(ctx: Ctx, item_id: int) -> None:
     tid = ctx.conn.tid
+
     def run() -> None:
         conn = db.connect().for_tenant(tid)
         try:

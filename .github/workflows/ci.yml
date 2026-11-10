@@ -79,7 +79,7 @@ jobs:
   test-postgres:
     name: Pytest (Postgres)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:16
@@ -110,4 +110,4 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Pytest on Postgres
-        run: python -m pytest -q
+        run: python -m pytest -v

@@ -1,6 +1,5 @@
 """Outbound WhatsApp to the clinic's command numbers: urgent alerts, callbacks, summaries (C6, C10)."""
 
-
 from ...core import db
 from ...core import phone as ph
 from ...core import settings as cs

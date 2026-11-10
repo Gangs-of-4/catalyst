@@ -1,6 +1,5 @@
 """Receptionist inbox: urgent escalations, callbacks and ops items (C7)."""
 
-
 from .core import db
 
 KINDS = ("escalation", "callback", "ops")

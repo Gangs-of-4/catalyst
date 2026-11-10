@@ -19,6 +19,11 @@ TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "").strip()
 def _reset_postgres() -> None:
     c = db.connect_unchecked()
     try:
+        # A connection left open by an earlier test would hold locks and make DROP wait forever.
+        c.raw.execute(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity"
+            " WHERE datname = current_database() AND pid <> pg_backend_pid()"
+        )
         c.raw.execute("DROP SCHEMA public CASCADE")
         c.raw.execute("CREATE SCHEMA public")
         c.commit()
@@ -35,6 +40,8 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("CATALYST_ENV_FILE", str(env_file))
     if TEST_DATABASE_URL:
         monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
+        # Fail with an error instead of hanging if a test ever waits on a lock (libpq reads this).
+        monkeypatch.setenv("PGOPTIONS", "-c lock_timeout=20000")
         _reset_postgres()
     else:
         monkeypatch.delenv("DATABASE_URL", raising=False)

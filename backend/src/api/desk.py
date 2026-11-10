@@ -47,9 +47,7 @@ def _day(value: str | None) -> date:
 
 
 @router.get("/api/desk/day")
-def day(
-    date_: str | None = Query(None, alias="date"), conn: db.Conn = Depends(get_conn)
-) -> dict:
+def day(date_: str | None = Query(None, alias="date"), conn: db.Conn = Depends(get_conn)) -> dict:
     d = _day(date_)
     grid = bk.day_grid(conn, cs.load(conn), d)
     today = config.now().date()
@@ -94,9 +92,7 @@ class StatusChange(BaseModel):
 
 
 @router.post("/api/desk/bookings/{booking_id}/status")
-def set_status(
-    booking_id: int, body: StatusChange, conn: db.Conn = Depends(get_conn)
-) -> dict:
+def set_status(booking_id: int, body: StatusChange, conn: db.Conn = Depends(get_conn)) -> dict:
     try:
         bk.set_status(conn, booking_id, body.status)
     except bk.BookingError as e:

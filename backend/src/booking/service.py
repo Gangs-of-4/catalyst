@@ -112,9 +112,7 @@ def day_grid(conn: db.Conn, s: dict, d: date) -> dict:
     return {"date": d.isoformat(), "closed": closed, "columns": columns, "stray": stray}
 
 
-def free_slots(
-    conn: db.Conn, s: dict, d: date, resource_id: str | None = None
-) -> list[Slot]:
+def free_slots(conn: db.Conn, s: dict, d: date, resource_id: str | None = None) -> list[Slot]:
     if is_closed(s, d):
         return []
     step = int(s["slot_min"])
