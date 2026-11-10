@@ -9,7 +9,7 @@ import httpx
 
 from ...agents import prompt
 from ...agents.tool_schemas import TOOLS
-from ...core import db
+from ...core import db, tenancy
 from ...core import settings as cs
 from ...core.config import env, set_env
 
@@ -38,10 +38,16 @@ def ensure_secret() -> str:
     return secret
 
 
-def payload(conn: db.Conn, secret: str) -> dict:
+def max_call_seconds() -> int:
+    """Hard cap on one call, so demo minutes can't run away (there is no Vapi budget; contracts §1.10)."""
+    raw = env("VAPI_MAX_CALL_SECONDS", "180")
+    return int(raw) if raw.isdigit() and int(raw) > 0 else 180
+
+
+def payload(conn: db.Conn, secret: str, webhook_path: str = "/vapi/webhook") -> dict:
     s = cs.load(conn)
     system, first = prompt.build(conn, s)
-    server = {"url": f"{public_url()}/vapi/webhook", "headers": {"x-catalyst-secret": secret}}
+    server = {"url": f"{public_url()}{webhook_path}", "headers": {"x-catalyst-secret": secret}}
     voice = s.get("voice") if s.get("voice") in VOICES else "female"
     return {
         "name": f"{s['name']} receptionist"[:40],
@@ -63,6 +69,7 @@ def payload(conn: db.Conn, secret: str) -> dict:
             "model": env("VAPI_TRANSCRIBER_MODEL", "nova-3"),
             "language": env("VAPI_TRANSCRIBER_LANGUAGE", "multi"),
         },
+        "maxDurationSeconds": max_call_seconds(),
         "server": server,
         "serverMessages": ["end-of-call-report"],
     }
@@ -103,3 +110,18 @@ def sync(conn: db.Conn) -> str:
     created = _request("POST", "/assistant", body)
     set_env({"VAPI_ASSISTANT_ID": created["id"]})
     return f"Agent created ({created['id']})."
+
+
+def sync_tenant(conn: db.Conn) -> str:
+    """Create or update *this business's* assistant: its own webhook path and secret, its own id
+    stored on its `tenants` row. Returns "created" or "updated". Raises VapiError."""
+    if not public_url().startswith("https://"):
+        raise VapiError("PUBLIC_URL must be the https:// URL Vapi can reach.")
+    t = tenancy.get(conn, conn.tid)
+    body = payload(conn, t["tool_secret"], f"/vapi/webhook/{t['public_id']}")
+    if t["vapi_assistant_id"]:
+        _request("PATCH", f"/assistant/{t['vapi_assistant_id']}", body)
+        return "updated"
+    created = _request("POST", "/assistant", body)
+    tenancy.set_assistant(conn, created["id"])
+    return "created"

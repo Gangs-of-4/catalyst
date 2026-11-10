@@ -2,14 +2,12 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import seed
-from .api import desk, public, setup, vapi, whatsapp
+from .api import auth, desk, errors, onboarding, public, setup, vapi, whatsapp
 from .core import db
 from .core.config import FRONTEND_DIR, env
 
@@ -31,8 +29,11 @@ if cors_origins:
         CORSMiddleware,
         allow_origins=cors_origins,
         allow_methods=["GET", "POST", "PUT", "DELETE"],
-        allow_headers=["Content-Type", "Authorization"],
+        allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+        allow_credentials=True,
     )
+app.include_router(auth.router)
+app.include_router(onboarding.router)
 app.include_router(vapi.router)
 app.include_router(public.router)
 app.include_router(desk.router)
@@ -41,13 +42,7 @@ app.include_router(setup.router)
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
 
 
-@app.exception_handler(RequestValidationError)
-async def readable_422(request: Request, exc: RequestValidationError) -> JSONResponse:
-    """Pages show `detail` as-is, so make it one plain sentence."""
-    msgs = [str(e.get("msg", "")).removeprefix("Value error, ") for e in exc.errors()]
-    return JSONResponse(
-        {"detail": " ".join(dict.fromkeys(msgs)) or "Invalid input."}, status_code=422
-    )
+errors.install(app)
 
 
 @app.get("/healthz")

@@ -69,6 +69,19 @@ def demo_id(conn: db.Conn, template: str = "clinic") -> str | None:
     return row["id"] if row else None
 
 
+def set_assistant(conn: db.Conn, assistant_id: str) -> None:
+    with conn:
+        conn.execute(
+            "UPDATE tenants SET vapi_assistant_id = ? WHERE id = ?", (assistant_id, conn.tid)
+        )
+
+
+def delete(conn: db.Conn, tid: str) -> None:
+    """Remove a business that was created but never finished (signup race). Nothing else points at it."""
+    with conn:
+        conn.execute("DELETE FROM tenants WHERE id = ?", (tid,))
+
+
 def load_settings(conn: db.Conn) -> dict:
     row = conn.execute("SELECT settings FROM tenants WHERE id = ?", (conn.tid,)).fetchone()
     if row is None:

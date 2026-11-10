@@ -5,7 +5,9 @@ from typing import Any
 
 import yaml
 
-from ..core.config import VERTICAL_DIR
+from ..core.config import REPO_ROOT, VERTICAL_DIR
+
+REPO_VERTICALS = REPO_ROOT / "verticals"
 
 
 def load_yaml(name: str, base: Path = VERTICAL_DIR) -> Any:
@@ -115,4 +117,32 @@ def default_settings(base: Path = VERTICAL_DIR) -> dict:
         "confirm_words": vertical["whatsapp"]["confirm_words"],
         "reject_words": vertical["whatsapp"]["reject_words"],
         "preview_expiry_min": vertical["whatsapp"]["preview_expiry_min"],
+    }
+
+
+def template_dir(template: str) -> Path:
+    return REPO_VERTICALS / template
+
+
+def template_defaults(template: str) -> dict:
+    """What a new business of this template starts with: labels, WhatsApp words, safety red flags and
+    the form defaults. Nothing from the fictional demo tenant."""
+    base = template_dir(template)
+    v = validate(base)
+    rules_file = base / "escalation-rules.yaml"
+    rules = load_yaml("escalation-rules.yaml", base) if rules_file.exists() else {}
+    red_flags = [
+        f"{r['rationale']} (e.g. {', '.join(r['phrases'][:3])})" for r in rules.get("red_flags", [])
+    ]
+    return {
+        "modules": v["modules"],
+        "labels": v.get("labels", {}),
+        "onboarding": v.get("onboarding", {}),
+        "red_flags": red_flags,
+        "offer_slots": v.get("booking", {}).get("offer_slots", 3),
+        "default_slot_min": v.get("booking", {}).get("default_slot_min", 15),
+        "confirm_words": v["whatsapp"]["confirm_words"],
+        "reject_words": v["whatsapp"]["reject_words"],
+        "preview_expiry_min": v["whatsapp"]["preview_expiry_min"],
+        "has_voice": (base / "agent-prompt.md").exists(),
     }

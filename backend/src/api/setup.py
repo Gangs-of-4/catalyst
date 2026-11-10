@@ -89,15 +89,7 @@ class SettingsIn(BaseModel):
         return v
 
 
-def _slug(name: str, taken: set[str]) -> str:
-    base = "dr-" + (
-        re.sub(r"[^a-z0-9]+", "-", name.lower().replace("dr.", "").replace("dr ", "")).strip("-")
-        or "x"
-    )
-    slug, n = base, 2
-    while slug in taken:
-        slug, n = f"{base}-{n}", n + 1
-    return slug
+_slug = cs.doctor_slug
 
 
 @router.get("/setup", include_in_schema=False)

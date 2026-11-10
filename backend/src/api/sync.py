@@ -1,6 +1,6 @@
 """Push changed clinic settings to the voice agent, so it never quotes stale facts."""
 
-from ..core import db
+from ..core import db, tenancy
 from ..core.config import env
 from ..core.log import log
 from ..providers.voice_orchestrator import vapi
@@ -25,3 +25,21 @@ def sync_agent(tid: str) -> str:
     finally:
         conn.close()
     return result
+
+
+def sync_tenant_agent(tid: str) -> str:
+    """Create or update one business's own assistant. Returns "updated", "not_configured" or "failed"
+    (the values contracts.md §6 gives the pages). Never raises: the business exists either way."""
+    conn = db.connect().for_tenant(tid)
+    try:
+        t = tenancy.get(conn, tid)
+        has_prompt = (tenancy.VERTICALS_DIR / t["template"] / "agent-prompt.md").exists()
+        if not (env("VAPI_PRIVATE_KEY") and env("PUBLIC_URL")) or not has_prompt:
+            return "not_configured"
+        vapi.sync_tenant(conn)
+        return "updated"
+    except vapi.VapiError as e:
+        log.warning("vapi: tenant sync failed (%s)", type(e).__name__)
+        return "failed"
+    finally:
+        conn.close()
