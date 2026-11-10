@@ -15,6 +15,7 @@ from typing import Any
 
 from . import config
 from .config import env
+from .log import log
 
 # Tables that hold one business's data. Every query on them must mention tenant_id.
 TENANT_TABLES = {
@@ -33,7 +34,10 @@ TENANT_TABLES = {
     "events",
     "feedback",
 }
-_TABLE_REF = re.compile(r"\b(?:from|join|into|update)\s+([a-z_]+)", re.I)
+_COMMENTS = re.compile(r"--[^\n]*|/\*.*?\*/", re.S)
+_LITERALS = re.compile(r"'(?:[^']|'')*'")
+_FILTER = re.compile(r"\btenant_id\b\s*=\s*(?:\?|[a-z_]+\.[a-z_]+|[a-z_]+\b)")
+_INSERT_COLS = re.compile(r"\binsert\s+into\s+\S+\s*\([^)]*\btenant_id\b")
 
 SCHEMA_VERSION = 1
 # {ID} becomes an auto-increment integer primary key in each dialect.
@@ -175,10 +179,34 @@ def _pg_row_factory(cursor):
     return lambda values: Row(keys, values)
 
 
+def _bare(sql: str) -> str:
+    """The SQL without comments and string literals, so a word inside them can't fake a filter."""
+    return _LITERALS.sub("''", _COMMENTS.sub(" ", sql)).lower().replace('"', "")
+
+
+def tenant_tables_in(sql: str) -> list[str]:
+    """Tenant tables the statement mentions in any form: plain, quoted, schema-qualified, joined,
+    comma-joined or in a subquery. One entry per mention."""
+    return [w for w in re.findall(r"[a-z_]+", _bare(sql)) if w in TENANT_TABLES]
+
+
 def check_scope(sql: str) -> None:
-    tables = {t.lower() for t in _TABLE_REF.findall(sql)}
-    if tables & TENANT_TABLES and "tenant_id" not in sql:
-        raise ScopeError(f"query on {sorted(tables & TENANT_TABLES)} without tenant_id")
+    """Refuse a statement on tenant tables unless it filters each one by tenant_id.
+
+    A statement mentioning N tenant tables needs N `tenant_id = ?` (or `a.tenant_id = b.tenant_id`
+    join) conditions. An INSERT needs tenant_id in its column list. This catches a forgotten
+    filter; it can't prove the filter is the right one, so tests still check isolation.
+    """
+    bare = _bare(sql)
+    tables = tenant_tables_in(sql)
+    if not tables:
+        return
+    if bare.lstrip().startswith("insert"):
+        ok = bool(_INSERT_COLS.search(bare))
+    else:
+        ok = len(_FILTER.findall(bare)) >= len(tables)
+    if not ok:
+        raise ScopeError(f"query on {sorted(set(tables))} without a tenant_id filter")
 
 
 class Conn:
@@ -198,8 +226,10 @@ class Conn:
         return Conn(self.raw, self.dialect, tid, self.checked)
 
     def execute(self, sql: str, params: tuple | list = ()):
-        if self.checked:
+        if self.checked and tenant_tables_in(sql):
             check_scope(sql)
+            if self.tid not in tuple(params):
+                raise ScopeError("query on tenant tables doesn't pass this business's tenant id")
         if self.dialect == "sqlite":
             try:
                 return self.raw.execute(sql, params)
@@ -271,21 +301,55 @@ def connect_unchecked() -> Conn:
     return Conn(raw, kind, checked=False)
 
 
+_LEGACY_CHECKED: set[str] = set()  # DB files already checked in this process
+_CARRIED_SETTINGS: dict[str, dict] = {}  # old demo settings, handed to seed.ensure once
+
+
 def _move_legacy_demo_db(path) -> None:
-    """The single-clinic demo DB (no tenant_id) can't be upgraded in place; its data is fictional,
-    so move it aside and start fresh."""
-    if not path.exists():
+    """The single-clinic demo DB (no tenant_id) can't be upgraded in place. Move it aside to
+    `<name>.legacy`, keep its settings (doctors, fees, WhatsApp numbers from /setup) for the new
+    demo clinic, and say so loudly. Checked once per process. If another program (usually the old
+    server) has the file open, fail with a plain message instead of a raw PermissionError."""
+    key = str(path)
+    if key in _LEGACY_CHECKED:
         return
-    probe = sqlite3.connect(path)
-    try:
-        cols = [r[1] for r in probe.execute("PRAGMA table_info(bookings)")]
-    finally:
-        probe.close()
-    if cols and "tenant_id" not in cols:
-        for suffix in ("", "-wal", "-shm"):
-            old = path.with_name(path.name + suffix)
-            if old.exists():
-                old.replace(old.with_name(old.name + ".legacy"))
+    if path.exists():
+        probe = sqlite3.connect(path)
+        try:
+            cols = [r[1] for r in probe.execute("PRAGMA table_info(bookings)")]
+            row = None
+            if cols and "tenant_id" not in cols:
+                try:
+                    row = probe.execute(
+                        "SELECT value FROM settings WHERE key = 'clinic'"
+                    ).fetchone()
+                except sqlite3.Error:
+                    row = None
+        finally:
+            probe.close()
+        if cols and "tenant_id" not in cols:
+            try:
+                for suffix in ("", "-wal", "-shm"):  # the main file first: it fails fast if in use
+                    old = path.with_name(path.name + suffix)
+                    if old.exists():
+                        old.replace(old.with_name(old.name + ".legacy"))
+            except OSError as e:
+                raise RuntimeError(
+                    f"The old demo database {path} is open in another program (probably the old"
+                    " server). Stop it, then start again. The file is upgraded automatically."
+                ) from e
+            if row:
+                _CARRIED_SETTINGS[key] = json.loads(row[0])
+            log.warning(
+                "db: moved the old single-clinic demo database to %s.legacy; its settings carry over",
+                path.name,
+            )
+    _LEGACY_CHECKED.add(key)
+
+
+def take_carried_settings() -> dict | None:
+    """Settings of the old single-clinic demo, once, if its database was just moved aside."""
+    return _CARRIED_SETTINGS.pop(str(config.db_path()), None)
 
 
 def init(conn: Conn) -> None:

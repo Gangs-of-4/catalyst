@@ -13,7 +13,8 @@ def ensure(conn: db.Conn, with_demo_data: bool = True) -> str:
     existing = tenancy.demo_id(conn, "clinic")
     if existing:
         return existing
-    s = loader.default_settings()
+    # Keep what an old single-clinic demo had set up on /setup, if its database was just moved.
+    s = {**loader.default_settings(), **(db.take_carried_settings() or {})}
     tid = tenancy.create(
         conn, "clinic", s, public_id=tenancy.DEMO_PUBLIC_ID.format(template="clinic"), is_demo=True
     )
