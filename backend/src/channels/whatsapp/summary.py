@@ -1,16 +1,17 @@
 """Day stats and the doctor's WhatsApp summary (C10). Counts only; no patient details."""
 
-import sqlite3
 from datetime import date
 
 from ...booking.when import short_date
+from ...core import db
 
 
-def day_stats(conn: sqlite3.Connection, d: date) -> dict:
+def day_stats(conn: db.Conn, d: date) -> dict:
     day = d.isoformat()
     calls = conn.execute(
-        "SELECT outcome, booked, changed, escalated, callback, safety_review FROM calls WHERE substr(started_at, 1, 10) = ?",
-        (day,),
+        "SELECT outcome, booked, changed, escalated, callback, safety_review FROM calls"
+        " WHERE tenant_id = ? AND substr(started_at, 1, 10) = ?",
+        (conn.tid, day),
     ).fetchall()
     outcomes = {k: 0 for k in ("booked", "changed", "escalated", "callback", "answered", "hung_up")}
     for c in calls:
@@ -18,12 +19,16 @@ def day_stats(conn: sqlite3.Connection, d: date) -> dict:
             outcomes[c["outcome"]] += 1
     sources = dict(
         conn.execute(
-            "SELECT source, COUNT(*) FROM bookings WHERE date = ? AND status != 'cancelled' GROUP BY source",
-            (day,),
+            "SELECT source, COUNT(*) FROM bookings WHERE tenant_id = ? AND date = ?"
+            " AND status != 'cancelled' GROUP BY source",
+            (conn.tid, day),
         ).fetchall()
     )
     open_items = conn.execute(
-        "SELECT SUM(urgent = 1), SUM(urgent = 0 AND kind = 'callback') FROM inbox WHERE done_at IS NULL"
+        "SELECT SUM(CASE WHEN urgent = 1 THEN 1 ELSE 0 END),"
+        " SUM(CASE WHEN urgent = 0 AND kind = 'callback' THEN 1 ELSE 0 END)"
+        " FROM inbox WHERE tenant_id = ? AND done_at IS NULL",
+        (conn.tid,),
     ).fetchone()
     return {
         "date": day,

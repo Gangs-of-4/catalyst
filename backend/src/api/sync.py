@@ -10,13 +10,13 @@ def agent_configured() -> bool:
     return all(env(k) for k in ("VAPI_PRIVATE_KEY", "VAPI_ASSISTANT_ID", "PUBLIC_URL"))
 
 
-def sync_agent() -> str:
+def sync_agent(tid: str) -> str:
     """Returns a one-line result. Never raises: settings are saved either way."""
     if not agent_configured():
         return (
             "Saved. The agent isn't set up yet (run scripts/setup_vapi.py), so nothing to update."
         )
-    conn = db.connect()
+    conn = db.connect().for_tenant(tid)
     try:
         result = vapi.sync(conn)
     except vapi.VapiError as e:

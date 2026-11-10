@@ -1,23 +1,17 @@
-"""Clinic settings, stored as one JSON document."""
+"""A business's settings, stored as one JSON document on its `tenants` row."""
 
 import difflib
 import re
-import sqlite3
 
-from . import db
-
-KEY = "clinic"
+from . import db, tenancy
 
 
-def load(conn: sqlite3.Connection) -> dict:
-    s = db.get_json(conn, KEY)
-    if s is None:
-        raise RuntimeError("Clinic settings missing; the app seeds them on startup.")
-    return s
+def load(conn: db.Conn) -> dict:
+    return tenancy.load_settings(conn)
 
 
-def save(conn: sqlite3.Connection, s: dict) -> None:
-    db.put_json(conn, KEY, s)
+def save(conn: db.Conn, s: dict) -> None:
+    tenancy.save_settings(conn, s)
 
 
 def doctor(s: dict, doctor_id: str | None) -> dict | None:

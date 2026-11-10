@@ -1,8 +1,8 @@
 """Builds the system prompt and first message from verticals/clinic/agent-prompt.md plus a settings snapshot."""
 
 import re
-import sqlite3
 
+from ..core import db
 from ..knowledge import answers
 from ..verticals import loader
 
@@ -17,7 +17,7 @@ def _fill(template: str, values: dict[str, str]) -> str:
     return re.sub(r"\{(\w+)\}", lambda m: values.get(m[1], m[0]), template)
 
 
-def snapshot(conn: sqlite3.Connection, s: dict) -> str:
+def snapshot(conn: db.Conn, s: dict) -> str:
     f = answers.facts(conn, s)
     lines = [
         f"- Name: {s['name']}",
@@ -33,7 +33,7 @@ def snapshot(conn: sqlite3.Connection, s: dict) -> str:
     return "\n".join(lines)
 
 
-def build(conn: sqlite3.Connection, s: dict) -> tuple[str, str]:
+def build(conn: db.Conn, s: dict) -> tuple[str, str]:
     """(system prompt, first message) for the clinic's current settings."""
     raw = loader.prompt_template()
     body, _, first = raw.partition("## First message")

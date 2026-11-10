@@ -1,7 +1,6 @@
 """Clinic settings page and API (C12). Saving re-syncs the voice agent and reports the result."""
 
 import re
-import sqlite3
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from ..booking import service as bk
 from ..booking.when import short_date, spoken_time
-from ..core import config
+from ..core import config, db
 from ..core import phone as ph
 from ..core import settings as cs
 from ..core.config import FRONTEND_DIR
@@ -106,7 +105,7 @@ def setup_page() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "setup.html")
 
 
-def _blocks(conn: sqlite3.Connection, s: dict) -> list[dict]:
+def _blocks(conn: db.Conn, s: dict) -> list[dict]:
     out = []
     for b in bk.list_blocks(conn):
         d = date.fromisoformat(b["date"])
@@ -126,13 +125,13 @@ def _blocks(conn: sqlite3.Connection, s: dict) -> list[dict]:
 
 
 @router.get("/api/setup")
-def get_setup(conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+def get_setup(conn: db.Conn = Depends(get_conn)) -> dict:
     s = cs.load(conn)
     return {"settings": s, "blocks": _blocks(conn, s), "agentConfigured": agent_configured()}
 
 
 @router.put("/api/setup")
-def save_setup(body: SettingsIn, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+def save_setup(body: SettingsIn, conn: db.Conn = Depends(get_conn)) -> dict:
     s = cs.load(conn)
     old_ids = {d["id"] for d in s["doctors"]}
     doctors, taken = [], set()
@@ -150,8 +149,9 @@ def save_setup(body: SettingsIn, conn: sqlite3.Connection = Depends(get_conn)) -
     today = config.now().date().isoformat()
     for gone in old_ids - taken:
         n = conn.execute(
-            "SELECT COUNT(*) FROM bookings WHERE resource_id = ? AND date >= ? AND status = 'booked'",
-            (gone, today),
+            "SELECT COUNT(*) FROM bookings WHERE tenant_id = ? AND resource_id = ? AND date >= ?"
+            " AND status = 'booked'",
+            (conn.tid, gone, today),
         ).fetchone()[0]
         if n:
             raise HTTPException(
@@ -163,7 +163,7 @@ def save_setup(body: SettingsIn, conn: sqlite3.Connection = Depends(get_conn)) -
     s["sessions"] = [list(x) for x in body.sessions]
     s["red_flags"] = [r.strip() for r in body.red_flags if r.strip()]
     cs.save(conn, s)
-    return {"ok": True, "agent": sync_agent(), "settings": s}
+    return {"ok": True, "agent": sync_agent(conn.tid), "settings": s}
 
 
 class BlockIn(BaseModel):
@@ -172,7 +172,7 @@ class BlockIn(BaseModel):
 
 
 @router.post("/api/setup/blocks")
-def add_block(body: BlockIn, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+def add_block(body: BlockIn, conn: db.Conn = Depends(get_conn)) -> dict:
     s = cs.load(conn)
     try:
         d = date.fromisoformat(body.date)
@@ -189,11 +189,12 @@ def add_block(body: BlockIn, conn: sqlite3.Connection = Depends(get_conn)) -> di
         if affected
         else None
     )
-    return {"blocks": _blocks(conn, s), "note": note, "agent": sync_agent()}
+    return {"blocks": _blocks(conn, s), "note": note, "agent": sync_agent(conn.tid)}
 
 
 @router.delete("/api/setup/blocks/{block_id}")
-def delete_block(block_id: int, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
-    bk.remove_block(conn, block_id)
+def delete_block(block_id: int, conn: db.Conn = Depends(get_conn)) -> dict:
+    if not bk.remove_block(conn, block_id):
+        raise HTTPException(404, "That leave or holiday was already removed.")
     s = cs.load(conn)
-    return {"blocks": _blocks(conn, s), "agent": sync_agent()}
+    return {"blocks": _blocks(conn, s), "agent": sync_agent(conn.tid)}

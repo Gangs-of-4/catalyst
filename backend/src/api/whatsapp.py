@@ -3,13 +3,13 @@
 import base64
 import hashlib
 import hmac
-import sqlite3
 from urllib.parse import parse_qsl
 from xml.sax.saxutils import escape
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response
 
 from ..channels.whatsapp import alerts, commands
+from ..core import db
 from ..core import phone as ph
 from ..core import settings as cs
 from ..core.config import env
@@ -38,7 +38,7 @@ def signature_ok(signature: str | None, url: str, params: dict[str, str], token:
 
 @router.post("/whatsapp/incoming")
 async def incoming(
-    request: Request, background: BackgroundTasks, conn: sqlite3.Connection = Depends(get_conn)
+    request: Request, background: BackgroundTasks, conn: db.Conn = Depends(get_conn)
 ):
     raw = (await request.body()).decode("utf-8", errors="replace")
     params = dict(parse_qsl(raw, keep_blank_values=True))
@@ -72,5 +72,5 @@ async def incoming(
 
     reply, changed = commands.handle(conn, sender, text)
     if changed:
-        background.add_task(sync_agent)
+        background.add_task(sync_agent, conn.tid)
     return twiml(reply + ("" if allowed else OPEN_WARNING))

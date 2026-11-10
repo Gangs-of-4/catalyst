@@ -108,7 +108,7 @@ def main() -> int:
     from src.core import settings as cs
 
     conn = db.connect()
-    seed.ensure(conn)
+    conn = conn.for_tenant(seed.ensure(conn))  # the demo clinic
     numbers = len(alerts.recipients(cs.load(conn)))
     print("\nClinic")
     if numbers:

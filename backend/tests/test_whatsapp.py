@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from src.api.whatsapp import signature_ok
 from src.booking import service as bk
 from src.channels.whatsapp.commands import parse_rules
-from src.core import db
+from src.core import db, tenancy
 from src.core import settings as cs
 from src.main import app
 
@@ -90,8 +90,15 @@ def send(client, body, sender=DOCTOR, headers=None):
     return r.text
 
 
+def demo_conn():
+    """Unchecked connection scoped to the demo clinic, for asserting stored state."""
+    c = db.connect_unchecked()
+    return c.for_tenant(tenancy.demo_id(c))
+
+
 def allow(numbers):
     conn = db.connect()
+    conn = conn.for_tenant(tenancy.demo_id(conn))
     s = cs.load(conn)
     s["whatsapp_numbers"] = numbers
     cs.save(conn, s)
@@ -102,7 +109,7 @@ def test_preview_then_haan_applies(client):
     allow([DOCTOR])
     reply = send(client, "kal chhutti")
     assert "Poori clinic" in reply and "Wed, 28 Oct" in reply and "Haan/Nahi" in reply
-    conn = db.connect()
+    conn = demo_conn()
     assert (
         conn.execute("SELECT COUNT(*) FROM blocks").fetchone()[0] == 0
     ), "nothing changes before Haan"
@@ -122,7 +129,7 @@ def test_preview_then_nahi_discards(client):
     allow([DOCTOR])
     send(client, "consultation fee 450")
     assert "kuch nahi badla" in send(client, "nahi")
-    conn = db.connect()
+    conn = demo_conn()
     assert (
         next(x for x in cs.load(conn)["services"] if x["name"] == "Consultation")["fee"] == "₹300"
     )
@@ -133,7 +140,7 @@ def test_fee_change_applies(client):
     allow([DOCTOR])
     send(client, "consultation fee 450")
     send(client, "ok")
-    conn = db.connect()
+    conn = demo_conn()
     assert (
         next(x for x in cs.load(conn)["services"] if x["name"] == "Consultation")["fee"] == "₹450"
     )
@@ -143,14 +150,14 @@ def test_walk_in_from_whatsapp(client):
     allow([DOCTOR])
     assert "Walk-in: Ramesh" in send(client, "walk-in Ramesh 9876543210 kal 12 baje")
     assert "Done ✅" in send(client, "haan")
-    row = db.connect().execute("SELECT source, time FROM bookings WHERE name = 'Ramesh'").fetchone()
+    row = demo_conn().execute("SELECT source, time FROM bookings WHERE name = 'Ramesh'").fetchone()
     assert tuple(row) == ("whatsapp", "12:00")
 
 
 def test_unregistered_number_rejected(client):
     allow([DOCTOR])
     assert "registered nahi" in send(client, "kal chhutti", sender="+919000000999")
-    assert db.connect().execute("SELECT COUNT(*) FROM pending_actions").fetchone()[0] == 0
+    assert demo_conn().execute("SELECT COUNT(*) FROM pending_actions").fetchone()[0] == 0
 
 
 def test_open_mode_warns(client):
@@ -161,7 +168,7 @@ def test_open_mode_warns(client):
 def test_unparsed_creates_ops_item(client):
     allow([DOCTOR])
     assert "Samajh nahi aaya" in send(client, "kuch alag sa sawaal")
-    assert db.connect().execute("SELECT kind FROM inbox WHERE kind = 'ops'").fetchone() is not None
+    assert demo_conn().execute("SELECT kind FROM inbox WHERE kind = 'ops'").fetchone() is not None
 
 
 def test_query_lists_bookings(client):

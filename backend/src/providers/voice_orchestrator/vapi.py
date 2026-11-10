@@ -4,12 +4,12 @@ Field names checked against the @vapi-ai/web 2.7.1 type definitions. VERIFY agai
 """
 
 import secrets
-import sqlite3
 
 import httpx
 
 from ...agents import prompt
 from ...agents.tool_schemas import TOOLS
+from ...core import db
 from ...core import settings as cs
 from ...core.config import env, set_env
 
@@ -38,7 +38,7 @@ def ensure_secret() -> str:
     return secret
 
 
-def payload(conn: sqlite3.Connection, secret: str) -> dict:
+def payload(conn: db.Conn, secret: str) -> dict:
     s = cs.load(conn)
     system, first = prompt.build(conn, s)
     server = {"url": f"{public_url()}/vapi/webhook", "headers": {"x-catalyst-secret": secret}}
@@ -89,7 +89,7 @@ def get_assistant(assistant_id: str) -> dict:
     return _request("GET", f"/assistant/{assistant_id}")
 
 
-def sync(conn: sqlite3.Connection) -> str:
+def sync(conn: db.Conn) -> str:
     """Create the assistant on first run, update it after. Returns a one-line status. Raises VapiError."""
     if not public_url().startswith("https://"):
         raise VapiError(

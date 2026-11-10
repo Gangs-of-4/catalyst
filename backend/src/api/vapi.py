@@ -1,7 +1,6 @@
 """POST /vapi/webhook: Vapi tool calls and server messages (contracts.md §1.10)."""
 
 import json
-import sqlite3
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, ValidationError
@@ -60,7 +59,7 @@ def tool_call_list(message: dict) -> list[_ToolCall]:
 async def webhook(
     request: Request,
     background: BackgroundTasks,
-    conn: sqlite3.Connection = Depends(get_conn),
+    conn: db.Conn = Depends(get_conn),
     x_catalyst_secret: str | None = Header(default=None),
 ):
     if not secret_ok(x_catalyst_secret, "CATALYST_TOOL_SECRET"):
@@ -87,15 +86,18 @@ async def webhook(
         )
         results = []
         for tc in tool_call_list(message):
-            cached = conn.execute("SELECT result FROM tool_calls WHERE id = ?", (tc.id,)).fetchone()
+            cached = conn.execute(
+                "SELECT result FROM tool_calls WHERE tenant_id = ? AND id = ?", (conn.tid, tc.id)
+            ).fetchone()
             if cached:
                 result = cached["result"]
             else:
                 result = tools.run(ctx, tc.function.name, _args(tc.function.arguments))
                 with conn:
                     conn.execute(
-                        "INSERT OR IGNORE INTO tool_calls (id, result, created_at) VALUES (?, ?, ?)",
-                        (tc.id, result, db.stamp()),
+                        "INSERT INTO tool_calls (tenant_id, id, result, created_at)"
+                        " VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
+                        (conn.tid, tc.id, result, db.stamp()),
                     )
             log.info("vapi: call %s tool %s", call_id, tc.function.name)
             results.append({"name": tc.function.name, "toolCallId": tc.id, "result": result})

@@ -20,7 +20,7 @@ def main() -> int:
         print(f"No .env found at {env_path()}. Copy .env.example to .env and fill it in first.")
         return 1
     conn = db.connect()
-    seed.ensure(conn)
+    conn = conn.for_tenant(seed.ensure(conn))  # the demo clinic
     try:
         status = vapi.sync(conn)
     except vapi.VapiError as e:
