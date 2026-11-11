@@ -20,7 +20,7 @@ function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
   return (
     <textarea
       data-slot="textarea"
-      className={cn(controlBase, "min-h-24 py-2.5 leading-normal", className)}
+      className={cn(controlBase, "field-sizing-content min-h-24 py-2.5 leading-normal", className)}
       {...props}
     />
   );

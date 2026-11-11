@@ -5,5 +5,8 @@
   "outputDirectory": "dist",
   "cleanUrls": true,
   "git": { "deploymentEnabled": false },
-  "rewrites": [{ "source": "/styleguide", "destination": "/app.html" }]
+  "rewrites": [
+    { "source": "/signup", "destination": "/app.html" },
+    { "source": "/styleguide", "destination": "/app.html" }
+  ]
 }
