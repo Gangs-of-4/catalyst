@@ -10,13 +10,13 @@ from pydantic import BaseModel, Field, field_validator
 
 from ..booking import service as bk
 from ..booking.when import short_date, spoken_time
-from ..core import config, db, tenancy
+from ..core import config, db
 from ..core import phone as ph
 from ..core import settings as cs
 from ..core.config import FRONTEND_DIR
 from .deps import get_user_conn, modules, require_bookings, require_csrf_header
 from .errors import ApiError
-from .sync import agent_configured, sync_agent
+from .sync import agent_available, sync_agent
 
 pages = APIRouter()
 router = APIRouter(dependencies=[Depends(require_csrf_header)])
@@ -116,18 +116,11 @@ def _blocks(conn: db.Conn, s: dict) -> list[dict]:
     return out
 
 
-def _has_agent(conn: db.Conn) -> bool:
-    """This business has a voice agent to update: its own, or (demo clinic only) the .env one."""
-    if tenancy.get(conn, conn.tid)["vapi_assistant_id"]:
-        return True
-    return conn.tid == tenancy.demo_id(conn, "clinic") and agent_configured()
-
-
 @router.get("/api/settings")
 def get_settings(conn: db.Conn = Depends(get_user_conn)) -> dict:
     s = cs.load(conn)
     blocks = _blocks(conn, s) if "bookings" in modules(conn) else []
-    return {"settings": s, "blocks": blocks, "agentConfigured": _has_agent(conn)}
+    return {"settings": s, "blocks": blocks, "agentConfigured": agent_available(conn)}
 
 
 @router.put("/api/settings")
@@ -166,7 +159,7 @@ def save_settings(body: SettingsIn, conn: db.Conn = Depends(get_user_conn)) -> d
     s["sessions"] = [list(x) for x in body.sessions]
     s["red_flags"] = [r.strip() for r in body.red_flags if r.strip()]
     cs.save(conn, s)
-    return {"saved": True, "ok": True, "agent": sync_agent(conn.tid), "settings": s}
+    return {"saved": True, "agent": sync_agent(conn.tid), "settings": s}
 
 
 class BlockIn(BaseModel):

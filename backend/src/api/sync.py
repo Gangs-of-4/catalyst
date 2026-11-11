@@ -5,6 +5,7 @@ from ..core import db, tenancy
 from ..core.config import env
 from ..core.log import log
 from ..providers.voice_orchestrator import vapi
+from ..verticals import loader
 
 MESSAGES = {
     "updated": "Saved. The agent has been updated.",
@@ -16,6 +17,24 @@ MESSAGES = {
 def agent_configured() -> bool:
     """The demo clinic's original assistant (id in .env) can be updated."""
     return all(env(k) for k in ("VAPI_PRIVATE_KEY", "VAPI_ASSISTANT_ID", "PUBLIC_URL"))
+
+
+def uses_env_assistant(conn: db.Conn, t: db.Row) -> bool:
+    """The one rule for the .env assistant: only the demo clinic uses it, and only while its own row
+    has no assistant id (the old try page still reads the .env id)."""
+    return not t["vapi_assistant_id"] and conn.tid == tenancy.demo_id(conn, "clinic")
+
+
+def agent_available(conn: db.Conn) -> bool:
+    """Whether a settings save will update (or create) a voice agent for this business: what the
+    settings page shows as `agentConfigured`."""
+    t = tenancy.get(conn, conn.tid)
+    if uses_env_assistant(conn, t):
+        return agent_configured()
+    if t["vapi_assistant_id"]:
+        return True
+    has_prompt = (loader.template_dir(t["template"]) / "agent-prompt.md").exists()
+    return bool(env("VAPI_PRIVATE_KEY") and env("PUBLIC_URL")) and has_prompt
 
 
 def sync_agent(tid: str) -> str:
@@ -31,7 +50,7 @@ def sync_agent(tid: str) -> str:
             t = tenancy.get(conn, tid)
             if t is None:
                 return MESSAGES["failed"]
-            if not t["vapi_assistant_id"] and tid == tenancy.demo_id(conn, "clinic"):
+            if uses_env_assistant(conn, t):
                 return _legacy_sync(conn) if agent_configured() else MESSAGES["not_configured"]
         finally:
             conn.close()

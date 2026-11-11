@@ -62,6 +62,26 @@ def day(
     return {**grid, "label": label, "long": spoken_date(d), "short": short_date(d)}
 
 
+def _booking_error(e: bk.BookingError, s: dict) -> ApiError:
+    """One mapping from booking errors to the page's error shape. Whenever the booking service found
+    free times nearby (a taken slot, a closed day, a time that isn't a slot start), the page gets
+    them both in words and as `alternatives`, so the receptionist never has to guess."""
+    status, code = {"SLOT_TAKEN": (409, "SLOT_TAKEN"), "NOT_FOUND": (404, "NOT_FOUND")}.get(
+        e.code, (422, "VALIDATION")
+    )
+    alts = e.alternatives[:3]
+    said = ", ".join(f"{spoken_time(a.time)} {cs.doctor_name(s, a.resource_id)}" for a in alts)
+    detail = "That slot isn't free." if e.code == "SLOT_TAKEN" or alts else f"{str(e).rstrip('.')}."
+    return ApiError(
+        status,
+        code,
+        detail + (f" Free nearby: {said}." if said else ""),
+        alternatives=[
+            {"doctor_id": a.resource_id, "date": a.date.isoformat(), "time": a.time} for a in alts
+        ],
+    )
+
+
 class WalkIn(BaseModel):
     doctor_id: str
     date: str
@@ -89,19 +109,7 @@ def add_booking(body: WalkIn, conn: db.Conn = Depends(require_bookings)) -> dict
             conn, s, body.doctor_id, _day(body.date), body.time, body.name, phone, body.source
         )
     except bk.BookingError as e:
-        alts = e.alternatives[:3]
-        if e.code != "SLOT_TAKEN":
-            raise ApiError(422, "VALIDATION", str(e)) from e
-        said = ", ".join(f"{spoken_time(a.time)} {cs.doctor_name(s, a.resource_id)}" for a in alts)
-        raise ApiError(
-            409,
-            "SLOT_TAKEN",
-            "That slot isn't free." + (f" Free nearby: {said}." if said else ""),
-            alternatives=[
-                {"doctor_id": a.resource_id, "date": a.date.isoformat(), "time": a.time}
-                for a in alts
-            ],
-        ) from e
+        raise _booking_error(e, s) from e
     return {"id": bid}
 
 
@@ -116,10 +124,7 @@ def set_status(
     try:
         bk.set_status(conn, booking_id, body.status)
     except bk.BookingError as e:
-        status, code = {"SLOT_TAKEN": (409, "SLOT_TAKEN"), "NOT_FOUND": (404, "NOT_FOUND")}.get(
-            e.code, (422, "VALIDATION")
-        )
-        raise ApiError(status, code, str(e)) from e
+        raise _booking_error(e, cs.load(conn)) from e
     return {"ok": True}
 
 

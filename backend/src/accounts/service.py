@@ -233,28 +233,38 @@ DEMO_EMAIL = "demo.clinic@example.com"
 
 def ensure_demo_login(conn: db.Conn, tenant_id: str) -> str | None:
     """Give the demo clinic an owner login, so its desk and settings sit behind a session like every
-    other business. The password comes only from DEMO_LOGIN_PASSWORD (never the repo); unset means no
-    demo login. Changing the variable changes the password on the next start. Returns the email, or
-    None when there is no demo login. `conn` is unchecked: this runs at startup, before any request.
+    other business. The password comes only from DEMO_LOGIN_PASSWORD (never the repo). Runs at every
+    start, so the variable is the truth:
+
+    - unset (or too short): no demo login; any earlier one and its sessions are removed;
+    - a new DEMO_LOGIN_EMAIL: the old demo login is removed;
+    - a new password: the hash is replaced and the old sessions end.
+
+    Returns the email, or None when there is no demo login. `conn` is unchecked: startup, before any
+    request.
     """
     password = env("DEMO_LOGIN_PASSWORD")
-    if not password:
-        return None
-    if len(password) < MIN_PASSWORD:
+    email = normalize_email(env("DEMO_LOGIN_EMAIL") or DEMO_EMAIL)
+    usable = len(password) >= MIN_PASSWORD
+    if password and not usable:
         log.warning(
             "accounts: DEMO_LOGIN_PASSWORD is under %s characters; no demo login", MIN_PASSWORD
         )
+    _remove_demo_logins(conn, tenant_id, keep=email if usable else None)
+    if not usable:
         return None
-    email = normalize_email(env("DEMO_LOGIN_EMAIL") or DEMO_EMAIL)
-    row = conn.execute(
-        "SELECT id, tenant_id, password_hash FROM users WHERE email = ?", (email,)
-    ).fetchone()
+    row = _user_by_email(conn, email)
     if row is None:
-        create_user(conn, tenant_id, "Demo owner", email, password)
-    elif row["tenant_id"] != tenant_id:
+        try:
+            create_user(conn, tenant_id, "Demo owner", email, password)
+        except EmailTaken:  # another worker starting at the same moment created it first
+            row = _user_by_email(conn, email)
+    if row is None:
+        return email
+    if row["tenant_id"] != tenant_id:
         log.warning("accounts: DEMO_LOGIN_EMAIL belongs to another business; no demo login")
         return None
-    elif not verify_password(password, row["password_hash"]):
+    if not verify_password(password, row["password_hash"]):
         with conn:
             conn.execute(
                 "UPDATE users SET password_hash = ?, failed_logins = 0, locked_until = NULL"
@@ -265,3 +275,25 @@ def ensure_demo_login(conn: db.Conn, tenant_id: str) -> str | None:
                 "DELETE FROM sessions WHERE user_id = ? AND tenant_id = ?", (row["id"], tenant_id)
             )
     return email
+
+
+def _user_by_email(conn: db.Conn, email: str) -> db.Row | None:
+    return conn.execute(
+        "SELECT id, tenant_id, password_hash FROM users WHERE email = ?", (email,)
+    ).fetchone()
+
+
+def _remove_demo_logins(conn: db.Conn, tenant_id: str, keep: str | None) -> None:
+    """Delete the demo clinic's logins (and their sessions) other than `keep`. Only the demo clinic's
+    tenant id is ever passed here: no real owner belongs to it."""
+    rows = conn.execute("SELECT id, email FROM users WHERE tenant_id = ?", (tenant_id,)).fetchall()
+    gone = [r["id"] for r in rows if r["email"] != keep]
+    if not gone:
+        return
+    with conn:
+        for uid in gone:
+            conn.execute(
+                "DELETE FROM sessions WHERE user_id = ? AND tenant_id = ?", (uid, tenant_id)
+            )
+            conn.execute("DELETE FROM users WHERE id = ? AND tenant_id = ?", (uid, tenant_id))
+    log.info("accounts: removed %s old demo login(s)", len(gone))

@@ -1,5 +1,6 @@
 """Loads verticals/clinic/ config. Only loads and shapes; no behaviour."""
 
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -123,9 +124,21 @@ def template_dir(template: str) -> Path:
     return VERTICALS_DIR / template
 
 
+@lru_cache(maxsize=32)
+def _checked(template: str) -> dict:
+    """validate() once per template per process: vertical.yaml only changes with a deploy, and the
+    desk polls routes that need it every few seconds."""
+    return validate(template_dir(template))
+
+
 def tool_names(template: str) -> set[str]:
     """The tools a template's agent may call (vertical.yaml `tools`). Raises ValueError if invalid."""
-    return set(validate(template_dir(template))["tools"])
+    return set(_checked(template)["tools"])
+
+
+def modules(template: str) -> list[str]:
+    """The desk modules a template uses (vertical.yaml `modules`): bookings, orders."""
+    return list(_checked(template)["modules"])
 
 
 def template_defaults(template: str) -> dict:

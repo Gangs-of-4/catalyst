@@ -92,8 +92,7 @@ def get_user_conn(session: accounts.Session = Depends(current_session)) -> Itera
 
 def modules(conn: db.Conn) -> list[str]:
     """The business's desk modules from its template (vertical.yaml `modules`): bookings, orders."""
-    t = tenancy.get(conn, conn.tid)
-    return loader.validate(loader.template_dir(t["template"]))["modules"]
+    return loader.modules(tenancy.get(conn, conn.tid)["template"])
 
 
 def require_bookings(conn: db.Conn = Depends(get_user_conn)) -> db.Conn:

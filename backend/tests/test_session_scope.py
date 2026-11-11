@@ -175,3 +175,80 @@ def test_demo_email_taken_by_another_business_is_left_alone(isolated, monkeypatc
         assert login(c, DEMO_PASSWORD).status_code == 401  # that owner's password is unchanged
         assert login(c, "another pass").status_code == 200
         assert c.get("/api/me").json()["business"]["name"] == "Second Business 1"
+
+
+def test_unsetting_the_demo_password_removes_the_demo_login(isolated, monkeypatch):
+    monkeypatch.setenv("DEMO_LOGIN_PASSWORD", DEMO_PASSWORD)
+    with TestClient(app, headers=APP_HEADERS) as c:
+        assert login(c, DEMO_PASSWORD).status_code == 200
+        old_cookie = c.cookies.get(accounts.COOKIE)
+    monkeypatch.delenv("DEMO_LOGIN_PASSWORD")
+    with TestClient(app, headers=APP_HEADERS) as c:
+        assert login(c, DEMO_PASSWORD).status_code == 401
+        c.cookies.set(accounts.COOKIE, old_cookie)
+        assert c.get("/api/me").status_code == 401  # its sessions are gone too
+
+
+def test_changing_the_demo_email_retires_the_old_login(isolated, monkeypatch):
+    monkeypatch.setenv("DEMO_LOGIN_PASSWORD", DEMO_PASSWORD)
+    with TestClient(app, headers=APP_HEADERS):
+        pass
+    monkeypatch.setenv("DEMO_LOGIN_EMAIL", "Front.Desk@Example.com")
+    with TestClient(app, headers=APP_HEADERS) as c:
+        assert login(c, DEMO_PASSWORD).status_code == 401  # the old email
+        r = c.post(
+            "/api/login", json={"email": "front.desk@example.com", "password": DEMO_PASSWORD}
+        )
+        assert r.status_code == 200
+
+
+def test_demo_login_survives_another_worker_creating_it_first(isolated, monkeypatch):
+    """Two workers starting on a fresh database: the loser's insert hits EmailTaken."""
+    monkeypatch.setenv("DEMO_LOGIN_PASSWORD", DEMO_PASSWORD)
+    with TestClient(app):
+        pass  # the first worker created the login
+    real = accounts.service._user_by_email
+    calls = []
+
+    def stale_first(conn, email):  # this worker's first look happened before the other's insert
+        calls.append(email)
+        return None if len(calls) == 1 else real(conn, email)
+
+    monkeypatch.setattr(accounts.service, "_user_by_email", stale_first)
+    conn = db.connect_unchecked()
+    try:
+        assert accounts.ensure_demo_login(conn, demo_id()) == accounts.DEMO_EMAIL
+    finally:
+        conn.close()
+
+
+def test_booking_errors_suggest_free_times(owner):
+    """Not only a taken slot: a time that isn't a slot start also gets nearby free times."""
+    r = owner.post(
+        "/api/desk/bookings",
+        json={"doctor_id": "dr-b", "date": "2026-10-28", "time": "12:07", "name": "Walk In"},
+    )
+    body = r.json()
+    assert r.status_code == 422 and body["code"] == "VALIDATION"
+    assert "Free nearby" in body["detail"] and body["alternatives"]
+    r = owner.post(
+        "/api/desk/bookings",
+        json={"doctor_id": "nobody", "date": "2026-10-28", "time": "12:00", "name": "Walk In"},
+    )
+    assert r.status_code == 422 and r.json()["detail"] == "Unknown doctor."
+
+
+def test_settings_page_says_a_save_will_create_the_agent(isolated, monkeypatch):
+    """A new business whose assistant creation failed at signup: with Vapi set up, a save creates
+    one, so the page must not say the agent isn't configured. A template with no voice agent yet
+    says it isn't."""
+    isolated.write_text(
+        "PUBLIC_URL=https://api.example.com\nVAPI_PRIVATE_KEY=k\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(  # Vapi is down during signup
+        httpx, "request", lambda m, u, **k: httpx.Response(500, request=httpx.Request(m, u))
+    )
+    for template, n, expected in (("clinic", 3, True), ("wholesale", 4, False)):
+        with TestClient(app, headers=APP_HEADERS) as c:
+            assert c.post("/api/signup", json=signup_body(template, n)).status_code == 200
+            assert c.get("/api/settings").json()["agentConfigured"] is expected
