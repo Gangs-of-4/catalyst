@@ -22,6 +22,8 @@ type CallPanelProps = {
   problem: CallProblem | null;
   onStart: () => void;
   onStop: () => void;
+  /** Cancel a call that is still checking or connecting. */
+  onCancel: () => void;
 };
 
 /**
@@ -39,8 +41,11 @@ export function CallPanel({
   problem,
   onStart,
   onStop,
+  onCancel,
 }: CallPanelProps) {
-  const busy = state === "checking" || state === "connecting" || state === "ending";
+  // While it's checking or connecting the button cancels, so a stuck "Connecting…" is never a dead end.
+  const starting = state === "checking" || state === "connecting";
+  const busy = starting || state === "ending";
   const inCall = state === "live" || state === "ending";
   const status =
     state === "checking" || state === "connecting"
@@ -57,9 +62,9 @@ export function CallPanel({
     <div className="flex flex-col items-center gap-4 text-center">
       <button
         type="button"
-        onClick={inCall ? onStop : onStart}
-        disabled={busy}
-        aria-label={inCall ? "End the call" : "Talk to your front desk"}
+        onClick={starting ? onCancel : inCall ? onStop : onStart}
+        disabled={state === "ending"}
+        aria-label={starting ? "Cancel the call" : inCall ? "End the call" : "Talk to your front desk"}
         className={cn(
           "relative flex size-24 items-center justify-center rounded-full text-primary-foreground transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring disabled:cursor-wait sm:size-28",
           inCall ? "bg-destructive hover:bg-destructive/90" : "bg-primary hover:bg-primary/90",
@@ -75,7 +80,7 @@ export function CallPanel({
         )}
       </button>
 
-      <p className="text-lg font-semibold">{inCall ? "End the call" : "Talk to your front desk"}</p>
+      <p className="text-lg font-semibold">{starting ? "Cancel" : inCall ? "End the call" : "Talk to your front desk"}</p>
 
       <div className="flex flex-col items-center gap-2" aria-hidden>
         <span className={cn("font-mono text-sm tabular-nums", inCall ? "text-foreground" : "text-muted-foreground")}>

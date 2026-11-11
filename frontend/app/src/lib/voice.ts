@@ -47,9 +47,27 @@ function errorText(e: unknown): string {
   return String(any?.errorMsg || any?.message || any?.error?.message || "The call couldn't connect.");
 }
 
-/** Start the web call. Call `requestMicrophone()` first. */
-export async function startCall(publicKey: string, assistantId: string, events: CallEvents): Promise<VoiceCall> {
+/** Thrown when a pending start is cancelled (the page closed, or the owner pressed Cancel). */
+export class CallCancelled extends Error {
+  constructor() {
+    super("The call was cancelled.");
+    this.name = "CallCancelled";
+  }
+}
+
+/**
+ * Start the web call. Call `requestMicrophone()` first. Aborting `signal` cancels a pending start
+ * and hangs up a call that connects afterwards, so closing the page mid-connect never leaves a call
+ * running in the background with the microphone on (review on #25).
+ */
+export async function startCall(
+  publicKey: string,
+  assistantId: string,
+  events: CallEvents,
+  signal?: AbortSignal,
+): Promise<VoiceCall> {
   const { default: Vapi } = await import("@vapi-ai/web");
+  if (signal?.aborted) throw new CallCancelled();
   const vapi = new Vapi(publicKey);
   vapi.on("call-start", events.onLive);
   vapi.on("call-end", events.onEnded);
@@ -62,6 +80,17 @@ export async function startCall(publicKey: string, assistantId: string, events: 
     }
   });
   vapi.on("error", (e: unknown) => events.onError(errorText(e)));
-  await vapi.start(assistantId);
-  return { stop: () => void vapi.stop() };
+  const stop = () => void vapi.stop();
+  signal?.addEventListener("abort", stop, { once: true });
+  try {
+    await vapi.start(assistantId);
+  } catch (err) {
+    signal?.removeEventListener("abort", stop);
+    throw signal?.aborted ? new CallCancelled() : err;
+  }
+  if (signal?.aborted) {
+    stop(); // connected after the page asked to cancel: hang up at once
+    throw new CallCancelled();
+  }
+  return { stop };
 }

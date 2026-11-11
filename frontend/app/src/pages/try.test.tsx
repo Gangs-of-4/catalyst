@@ -140,7 +140,9 @@ describe("<TryPage>", () => {
     await screen.findByText("Ramesh G.");
 
     fireEvent.click(screen.getByRole("button", { name: "Talk to your front desk" }));
-    await waitFor(() => expect(startCallMock).toHaveBeenCalledWith("pk_test", "asst_test", expect.any(Object)));
+    await waitFor(() =>
+      expect(startCallMock).toHaveBeenCalledWith("pk_test", "asst_test", expect.any(Object), expect.any(AbortSignal)),
+    );
     const [, init] = fetchMock.mock.calls.find(([url, i]) => url === "/api/try/abc123/start" && i?.method === "POST")!;
     expect(init?.headers).toMatchObject({ "X-Requested-With": "catalyst" });
 
@@ -187,11 +189,53 @@ describe("<TryPage>", () => {
     expect(startCallMock).not.toHaveBeenCalled();
   });
 
+  it("hangs up a call that connects after the page was closed (no call left running)", async () => {
+    let resolveStart: (call: { stop: () => void }) => void = () => {};
+    let signal: AbortSignal | undefined;
+    startCallMock.mockImplementation((_k: string, _a: string, _ev: CallEvents, sig?: AbortSignal) => {
+      signal = sig;
+      return new Promise((r) => (resolveStart = r));
+    });
+    mockApi({
+      "GET /api/try/abc123": () => json(200, INFO),
+      "GET /api/try/abc123/board": () => json(200, bookings()),
+      "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
+    });
+    const { unmount } = renderAt("/b/abc123/try");
+    fireEvent.click(await screen.findByRole("button", { name: "Talk to your front desk" }));
+    await waitFor(() => expect(startCallMock).toHaveBeenCalled());
+
+    unmount(); // the owner leaves while it's still connecting
+    expect(signal?.aborted).toBe(true);
+    const stop = vi.fn();
+    await act(async () => resolveStart({ stop })); // ...and the call connects anyway
+    expect(stop).toHaveBeenCalled();
+  });
+
+  it("lets the owner cancel while it's connecting", async () => {
+    let signal: AbortSignal | undefined;
+    startCallMock.mockImplementation((_k: string, _a: string, _ev: CallEvents, sig?: AbortSignal) => {
+      signal = sig;
+      return new Promise(() => {}); // never connects
+    });
+    mockApi({
+      "GET /api/try/abc123": () => json(200, INFO),
+      "GET /api/try/abc123/board": () => json(200, bookings()),
+      "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
+    });
+    renderAt("/b/abc123/try");
+    fireEvent.click(await screen.findByRole("button", { name: "Talk to your front desk" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel the call" }));
+    expect(signal?.aborted).toBe(true);
+    expect(await screen.findByRole("button", { name: "Talk to your front desk" })).toBeTruthy();
+  });
+
   it("shows an orders board for an orders template", async () => {
     const orders: OrdersBoard = {
       kind: "orders",
       orders: [
         { id: 3, number: "A-102", shop: "Ramesh G.", items: 3, total: "₹2,400", status: "new", source: "phone", created_at: "2026-11-11T10:30:00+05:30" },
+        { id: 2, number: "42", shop: "Gupta S.", items: 1, total: "₹650", status: "confirmed", source: "whatsapp", created_at: "2026-11-11T09:30:00+05:30" },
       ],
     };
     mockApi({
@@ -202,6 +246,7 @@ describe("<TryPage>", () => {
     expect(await screen.findByText("Today's orders")).toBeTruthy();
     expect(await screen.findByText("A-102 · Ramesh G.")).toBeTruthy();
     expect(screen.getByText("3 items · ₹2,400")).toBeTruthy();
+    expect(screen.getByText("#42 · Gupta S.")).toBeTruthy(); // a bare number reads as "#42"
   });
 });
 
