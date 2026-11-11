@@ -6,6 +6,10 @@
   "cleanUrls": true,
   "git": { "deploymentEnabled": false },
   "rewrites": [
+    { "source": "/b/:publicId/try", "destination": "/app" },
+    { "source": "/demo/:template", "destination": "/app" },
+    { "source": "/home", "destination": "/app" },
+    { "source": "/login", "destination": "/app" },
     { "source": "/signup", "destination": "/app" },
     { "source": "/styleguide", "destination": "/app" }
   ]

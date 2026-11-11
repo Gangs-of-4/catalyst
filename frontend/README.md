@@ -51,6 +51,10 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 
 | Route | File | What |
 |---|---|---|
+| `/b/:publicId/try` | `src/pages/try.tsx`, `src/features/try/` | Public test page for one business: talk to its front desk (Vapi web call, after the `POST /api/try/{id}/start` cap check) and watch its register or order board update. Covers voice-not-switched-on, minutes-used-up and microphone-blocked states. Endpoint shapes: issue #24 |
+| `/demo/:template` | `src/pages/try.tsx` | Opens the demo business's test page (`/b/demo-<template>/try`) |
+| `/login` | `src/pages/login.tsx` | Owner login (`POST /api/login`). Already logged in → straight on. Honors a same-app `?next=` path |
+| `/home` | `src/pages/home.tsx` | The owner's signed-in home (`GET /api/me`), with Log out. Logged-out visitors go to `/login?next=/home`. Later tasks add the desk, settings and test page here |
 | `/signup` | `src/pages/signup.tsx`, `src/features/signup/` | Self-serve onboarding: account + business in one step (`GET /api/templates`, `POST /api/signup`). The template section is picked by the template's `modules`. A success screen shows the voice agent's state. |
 | `/styleguide` | `src/pages/styleguide.tsx` | Every token and component, for review |
 
@@ -61,14 +65,16 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 2. Add a rewrite for its path to `/app` in `frontend/vercel.json`. Use `/app`, not `/app.html`: with `cleanUrls` on, Vercel serves the shell at `/app`, and a rewrite to `/app.html` returns 404.
 3. Delete the old static page in the same PR, if there is one.
 
-**Deploy:** `build.mjs` builds the app, puts its shell at `dist/app.html` and its files in `dist/assets/`, then copies the old pages as before. `vercel.json` rewrites React routes (now: `/signup`, `/styleguide`) to `/app`, where Vercel serves `dist/app.html` because `cleanUrls` is on.
+**Deploy:** `build.mjs` builds the app, puts its shell at `dist/app.html` and its files in `dist/assets/`, then copies the old pages as before. `vercel.json` rewrites React routes (now: `/b/:publicId/try`, `/demo/:template`, `/home`, `/login`, `/signup`, `/styleguide`) to `/app`, where Vercel serves `dist/app.html` because `cleanUrls` is on.
 
 **Rules:** see `context/coding-rules.md` (Frontend).
 - Never put patient or customer data in browser storage.
 - Never call the backend by absolute URL.
 - Never log personal data (ESLint blocks `console.log`).
 
-## Vapi Web SDK bundle
+## Vapi Web SDK bundle (old pages only)
+
+> The React app uses `@vapi-ai/web` 2.7.1 from npm instead, behind `app/src/lib/voice.ts`, and loads it only when a call starts. This committed bundle stays only for the old static try page at `/` until that page is removed.
 
 `static/vapi.bundle.js` is `@vapi-ai/web` **2.7.1** (MIT; it bundles `@daily-co/daily-js`, BSD-2-Clause), built once as an IIFE that sets `window.Vapi`. It is committed so nobody needs Node to run the demo. To rebuild it (Node LTS needed), in an empty folder outside the repo:
 
@@ -85,9 +91,15 @@ Then copy `vapi.bundle.js` into `frontend/static/`. Don't move to 3.x without te
 
 Production deploys come only from GitHub Actions (`.github/workflows/deploy-frontend.yml`); Vercel's Git integration is off (`vercel.json`). The workflow runs `vercel pull`, `vercel build --prod` and `vercel deploy --prebuilt --prod`. Because the repo is public, Vercel Hobby deploys a merge by any teammate (its commit-author check applies only to private org repos). **Keep the repo public**; see ADR-0036. GitHub records the deployed SHA under the `production` environment.
 
-- `vercel.json` runs `node build.mjs`, which copies the pages and `static/` into `dist/` and writes `dist/static/config.js` from `NEXT_PUBLIC_API_URL`.
-- `NEXT_PUBLIC_API_URL` is the backend's public HTTPS URL, set in the Vercel project's **Production** environment variables. Empty = same-origin `/api` (local FastAPI behaviour). The backend must list the Vercel domain in `CORS_ALLOWED_ORIGINS`.
-- Vercel only serves files. *ADR-0041 (Proposed) would add one `/api` rewrite to the backend for first-party cookies; no functions or middleware.*
-- `/desk` and `/setup` use the session cookie, which reaches the backend first-party through the `/api` rewrite (ADR-0041).
+- **Backend rewrites (ADR-0041).** `vercel.json` can't read environment variables, so between `vercel pull` and `vercel build` the workflow runs `node frontend/configure-vercel.mjs`.
+  - It reads `NEXT_PUBLIC_API_URL` from the pulled `.vercel/.env.production.local` and adds rewrites of `/api/*` and `/healthz` to that backend.
+  - The browser then talks to one origin, so the HttpOnly session cookie is first-party and no CORS is needed.
+  - Webhooks (Vapi, Twilio) still call the backend directly. There are no Vercel functions or middleware: the rewrite only forwards.
+- `NEXT_PUBLIC_API_URL` is the backend's public **https origin with no path** (e.g. `https://<backend>.onrender.com`), set in the Vercel project's **Production** environment variables.
+  - Empty means no backend rewrites, so the deployed pages show the backend as unreachable.
+  - The script refuses anything that isn't an https origin.
+- `vercel.json` runs `node build.mjs`, which builds the app and copies the old pages. The old pages' `config.js` now always says "call `/api` on this origin", because the rewrite covers them too.
+- **VERIFY on the first deploy with a backend:** Vercel's docs don't state that external rewrites pass `Set-Cookie` through, or their timeout. Check that login keeps you logged in, and how a Render cold start behaves.
+- `/desk` and `/setup` (old pages) use the session cookie, which reaches the backend first-party through the `/api` rewrite (ADR-0041). Basic auth is gone (#28).
 
 One-time setup: Vercel project with Root Directory `frontend` and no Git connection; repo secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.

@@ -1,4 +1,5 @@
 import { AlertCircle, CheckCircle2, Clock } from "lucide-react";
+import { Link } from "react-router";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import type { AgentState, Template } from "./model";
 
 type SuccessProps = {
   businessName: string;
+  publicId: string;
   template: Template;
   agent: AgentState;
 };
@@ -32,9 +34,9 @@ const AGENT: Record<AgentState, { badge: "success" | "neutral" | "destructive"; 
 
 /**
  * Shown after a successful signup. The owner is already logged in (the session cookie is set).
- * When the test page exists (a later M8 task), signup sends the owner there instead.
+ * Offers the test page (talk to the agent) and the home page.
  */
-export function SignupSuccess({ businessName, template, agent }: SuccessProps) {
+export function SignupSuccess({ businessName, publicId, template, agent }: SuccessProps) {
   const a = AGENT[agent];
   const Icon = agent === "updated" ? CheckCircle2 : agent === "failed" ? AlertCircle : Clock;
   return (
@@ -56,9 +58,12 @@ export function SignupSuccess({ businessName, template, agent }: SuccessProps) {
         </Badge>
         <p className="text-body">{a.text}</p>
       </CardContent>
-      <CardFooter>
+      <CardFooter className="flex-wrap">
+        <Button asChild>
+          <Link to={`/b/${encodeURIComponent(publicId)}/try`}>Talk to your front desk</Link>
+        </Button>
         <Button asChild variant="outline">
-          <a href="/">Back to the home page</a>
+          <Link to="/home">Go to your home page</Link>
         </Button>
       </CardFooter>
     </Card>
