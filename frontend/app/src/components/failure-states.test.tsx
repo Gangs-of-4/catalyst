@@ -59,6 +59,13 @@ describe("<WakeGate>", () => {
     expect(screen.queryByText("Waking up your front desk…")).toBeNull();
   });
 
+  it("says the site isn't connected at once when /healthz is a 404 (no rewrite to a backend)", async () => {
+    stubHealth(() => new Response("Not found", { status: 404 }));
+    renderGate();
+    expect(await screen.findByText("This site isn't connected to a server yet")).toBeTruthy();
+    expect(screen.queryByText("Waking up your front desk…")).toBeNull();
+  });
+
   it("shows the waking screen while the backend wakes, then the page", async () => {
     vi.useFakeTimers();
     stubHealth(down, down, ok);

@@ -246,7 +246,9 @@ describe("<TryPage>", () => {
       "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
     });
     renderAt("/b/abc123/try");
-    fireEvent.click(await screen.findByRole("button", { name: "Talk to your front desk" }));
+    await screen.findByRole("button", { name: "Talk to your front desk" });
+    resetHealth(); // the page has been open a while and the backend has gone back to sleep
+    fireEvent.click(screen.getByRole("button", { name: "Talk to your front desk" }));
     expect(await screen.findByText(/Waking up the desk/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Cancel the call" }));
     expect(await screen.findByRole("button", { name: "Talk to your front desk" })).toBeTruthy();
@@ -262,12 +264,29 @@ describe("<TryPage>", () => {
       "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
     });
     const { unmount } = renderAt("/b/abc123/try");
-    fireEvent.click(await screen.findByRole("button", { name: "Talk to your front desk" }));
+    await screen.findByRole("button", { name: "Talk to your front desk" });
+    resetHealth(); // the page has been open a while and the backend has gone back to sleep
+    fireEvent.click(screen.getByRole("button", { name: "Talk to your front desk" }));
     expect(await screen.findByText(/Waking up the desk/)).toBeTruthy();
     unmount();
     await new Promise((r) => setTimeout(r, 50));
     expect(fetchMock.mock.calls.some(([url]) => url === "/api/try/abc123/start")).toBe(false);
     expect(startCallMock).not.toHaveBeenCalled();
+  });
+
+  it("says calls can't start when nothing forwards to a backend (/healthz 404)", async () => {
+    const fetchMock = mockApi({
+      "GET /api/try/abc123": () => json(200, INFO),
+      "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => new Response("Not found", { status: 404 }),
+      "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
+    });
+    renderAt("/b/abc123/try");
+    await screen.findByRole("button", { name: "Talk to your front desk" });
+    resetHealth(); // the page has been open a while and the backend has gone back to sleep
+    fireEvent.click(screen.getByRole("button", { name: "Talk to your front desk" }));
+    expect(await screen.findByText(/isn't connected to a server yet/)).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/try/abc123/start")).toBe(false);
   });
 
   it("shows an orders board for an orders template", async () => {

@@ -74,9 +74,14 @@ export function useCall(info: TryInfo | null, onCallEnded: () => void) {
     // Wake the backend before the call if it hasn't answered lately (phase2-plan §5, cold starts).
     if (!recentlyHealthy()) {
       setState("waking");
-      const awake = await waitForBackend({ signal: ctrl.signal });
+      const backend = await waitForBackend({ signal: ctrl.signal });
       if (cancelled()) return;
-      if (!awake) {
+      if (backend === "none") {
+        setState("idle");
+        setProblem({ kind: "other", message: "This site isn't connected to a server yet, so calls can't start here." });
+        return;
+      }
+      if (backend !== "up") {
         setState("idle");
         setProblem({ kind: "other", message: "Catalyst isn't responding right now. Please try again in a minute." });
         return;

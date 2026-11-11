@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { recentlyHealthy, waitForBackend } from "@/lib/health";
 
-type GateState = "checking" | "waking" | "ready" | "down";
+type GateState = "checking" | "waking" | "ready" | "down" | "none";
 
 type WakeGateProps = {
   children: React.ReactNode;
@@ -93,13 +93,14 @@ function Gate({ children, budgetMs, wakingAfterMs }: WakeGateProps) {
       budgetMs,
       wakingAfterMs,
       onWaking: () => setState((s) => (s === "checking" ? "waking" : s)),
-    }).then((ok) => {
-      if (!ctrl.signal.aborted) setState(ok ? "ready" : "down");
+    }).then((backend) => {
+      if (!ctrl.signal.aborted) setState(backend === "up" ? "ready" : backend);
     });
     return () => ctrl.abort();
   }, [attempt, budgetMs, wakingAfterMs]);
 
   if (state === "ready") return <>{children}</>;
+  if (state === "none") return <NotConnected />; // /healthz is a 404: nothing to wait for
   return (
     <>
       <AppHeader />
