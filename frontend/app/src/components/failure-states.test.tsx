@@ -41,6 +41,17 @@ afterEach(() => {
 });
 
 describe("<WakeGate>", () => {
+  it("says the site isn't connected yet, at once, when the deploy has no backend", () => {
+    vi.stubEnv("VITE_BACKEND_CONFIGURED", "0");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderGate();
+    expect(screen.getByText("This site isn't connected to a server yet")).toBeTruthy();
+    expect(screen.queryByText("The page")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled(); // no 90 s of pointless /healthz pings
+    vi.unstubAllEnvs();
+  });
+
   it("shows the page straight away when the backend answers", async () => {
     stubHealth(ok);
     renderGate();

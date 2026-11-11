@@ -254,6 +254,22 @@ describe("<TryPage>", () => {
     expect(startCallMock).not.toHaveBeenCalled();
   });
 
+  it("never reaches /start if the page closes while the backend is waking up", async () => {
+    const fetchMock = mockApi({
+      "GET /api/try/abc123": () => json(200, INFO),
+      "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => json(502, { detail: "waking", code: "INTERNAL" }),
+      "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
+    });
+    const { unmount } = renderAt("/b/abc123/try");
+    fireEvent.click(await screen.findByRole("button", { name: "Talk to your front desk" }));
+    expect(await screen.findByText(/Waking up the desk/)).toBeTruthy();
+    unmount();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/try/abc123/start")).toBe(false);
+    expect(startCallMock).not.toHaveBeenCalled();
+  });
+
   it("shows an orders board for an orders template", async () => {
     const orders: OrdersBoard = {
       kind: "orders",
