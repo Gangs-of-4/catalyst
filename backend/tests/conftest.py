@@ -2,10 +2,12 @@ import os
 from datetime import datetime
 
 import pytest
+from fastapi.testclient import TestClient
 
-from src import seed
+from src import accounts, seed
 from src.core import config, db
 from src.core import settings as cs
+from src.main import app
 
 # Tuesday 27 Oct 2026, 09:00 IST: before clinic hours, so all of today's slots are open.
 FIXED_NOW = datetime(2026, 10, 27, 9, 0, tzinfo=config.IST)
@@ -47,7 +49,8 @@ def isolated(tmp_path, monkeypatch):
         monkeypatch.delenv("DATABASE_URL", raising=False)
     for name in (
         "CATALYST_TOOL_SECRET",
-        "DESK_PASSWORD",
+        "DEMO_LOGIN_PASSWORD",
+        "DEMO_LOGIN_EMAIL",
         "TWILIO_ACCOUNT_SID",
         "TWILIO_AUTH_TOKEN",
         "GROQ_API_KEY",
@@ -81,3 +84,18 @@ def raw():
 @pytest.fixture
 def settings(conn):
     return cs.load(conn)
+
+
+DEMO_PASSWORD = "demo-pass-123"
+APP_HEADERS = {"X-Requested-With": "catalyst"}
+
+
+@pytest.fixture
+def owner(isolated, monkeypatch):
+    """A client logged in as the demo clinic's owner (DEMO_LOGIN_PASSWORD), sending the app's
+    CSRF header like the pages do."""
+    monkeypatch.setenv("DEMO_LOGIN_PASSWORD", DEMO_PASSWORD)
+    with TestClient(app, headers=APP_HEADERS) as c:
+        r = c.post("/api/login", json={"email": accounts.DEMO_EMAIL, "password": DEMO_PASSWORD})
+        assert r.status_code == 200, r.text
+        yield c

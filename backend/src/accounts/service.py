@@ -226,3 +226,42 @@ def touch(conn: db.Conn, user_id: str) -> None:
             "UPDATE users SET last_active_at = ? WHERE id = ? AND tenant_id = ?",
             (db.stamp(), user_id, conn.tid),
         )
+
+
+DEMO_EMAIL = "demo.clinic@example.com"
+
+
+def ensure_demo_login(conn: db.Conn, tenant_id: str) -> str | None:
+    """Give the demo clinic an owner login, so its desk and settings sit behind a session like every
+    other business. The password comes only from DEMO_LOGIN_PASSWORD (never the repo); unset means no
+    demo login. Changing the variable changes the password on the next start. Returns the email, or
+    None when there is no demo login. `conn` is unchecked: this runs at startup, before any request.
+    """
+    password = env("DEMO_LOGIN_PASSWORD")
+    if not password:
+        return None
+    if len(password) < MIN_PASSWORD:
+        log.warning(
+            "accounts: DEMO_LOGIN_PASSWORD is under %s characters; no demo login", MIN_PASSWORD
+        )
+        return None
+    email = normalize_email(env("DEMO_LOGIN_EMAIL") or DEMO_EMAIL)
+    row = conn.execute(
+        "SELECT id, tenant_id, password_hash FROM users WHERE email = ?", (email,)
+    ).fetchone()
+    if row is None:
+        create_user(conn, tenant_id, "Demo owner", email, password)
+    elif row["tenant_id"] != tenant_id:
+        log.warning("accounts: DEMO_LOGIN_EMAIL belongs to another business; no demo login")
+        return None
+    elif not verify_password(password, row["password_hash"]):
+        with conn:
+            conn.execute(
+                "UPDATE users SET password_hash = ?, failed_logins = 0, locked_until = NULL"
+                " WHERE id = ?",
+                (hash_password(password), row["id"]),
+            )
+            conn.execute(  # the old password's sessions end with it
+                "DELETE FROM sessions WHERE user_id = ? AND tenant_id = ?", (row["id"], tenant_id)
+            )
+    return email
