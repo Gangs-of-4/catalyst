@@ -113,8 +113,15 @@ export function SignupPage() {
   }, []);
 
   async function onLogout() {
-    await logout().catch(() => {});
+    try {
+      await logout();
+    } catch {
+      // Still logged in: keep the note and say so, rather than pretend (review on #31).
+      toast.error("Couldn't log out just now. Please try again.");
+      return;
+    }
     setMe(null);
+    setFormError(null);
     toast.success("Logged out. You can set up another business now.");
   }
 
@@ -859,6 +866,19 @@ export function SignupPage() {
                       <Link to="/home" className="font-semibold underline underline-offset-2">
                         Go to your home page
                       </Link>
+                    </>
+                  ) : me ? (
+                    // Taken by a different account while logged in: /login would just bounce home.
+                    <>
+                      {" "}
+                      You&apos;re logged in as {me.user.email}.{" "}
+                      <button
+                        type="button"
+                        onClick={() => void onLogout()}
+                        className="font-semibold underline underline-offset-2"
+                      >
+                        Log out to set up another
+                      </button>
                     </>
                   ) : (
                     <>

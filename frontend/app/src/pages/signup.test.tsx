@@ -260,4 +260,39 @@ describe("<SignupPage>", () => {
     await screen.findByRole("radio", { name: /Clinic/ });
     expect(screen.queryByText(/still loading/)).toBeNull();
   });
+
+  it("keeps the logged-in note when logging out fails", async () => {
+    mockApi({
+      "/api/templates": templates,
+      "/api/me": () => json(200, ME),
+      "/api/logout": () => json(500, { detail: "Something went wrong.", code: "INTERNAL" }),
+    });
+    renderPage();
+    expect(await screen.findByText("owner@example.com")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Log out to set up another" }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByText("owner@example.com")).toBeTruthy(); // still logged in, so still shown
+  });
+
+  it("points to logging out when the taken email is a different account", async () => {
+    mockApi({
+      "/api/templates": templates,
+      "/api/me": () => json(200, { ...ME, user: { ...ME.user, email: "someone-else@example.com" } }),
+      "/api/signup": () =>
+        json(409, {
+          detail: "That email already has an account. Log in instead.",
+          code: "EMAIL_TAKEN",
+          fields: { "user.email": "That email already has an account." },
+        }),
+    });
+    renderPage();
+    await screen.findByLabelText("Your name");
+    fillValidClinic();
+    submit();
+    const banner = await waitFor(() =>
+      screen.getAllByRole("alert").find((el) => el.textContent?.includes("You're logged in as"))!,
+    );
+    expect(within(banner).getByRole("button", { name: "Log out to set up another" })).toBeTruthy();
+    expect(within(banner).queryByRole("link", { name: "Go to login" })).toBeNull();
+  });
 });
