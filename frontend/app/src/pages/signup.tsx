@@ -1,4 +1,4 @@
-import { AlertCircle, Loader2, Plus, RotateCw, X } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Loader2, Plus, RotateCw, X } from "lucide-react";
 import * as React from "react";
 import { useSearchParams } from "react-router";
 
@@ -16,7 +16,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CONSENT_TEXT } from "@/features/signup/consent";
 import { HoursEditor } from "@/features/signup/hours-editor";
 import {
+  errorsForStep,
   type FieldErrors,
+  firstErrorStep,
   hasModule,
   initialForm,
   MAX_DOCTORS,
@@ -25,6 +27,8 @@ import {
   SLOT_CHOICES,
   type SignupForm,
   type SignupResponse,
+  type Step,
+  STEPS,
   switchTemplate,
   type Template,
   toPayload,
@@ -54,8 +58,10 @@ function Section({
   return (
     <Card aria-labelledby={id} role="group">
       <CardHeader>
-        <p className="text-[13px] font-medium text-muted-foreground">Step {step} of 3</p>
-        <CardTitle id={id}>{title}</CardTitle>
+        {/* Focused when this step opens, so screen readers announce the new screen. */}
+        <CardTitle id={id} tabIndex={-1} className="outline-none">
+          {title}
+        </CardTitle>
         {description && <CardDescription>{description}</CardDescription>}
       </CardHeader>
       <CardContent className="flex flex-col gap-5">{children}</CardContent>
@@ -81,7 +87,8 @@ function focusFirstError(form: HTMLFormElement | null) {
  * contracts.md §6 `POST /api/signup`). Three short sections, then a success screen.
  */
 export function SignupPage() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
+  const wantedTemplate = params.get("template");
   const [templates, setTemplates] = React.useState<Template[] | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = React.useState(0);
@@ -100,7 +107,9 @@ export function SignupPage() {
       .then(({ templates: list }) => {
         setTemplates(list);
         setLoadError(null);
-        const wanted = list.find((t) => t.template === params.get("template")) ?? list[0];
+        // The form has loaded, so a "still loading" / "didn't load" message from an earlier press is stale.
+        setFormError((e) => (e && (e.code === "LOADING" || e.code === "NOT_LOADED") ? null : e));
+        const wanted = list.find((t) => t.template === wantedTemplate) ?? list[0];
         if (wanted) setForm((f) => (f.business.template ? f : switchTemplate(f, wanted)));
       })
       .catch((err: unknown) => {
@@ -108,9 +117,40 @@ export function SignupPage() {
         setLoadError(err instanceof ApiError ? err.detail : "We couldn't load the signup form.");
       });
     return () => ctrl.abort();
-  }, [loadAttempt, params]);
+  }, [loadAttempt, wantedTemplate]);
 
   const template = templates?.find((t) => t.template === form.business.template);
+
+  // One step per screen. The step lives in the URL (?step=2), so the phone's back button goes to
+  // the previous step instead of leaving the page. A fresh visit to ?step=3 with nothing filled in
+  // starts at step 1.
+  const rawStep = Number(params.get("step"));
+  const step: Step = rawStep === 2 || rawStep === 3 ? (form.user.email ? rawStep : 1) : 1;
+  const pendingFocus = React.useRef<"heading" | "error" | null>(null);
+
+  const goTo = (next: Step, focus: "heading" | "error") => {
+    if (next === step) {
+      if (focus === "error") focusFirstError(formRef.current);
+      return;
+    }
+    pendingFocus.current = focus;
+    setParams((p) => {
+      const q = new URLSearchParams(p);
+      q.set("step", String(next));
+      return q;
+    });
+  };
+
+  // After a step change: land on the problem, or on the new step's heading, at the top.
+  React.useEffect(() => {
+    const focus = pendingFocus.current;
+    pendingFocus.current = null;
+    if (focus === "error") focusFirstError(formRef.current);
+    else if (focus === "heading") {
+      window.scrollTo({ top: 0 });
+      document.getElementById(`section-${step}`)?.focus({ preventScroll: true });
+    }
+  }, [step]);
   const labels = template?.labels ?? {};
   const resource = labels.resource ?? "Doctor";
   const resourcePlural = labels.resource_plural ?? "Doctors";
@@ -132,21 +172,54 @@ export function SignupPage() {
   const setBusiness = <K extends keyof SignupForm["business"]>(key: K, value: SignupForm["business"][K]) =>
     edit(`business.${key}`, (f) => ({ ...f, business: { ...f.business, [key]: value } }));
 
+  const notLoaded = () =>
+    setFormError(
+      loadError
+        ? {
+            code: "NOT_LOADED",
+            detail:
+              "The form didn't finish loading, so it can't go on yet. Press \"Try again\" under \"What kind of business is it?\".",
+          }
+        : { code: "LOADING", detail: "The form is still loading. Wait a moment, then try again." },
+    );
+
+  /** Next: check only this step's fields; go on when they're fine. */
+  function next() {
+    if (step === 2 && !templates) {
+      notLoaded();
+      document.getElementById("templates-retry")?.focus();
+      return;
+    }
+    const mine = errorsForStep(validate(form, template), step);
+    if (Object.keys(mine).length) {
+      setErrors(mine);
+      setFormError({ code: "VALIDATION", detail: "Please fix the highlighted fields." });
+      focusFirstError(formRef.current);
+      return;
+    }
+    setErrors({});
+    setFormError(null);
+    goTo((step + 1) as Step, "heading");
+  }
+
+  /** Back never checks anything, and keeps what was typed. */
+  function back() {
+    setFormError(null);
+    setErrors({});
+    goTo((step - 1) as Step, "heading");
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting) return;
+    if (step < 3) {
+      next(); // Enter on steps 1 and 2 means Next
+      return;
+    }
     // The button is never disabled without a reason; if the templates didn't load, say so here.
     if (!templates) {
-      setFormError(
-        loadError
-          ? {
-              code: "NOT_LOADED",
-              detail:
-                "The form didn't finish loading, so it can't be sent yet. Press \"Try again\" under \"What kind of business is it?\".",
-            }
-          : { code: "LOADING", detail: "The form is still loading. Wait a moment, then press the button again." },
-      );
-      document.getElementById("templates-retry")?.focus();
+      notLoaded();
+      goTo(2, "heading");
       return;
     }
     const found = validate(form, template);
@@ -155,7 +228,7 @@ export function SignupPage() {
     if (Object.keys(found).length || !template) {
       setErrors(found);
       setFormError({ code: "VALIDATION", detail: "Please fix the highlighted fields." });
-      focusFirstError(formRef.current);
+      goTo(firstErrorStep(found) ?? 3, "error");
       return;
     }
     setSubmitting(true);
@@ -174,7 +247,7 @@ export function SignupPage() {
       if (Object.keys(fields).some((k) => k.startsWith("faqs") || k === "instructions")) setOptionalOpen(true);
       setErrors(fields);
       setFormError({ code: apiErr.code, detail: apiErr.detail });
-      focusFirstError(formRef.current);
+      goTo(firstErrorStep(fields) ?? 3, "error");
     } finally {
       setSubmitting(false);
     }
@@ -206,19 +279,45 @@ export function SignupPage() {
   }
 
   const optionalErrors = Object.keys(errors).some((k) => k.startsWith("faqs") || k === "instructions");
+  const stepTitles: Record<Step, string> = {
+    1: "You",
+    2: "Your business",
+    3: template && hasModule(template, "orders") ? "Orders" : `${resourcePlural} and services`,
+  };
 
   return (
     <>
       {header}
       <main className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-10 sm:px-6 sm:py-14">
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           <h1 className="text-[28px] font-semibold leading-tight tracking-tight">Set up your front desk</h1>
-          <p className="text-body">
-            About two minutes. Your agent starts with these details, and you can change any of them later.
-          </p>
+          {step === 1 && (
+            <p className="text-body">
+              About two minutes. Your agent starts with these details, and you can change any of them later.
+            </p>
+          )}
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-medium text-muted-foreground">
+              Step <span className="tabular-nums">{step}/3</span> · {stepTitles[step]}
+            </p>
+            <div
+              role="progressbar"
+              aria-label="Signup progress"
+              aria-valuemin={1}
+              aria-valuemax={3}
+              aria-valuenow={step}
+              aria-valuetext={`Step ${step} of 3: ${stepTitles[step]}`}
+              className="grid grid-cols-3 gap-1.5"
+            >
+              {STEPS.map((n) => (
+                <span key={n} className={cn("h-1.5 rounded-full", n <= step ? "bg-primary" : "bg-muted")} />
+              ))}
+            </div>
+          </div>
         </div>
 
         <form ref={formRef} noValidate onSubmit={onSubmit} className="flex flex-col gap-6" aria-busy={submitting}>
+          {step === 1 && (
           <Section step={1} title="You" description="You'll log in with this email.">
             <Field label="Your name" error={errors["user.name"]}>
               <Input autoComplete="name" value={form.user.name} onChange={(e) => setUser("name", e.target.value)} />
@@ -240,7 +339,9 @@ export function SignupPage() {
               />
             </Field>
           </Section>
+          )}
 
+          {step === 2 && (
           <Section step={2} title="Your business" description="What callers hear when they ask where and when.">
             <Fieldset legend="What kind of business is it?" error={errors["business.template"]}>
               {templates ? (
@@ -359,7 +460,10 @@ export function SignupPage() {
               </RadioGroup>
             </Fieldset>
           </Section>
+          )}
 
+          {step === 3 && (
+            <>
           {template && hasModule(template, "bookings") && (
             <Section
               step={3}
@@ -677,8 +781,7 @@ export function SignupPage() {
             </div>
           </details>
 
-          <div className="flex flex-col gap-5">
-            <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5">
               <div className="flex items-start gap-3">
                 <Checkbox
                   id="consent"
@@ -698,36 +801,58 @@ export function SignupPage() {
                 </p>
               )}
             </div>
+          </>
+          )}
 
-            {formError && (
-              <div
-                role="alert"
-                className="flex items-start gap-2.5 rounded-md bg-destructive-soft px-4 py-3 text-sm text-destructive-text"
-              >
-                <AlertCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
-                <p>
-                  {formError.detail}
-                  {formError.code === "EMAIL_TAKEN" && (
-                    <>
-                      {" "}
-                      <a href="/login" className="font-semibold underline underline-offset-2">
-                        Go to login
-                      </a>
-                    </>
-                  )}
-                </p>
-              </div>
-            )}
+        {formError && (
+            <div
+              role="alert"
+              className="flex items-start gap-2.5 rounded-md bg-destructive-soft px-4 py-3 text-sm text-destructive-text"
+            >
+              <AlertCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
+              <p>
+                {formError.detail}
+                {formError.code === "EMAIL_TAKEN" && (
+                  <>
+                    {" "}
+                    <a href="/login" className="font-semibold underline underline-offset-2">
+                      Go to login
+                    </a>
+                  </>
+                )}
+              </p>
+            </div>
+          )}
 
-            <Button type="submit" size="lg" disabled={submitting} className="w-full sm:w-auto sm:self-end">
-              {submitting ? (
-                <>
-                  <Loader2 aria-hidden className="animate-spin" /> Setting up your front desk…
-                </>
+          {/* Back on the left, Next on the right; it stays in reach at the bottom of a phone screen. */}
+          <div className="sticky bottom-0 z-10 -mx-4 border-t bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-sm sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+            <div className="flex items-center justify-between gap-3">
+              {step > 1 ? (
+                <Button variant="outline" size="lg" onClick={back} disabled={submitting} className="px-3 sm:px-4">
+                  <ChevronLeft aria-hidden /> Back
+                </Button>
               ) : (
-                "Create my front desk"
+                <span aria-hidden className="w-[84px]" />
               )}
-            </Button>
+              <span className="text-sm tabular-nums text-muted-foreground" aria-hidden>
+                {step}/3
+              </span>
+              {step < 3 ? (
+                <Button size="lg" onClick={next} className="px-5">
+                  Next <ChevronRight aria-hidden />
+                </Button>
+              ) : (
+                <Button type="submit" size="lg" disabled={submitting} className="px-4 text-sm sm:text-base">
+                  {submitting ? (
+                    <>
+                      <Loader2 aria-hidden className="animate-spin" /> Setting up…
+                    </>
+                  ) : (
+                    "Create my front desk"
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         </form>
       </main>
