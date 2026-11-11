@@ -58,10 +58,10 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 
 **Adding a page:**
 1. Add the route in `src/App.tsx`.
-2. Add a rewrite for its path to `/app.html` in `frontend/vercel.json`.
+2. Add a rewrite for its path to `/app` in `frontend/vercel.json`. Use `/app`, not `/app.html`: with `cleanUrls` on, Vercel serves the shell at `/app`, and a rewrite to `/app.html` returns 404.
 3. Delete the old static page in the same PR, if there is one.
 
-**Deploy:** `build.mjs` builds the app, puts its shell at `dist/app.html` and its files in `dist/assets/`, then copies the old pages as before. `vercel.json` rewrites React routes (now: `/signup`, `/styleguide`) to `/app.html`.
+**Deploy:** `build.mjs` builds the app, puts its shell at `dist/app.html` and its files in `dist/assets/`, then copies the old pages as before. `vercel.json` rewrites React routes (now: `/signup`, `/styleguide`) to `/app`, where Vercel serves `dist/app.html` because `cleanUrls` is on.
 
 **Rules:** see `context/coding-rules.md` (Frontend).
 - Never put patient or customer data in browser storage.
