@@ -378,8 +378,10 @@ HANDLERS: dict[str, Callable[[Ctx, dict], str]] = {
 }
 
 
-def run(ctx: Ctx, name: str, args: dict) -> str:
-    handler = HANDLERS.get(name)
+def run(ctx: Ctx, name: str, args: dict, allowed: set[str] | None = None) -> str:
+    """Run one tool. `allowed` is the business's template tool list: anything else is refused, so a
+    wholesale agent can't book a clinic slot even if its model asks to."""
+    handler = HANDLERS.get(name) if allowed is None or name in allowed else None
     if not handler:
         return f"Unknown tool {name}. " + FAILOVER
     try:

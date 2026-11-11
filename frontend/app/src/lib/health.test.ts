@@ -43,7 +43,7 @@ describe("waitForBackend", () => {
     stubFetch(ok);
     await pingHealth();
     const fetchMock = stubFetch(ok);
-    expect(await waitForBackend()).toBe(true);
+    expect(await waitForBackend()).toBe("up");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -53,7 +53,7 @@ describe("waitForBackend", () => {
     const onWaking = vi.fn();
     const result = waitForBackend({ onWaking, budgetMs: 60_000 });
     await vi.advanceTimersByTimeAsync(10_000);
-    expect(await result).toBe(true);
+    expect(await result).toBe("up");
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(onWaking).toHaveBeenCalledTimes(1);
   });
@@ -63,6 +63,14 @@ describe("waitForBackend", () => {
     stubFetch(down);
     const result = waitForBackend({ budgetMs: 5000 });
     await vi.advanceTimersByTimeAsync(10_000);
-    expect(await result).toBe(false);
+    expect(await result).toBe("down");
+  });
+
+  it("stops at once when /healthz is a 404: nothing forwards to a backend", async () => {
+    const fetchMock = stubFetch(() => new Response("Not found", { status: 404 }));
+    const onWaking = vi.fn();
+    expect(await waitForBackend({ onWaking })).toBe("none");
+    expect(fetchMock).toHaveBeenCalledTimes(1); // no 90 s of retries
+    expect(onWaking).not.toHaveBeenCalled();
   });
 });

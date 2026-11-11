@@ -13,7 +13,11 @@ if (raw && !/^https:\/\/[^\s/]+(\/[^\s]*)?$/.test(raw)) {
   process.exit(1);
 }
 
-const run = (cmd) => execSync(cmd, { cwd: "app", stdio: "inherit" });
+// Tell the app whether this deploy has a backend behind /api (NEXT_PUBLIC_API_URL set, ADR-0041).
+// Without one, the "waking up" gate says so at once instead of waiting 90 s for a /healthz that
+// can never answer (review on #26). Local dev doesn't use build.mjs, so it always waits for a backend.
+const run = (cmd) =>
+  execSync(cmd, { cwd: "app", stdio: "inherit", env: { ...process.env, VITE_BACKEND_CONFIGURED: raw ? "1" : "0" } });
 
 // 1. The React app.
 if (!existsSync("app/node_modules")) run("npm ci --no-audit --no-fund");

@@ -21,6 +21,8 @@ from .sync import sync_tenant_agent
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_csrf_header)])
 MAX_INSTRUCTIONS = 500
+# Which wording of the "we store these details" line was ticked. Bump it when the text changes.
+CONSENT_VERSION = "2026-11-phase2-v1"
 
 
 class UserIn(BaseModel):
@@ -121,7 +123,7 @@ class SignupIn(BaseModel):
     business: BusinessIn
     details: dict = {}
     faqs: list[Faq] = []
-    instructions: str = ""  # checked here, stored once instruction versions exist (M5)
+    instructions: str = ""  # length-checked here; kept as pending_instructions until M5 screens it
 
     @field_validator("instructions")
     @classmethod
@@ -193,6 +195,12 @@ def build_settings(t: dict, body: SignupIn) -> dict:
     if "orders" in modules:
         d = parsed["orders"]
         s.update(min_order=d.min_order.strip(), delivery_area=d.delivery_area.strip())
+    # Evidence of consent (ADR-0039): when, and which wording. The box has to be ticked to get here.
+    s["consent"] = {"at": db.stamp(), "version": CONSENT_VERSION}
+    # The owner's words are kept, not dropped, but NOT screened yet: they must never reach the agent
+    # prompt. M5 screens them, writes an instruction version and removes this key.
+    if body.instructions.strip():
+        s["pending_instructions"] = body.instructions.strip()
     return s
 
 
@@ -214,6 +222,21 @@ def templates() -> dict:
             }
         )
     return {"templates": out}
+
+
+@router.get("/templates/{template}/sample-catalog.csv")
+def sample_catalog(template: str) -> Response:
+    """The template's example catalogue, for the "Download sample" link next to CSV upload."""
+    if template not in tenancy.templates():
+        raise ApiError(404, "NOT_FOUND", "No such template.")
+    path = loader.template_dir(template) / "sample-catalog.csv"
+    if not path.exists():
+        raise ApiError(404, "NOT_FOUND", "This template has no catalogue.")
+    return Response(
+        path.read_bytes(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{template}-sample-catalog.csv"'},
+    )
 
 
 def _undo_signup(conn: db.Conn, tid: str) -> None:
@@ -283,4 +306,9 @@ def signup(body: SignupIn, request: Request, response: Response) -> dict:
 
     agent = sync_tenant_agent(tid)  # the business exists either way; the test page shows the state
     set_session_cookie(response, request, cookie)
-    return {"public_id": public_id, "template": body.business.template, "agent": agent}
+    return {
+        "public_id": public_id,
+        "template": body.business.template,
+        "agent": agent,
+        "instructions": "pending" if body.instructions.strip() else "none",
+    }

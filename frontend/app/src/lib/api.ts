@@ -8,6 +8,8 @@
  * - Errors become an `ApiError` whose `detail` is one plain sentence a page can show as-is.
  */
 
+import { markHealthy } from "@/lib/health";
+
 export type ApiErrorBody = {
   detail: string;
   code: string;
@@ -103,6 +105,8 @@ export async function api<T>(path: string, { method = "GET", body, signal }: Api
     throw new ApiError(0, NETWORK_ERROR);
   }
 
+  // Any answer the backend made means it's awake, so the "waking up" gate needn't check again.
+  if (res.ok) markHealthy();
   if (res.status === 204) return undefined as T;
   const data: unknown = await res.json().catch(() => undefined);
 

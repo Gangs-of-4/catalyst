@@ -1,0 +1,319 @@
+"""One business's product catalogue: add, edit, look up by spoken name, and CSV import.
+
+Every function takes a connection scoped to one business (`conn.tid`). Rates are integer paise; the
+agent only ever states a rate read from here (contracts.md §1.11).
+"""
+
+import csv
+import difflib
+import io
+import re
+import unicodedata
+from dataclasses import dataclass, field
+
+from ..core import db
+
+MAX_NAME = 120
+MAX_PACK = 60
+MAX_RATE_PAISE = 10_000_000_00  # ₹1 crore: anything above is a typo
+MAX_IMPORT_ROWS = 2000
+CSV_COLUMNS = ("name", "pack_size", "rate", "in_stock")
+YES = {"yes", "y", "true", "1", "haan", "ha", "in stock", ""}
+NO = {"no", "n", "false", "0", "nahi", "out", "out of stock"}
+
+
+class CatalogError(Exception):
+    """`code` is VALIDATION, NOT_FOUND or UNKNOWN_PRODUCT; `matches` are close names (spelling help,
+    never a substitute)."""
+
+    def __init__(self, code: str, message: str, matches: list[dict] | None = None):
+        super().__init__(message)
+        self.code = code
+        self.matches = matches or []
+
+
+def name_key(name: str) -> str:
+    """The identity of a product name: case, spacing and punctuation don't make a new product.
+    Letters, digits and combining marks of every script count (Hindi, Tamil, Bengali, ...), so
+    "அரிசி" is a name and "Atta ஆட்டா" is not the same product as "Atta ಹಿಟ್ಟು"."""
+    text = unicodedata.normalize("NFC", name).casefold()
+    kept = "".join(c if unicodedata.category(c)[0] in "LNM" else " " for c in text)
+    return " ".join(kept.split())
+
+
+def parse_rate(text: str | int | float) -> int:
+    """'₹1,234.50', '1234.5' or 1234.5 → paise. Raises ValueError with a plain sentence."""
+    raw = str(text).strip().replace("₹", "").replace("Rs.", "").replace("Rs", "").replace(",", "")
+    if not re.fullmatch(r"\d+(\.\d{1,2})?", raw.strip()):
+        raise ValueError("Rate must be a number of rupees, like 120 or 120.50.")
+    rupees, _, paise = raw.strip().partition(".")
+    value = int(rupees) * 100 + int((paise + "00")[:2])
+    if value <= 0 or value > MAX_RATE_PAISE:
+        raise ValueError("Rate must be more than ₹0 and less than ₹1 crore.")
+    return value
+
+
+def format_inr(paise: int) -> str:
+    """Indian grouping, paise only when there are any: ₹1,23,456 or ₹99.50."""
+    rupees, rest = divmod(paise, 100)
+    digits = str(rupees)
+    if len(digits) > 3:
+        head, tail = digits[:-3], digits[-3:]
+        head = ",".join(re.findall(r"\d{1,2}", head[::-1]))[::-1] if head else ""
+        digits = f"{head},{tail}"
+    return f"₹{digits}" + (f".{rest:02d}" if rest else "")
+
+
+def parse_stock(text) -> bool:
+    if isinstance(text, bool):
+        return text
+    value = str(text).strip().lower()
+    if value in YES:
+        return True
+    if value in NO:
+        return False
+    raise ValueError("In stock must be yes or no.")
+
+
+def _clean(name: str, pack_size: str) -> tuple[str, str]:
+    name, pack_size = " ".join(str(name).split()), " ".join(str(pack_size or "").split())
+    if not name_key(name):
+        raise ValueError("Product name is missing.")
+    if len(name) > MAX_NAME:
+        raise ValueError(f"Product name must be under {MAX_NAME} characters.")
+    if len(pack_size) > MAX_PACK:
+        raise ValueError(f"Pack size must be under {MAX_PACK} characters.")
+    return name, pack_size
+
+
+def public(row: db.Row) -> dict:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "pack_size": row["pack_size"],
+        "rate_paise": row["rate_paise"],
+        "rate": format_inr(row["rate_paise"]),
+        "in_stock": bool(row["in_stock"]),
+        "active": bool(row["active"]),
+    }
+
+
+def list_products(conn: db.Conn, include_inactive: bool = False) -> list[dict]:
+    sql = "SELECT * FROM products WHERE tenant_id = ?"
+    if not include_inactive:
+        sql += " AND active = 1"
+    rows = conn.execute(sql + " ORDER BY name", (conn.tid,)).fetchall()
+    return [public(r) for r in rows]
+
+
+def get(conn: db.Conn, product_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM products WHERE tenant_id = ? AND id = ?", (conn.tid, product_id)
+    ).fetchone()
+    return public(row) if row else None
+
+
+def _by_key(conn: db.Conn, key: str) -> db.Row | None:
+    return conn.execute(
+        "SELECT * FROM products WHERE tenant_id = ? AND name_key = ?", (conn.tid, key)
+    ).fetchone()
+
+
+def add(conn: db.Conn, name: str, pack_size: str, rate_paise: int, in_stock: bool = True) -> dict:
+    """Raises CatalogError VALIDATION (bad field, or the name is already in the catalogue)."""
+    try:
+        name, pack_size = _clean(name, pack_size)
+    except ValueError as e:
+        raise CatalogError("VALIDATION", str(e)) from e
+    try:
+        with conn:
+            row = conn.execute(
+                "INSERT INTO products (tenant_id, name, name_key, pack_size, rate_paise, in_stock,"
+                " active, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?) RETURNING id",
+                (conn.tid, name, name_key(name), pack_size, rate_paise, int(in_stock), db.stamp()),
+            ).fetchone()
+    except db.Conflict as e:
+        raise CatalogError("VALIDATION", f"{name} is already in the catalogue.") from e
+    return get(conn, row["id"])
+
+
+def update(conn: db.Conn, product_id: int, **changes) -> dict:
+    """Change any of name, pack_size, rate_paise, in_stock, active. Raises CatalogError."""
+    current = get(conn, product_id)
+    if current is None:
+        raise CatalogError("NOT_FOUND", "That product isn't in the catalogue.")
+    merged = {**current, **{k: v for k, v in changes.items() if v is not None}}
+    try:
+        name, pack_size = _clean(merged["name"], merged["pack_size"])
+    except ValueError as e:
+        raise CatalogError("VALIDATION", str(e)) from e
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE products SET name = ?, name_key = ?, pack_size = ?, rate_paise = ?,"
+                " in_stock = ?, active = ?, updated_at = ? WHERE tenant_id = ? AND id = ?",
+                (
+                    name,
+                    name_key(name),
+                    pack_size,
+                    int(merged["rate_paise"]),
+                    int(bool(merged["in_stock"])),
+                    int(bool(merged["active"])),
+                    db.stamp(),
+                    conn.tid,
+                    product_id,
+                ),
+            )
+    except db.Conflict as e:
+        raise CatalogError("VALIDATION", f"{name} is already in the catalogue.") from e
+    return get(conn, product_id)
+
+
+def _word_matches(products: list[dict], words: list[str]) -> list[dict]:
+    """Products whose name has every one of `words` as a whole word."""
+    return [p for p in products if all(w in name_key(p["name"]).split() for w in words)]
+
+
+def _joined_matches(products: list[dict], words: list[str]) -> list[dict]:
+    """ "paracetamol500" vs "paracetamol 500": the words run together, inside the name."""
+    joined = "".join(words)
+    return [p for p in products if joined in name_key(p["name"]).replace(" ", "")]
+
+
+def search(conn: db.Conn, query: str = "", limit: int = 10) -> list[dict]:
+    """Active products whose name contains every word of `query` (all of them when empty)."""
+    products = list_products(conn)
+    words = name_key(query or "").split()
+    found = _word_matches(products, words)
+    if not found and words:
+        found = _joined_matches(products, words)
+    return found[:limit]
+
+
+def find(conn: db.Conn, spoken: str) -> dict:
+    """The one active product a caller or the desk named. Never a different product instead.
+
+    Returns a product only for its exact name, or when it is the single product whose name has
+    every spoken word as a whole word ("gloves" → "Surgical gloves"). Otherwise raises CatalogError
+    UNKNOWN_PRODUCT with up to 3 `matches` to ask "which one?" about: the names that fit, or close
+    spellings. A product that exists but is hidden is "not available", never swapped for another
+    one whose name merely contains it."""
+    key = name_key(spoken or "")
+    if not key:
+        raise CatalogError("UNKNOWN_PRODUCT", "Which product?")
+    exact = _by_key(conn, key)
+    if exact is not None:
+        if exact["active"]:
+            return public(exact)
+        raise CatalogError("UNKNOWN_PRODUCT", f"{exact['name']} isn't available right now.")
+    products = list_products(conn)  # read once per lookup: this is on the live call path
+    words = key.split()
+    whole = _word_matches(products, words)
+    if len(whole) == 1:
+        return whole[0]
+    if whole:
+        raise CatalogError("UNKNOWN_PRODUCT", f"More than one product matches {spoken}.", whole[:3])
+    partial = _joined_matches(products, words)
+    if partial:  # never assumed: the caller confirms which one
+        raise CatalogError(
+            "UNKNOWN_PRODUCT", f"Did they mean one of these for {spoken}?", partial[:3]
+        )
+    names = {name_key(p["name"]): p for p in products}
+    close = difflib.get_close_matches(key, list(names), n=3, cutoff=0.75)
+    raise CatalogError(
+        "UNKNOWN_PRODUCT", f"{spoken} isn't in the catalogue.", [names[k] for k in close]
+    )
+
+
+@dataclass
+class ImportResult:
+    added: int = 0
+    updated: int = 0
+    errors: list[dict] = field(default_factory=list)
+
+
+def import_csv(conn: db.Conn, text: str) -> ImportResult:
+    """Add or update products from CSV (columns name, pack_size, rate, in_stock; header required).
+
+    Good rows are saved; bad rows are reported by their spreadsheet row number (the header is
+    row 1) and skipped. A name already in the catalogue is updated, not duplicated. The file is
+    read and checked in full before anything is written, and the writes are one transaction: a
+    file that can't be read as CSV saves nothing, never half of it."""
+    result = ImportResult()
+    rows: list[tuple[int, str, str, int, bool]] = []
+    reader = csv.reader(io.StringIO(text.lstrip("\ufeff").replace("\x00", "")))
+    try:
+        header = [h.strip().lower() for h in next(reader, [])]
+        if not all(c in header for c in ("name", "rate")):
+            result.errors.append(
+                {
+                    "row": 1,
+                    "message": "The first row must name the columns: name, pack_size, rate, "
+                    "in_stock.",
+                }
+            )
+            return result
+        col = {c: header.index(c) for c in CSV_COLUMNS if c in header}
+        seen: dict[str, int] = {}
+        for number, cells in enumerate(reader, start=2):
+            if not any(c.strip() for c in cells):
+                continue
+            if number - 1 > MAX_IMPORT_ROWS:
+                result.errors.append(
+                    {"row": number, "message": f"Only the first {MAX_IMPORT_ROWS} rows are read."}
+                )
+                break
+            row = {c: cells[i].strip() if i < len(cells) else "" for c, i in col.items()}
+            try:
+                name, pack_size = _clean(row.get("name", ""), row.get("pack_size", ""))
+                rate = parse_rate(row.get("rate", ""))
+                in_stock = parse_stock(row.get("in_stock", ""))
+            except ValueError as e:
+                result.errors.append({"row": number, "message": str(e)})
+                continue
+            key = name_key(name)
+            if key in seen:
+                result.errors.append(
+                    {
+                        "row": number,
+                        "message": f"{name} is already on row {seen[key]} of this file.",
+                    }
+                )
+                continue
+            seen[key] = number
+            rows.append((number, name, pack_size, rate, in_stock))
+    except csv.Error:
+        return ImportResult(
+            errors=[
+                {
+                    "row": reader.line_num,
+                    "message": "The file can't be read as CSV from this row. Save it again as "
+                    "CSV (UTF-8) from Excel or Google Sheets. Nothing was imported.",
+                }
+            ]
+        )
+    existing = {
+        r["name_key"]: r["id"]
+        for r in conn.execute(
+            "SELECT id, name_key FROM products WHERE tenant_id = ?", (conn.tid,)
+        ).fetchall()
+    }
+    ts = db.stamp()
+    with conn:
+        for _, name, pack_size, rate, in_stock in rows:
+            key = name_key(name)
+            if key in existing:
+                conn.execute(
+                    "UPDATE products SET name = ?, pack_size = ?, rate_paise = ?, in_stock = ?,"
+                    " active = 1, updated_at = ? WHERE tenant_id = ? AND id = ?",
+                    (name, pack_size, rate, int(in_stock), ts, conn.tid, existing[key]),
+                )
+                result.updated += 1
+            else:
+                conn.execute(
+                    "INSERT INTO products (tenant_id, name, name_key, pack_size, rate_paise,"
+                    " in_stock, active, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
+                    (conn.tid, name, key, pack_size, rate, int(in_stock), ts),
+                )
+                result.added += 1
+    return result

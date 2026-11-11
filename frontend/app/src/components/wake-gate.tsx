@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { recentlyHealthy, waitForBackend } from "@/lib/health";
 
-type GateState = "checking" | "waking" | "ready" | "down";
+type GateState = "checking" | "waking" | "ready" | "down" | "none";
 
 type WakeGateProps = {
   children: React.ReactNode;
@@ -49,7 +49,35 @@ function WakingScreen() {
  * Skips the check when the backend answered in the last two minutes, so moving between pages
  * doesn't flash it. After the budget it offers a retry.
  */
+/** False only for a deployed build with no backend behind /api (set by build.mjs). */
+const backendConfigured = () => import.meta.env.VITE_BACKEND_CONFIGURED !== "0";
+
 export function WakeGate({ children, budgetMs, wakingAfterMs }: WakeGateProps) {
+  if (!backendConfigured()) return <NotConnected />;
+  return (
+    <Gate budgetMs={budgetMs} wakingAfterMs={wakingAfterMs}>
+      {children}
+    </Gate>
+  );
+}
+
+/** A deploy with no backend yet: say so straight away, rather than "waking up" for 90 s. */
+function NotConnected() {
+  return (
+    <>
+      <AppHeader />
+      <main className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
+        <EmptyState
+          icon={CloudOff}
+          title="This site isn't connected to a server yet"
+          description="Signup, login and the test page need our server, which isn't set up for this site yet. Please check back soon."
+        />
+      </main>
+    </>
+  );
+}
+
+function Gate({ children, budgetMs, wakingAfterMs }: WakeGateProps) {
   const [state, setState] = React.useState<GateState>(() => (recentlyHealthy() ? "ready" : "checking"));
   const [attempt, setAttempt] = React.useState(0);
   const skipFirst = React.useRef(state === "ready");
@@ -65,13 +93,14 @@ export function WakeGate({ children, budgetMs, wakingAfterMs }: WakeGateProps) {
       budgetMs,
       wakingAfterMs,
       onWaking: () => setState((s) => (s === "checking" ? "waking" : s)),
-    }).then((ok) => {
-      if (!ctrl.signal.aborted) setState(ok ? "ready" : "down");
+    }).then((backend) => {
+      if (!ctrl.signal.aborted) setState(backend === "up" ? "ready" : backend);
     });
     return () => ctrl.abort();
   }, [attempt, budgetMs, wakingAfterMs]);
 
   if (state === "ready") return <>{children}</>;
+  if (state === "none") return <NotConnected />; // /healthz is a 404: nothing to wait for
   return (
     <>
       <AppHeader />

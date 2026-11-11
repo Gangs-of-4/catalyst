@@ -48,7 +48,7 @@ You need **Git**, **Python 3.11 or newer**, and **cloudflared** (Windows: `winge
    pip install -r requirements.txt
    Copy-Item ..\.env.example ..\.env
    ```
-   Open `.env` and fill in `VAPI_PRIVATE_KEY` and `VAPI_PUBLIC_KEY` (Vapi dashboard → API Keys), plus `DESK_PASSWORD`. Fill in the Twilio values if you have them.
+   Open `.env` and fill in `VAPI_PRIVATE_KEY` and `VAPI_PUBLIC_KEY` (Vapi dashboard → API Keys), plus `DEMO_LOGIN_PASSWORD` (at least 8 characters: the demo clinic owner's login for `/desk` and `/setup`). Fill in the Twilio values if you have them.
 4. Start the server (leave this window open):
    ```powershell
    uvicorn src.main:app --port 8000
@@ -66,6 +66,7 @@ You need **Git**, **Python 3.11 or newer**, and **cloudflared** (Windows: `winge
    This writes `VAPI_ASSISTANT_ID` and `CATALYST_TOOL_SECRET` into `.env`, and prints the URLs you need next.
 7. **WhatsApp (optional).** In the Twilio console → Messaging → Try it out → WhatsApp sandbox: join the sandbox from the doctor's phone (send the `join <code>` message it shows), then set **"When a message comes in"** to `<PUBLIC_URL>/whatsapp/incoming` (method POST). On `<PUBLIC_URL>/setup`, add the doctor's number under "WhatsApp numbers".
 8. Open `<PUBLIC_URL>/` and click **Talk to the receptionist**. Allow the microphone.
+9. **Desk and settings need a login.** Log in once as `demo.clinic@example.com` (or your `DEMO_LOGIN_EMAIL`) with `DEMO_LOGIN_PASSWORD`, on the React app's `/login` (`cd frontend/app && npm run dev`, then http://localhost:5173/login). The session cookie then also works on http://localhost:8000/desk and `/setup`. Every business you sign up gets its own login and sees only its own desk.
 
 To check everything at once: `python scripts\doctor.py`. It says what's missing in plain words, including a stale tunnel URL.
 

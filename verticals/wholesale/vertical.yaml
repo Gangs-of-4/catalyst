@@ -23,6 +23,13 @@ labels:
   booking: "Order"
   tenant: "Distributor"
 
+# Shown on the public test page as "Try saying" (contracts.md section 6.1, GET /api/try/{public_id}).
+try_saying:
+  - "Aapke yahan kya kya milta hai?"
+  - "Kal tak delivery ho jayegi?"
+  - "Mera pichhla order kahan tak pahuncha?"
+  - "Owner se baat karni hai, callback kar dijiye."
+
 languages:
   default: hi-en
   supported: [hi-en, en, hi]

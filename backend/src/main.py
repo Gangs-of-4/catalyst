@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import accounts, seed
-from .api import auth, desk, errors, onboarding, public, setup, vapi, whatsapp
+from .api import auth, desk, errors, onboarding, orders, public, setup, try_page, vapi, whatsapp
 from .core import db
 from .core.config import FRONTEND_DIR, env
 
@@ -16,8 +16,13 @@ from .core.config import FRONTEND_DIR, env
 async def lifespan(app: FastAPI):
     accounts.ensure_session_secret()
     conn = db.connect()
-    seed.ensure(conn)
+    demo = seed.ensure(conn)
     conn.close()
+    conn = db.connect_unchecked()  # startup, before any request: the demo owner's login
+    try:
+        accounts.ensure_demo_login(conn, demo)
+    finally:
+        conn.close()
     yield
 
 
@@ -37,8 +42,12 @@ app.include_router(auth.router)
 app.include_router(onboarding.router)
 app.include_router(vapi.router)
 app.include_router(public.router)
+app.include_router(try_page.router)
+app.include_router(orders.router)
+app.include_router(desk.pages)
 app.include_router(desk.router)
 app.include_router(whatsapp.router)
+app.include_router(setup.pages)
 app.include_router(setup.router)
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
 
