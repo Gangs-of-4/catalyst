@@ -51,6 +51,8 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 
 | Route | File | What |
 |---|---|---|
+| `/b/:publicId/try` | `src/pages/try.tsx`, `src/features/try/` | Public test page for one business: talk to its front desk (Vapi web call, after the `POST /api/try/{id}/start` cap check) and watch its register or order board update. Covers voice-not-switched-on, minutes-used-up and microphone-blocked states. Endpoint shapes: issue #24 |
+| `/demo/:template` | `src/pages/try.tsx` | Opens the demo business's test page (`/b/demo-<template>/try`) |
 | `/login` | `src/pages/login.tsx` | Owner login (`POST /api/login`). Already logged in → straight on. Honors a same-app `?next=` path |
 | `/home` | `src/pages/home.tsx` | The owner's signed-in home (`GET /api/me`), with Log out. Logged-out visitors go to `/login?next=/home`. Later tasks add the desk, settings and test page here |
 | `/signup` | `src/pages/signup.tsx`, `src/features/signup/` | Self-serve onboarding: account + business in one step (`GET /api/templates`, `POST /api/signup`). The template section is picked by the template's `modules`. A success screen shows the voice agent's state. |
@@ -63,14 +65,16 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 2. Add a rewrite for its path to `/app` in `frontend/vercel.json`. Use `/app`, not `/app.html`: with `cleanUrls` on, Vercel serves the shell at `/app`, and a rewrite to `/app.html` returns 404.
 3. Delete the old static page in the same PR, if there is one.
 
-**Deploy:** `build.mjs` builds the app, puts its shell at `dist/app.html` and its files in `dist/assets/`, then copies the old pages as before. `vercel.json` rewrites React routes (now: `/home`, `/login`, `/signup`, `/styleguide`) to `/app`, where Vercel serves `dist/app.html` because `cleanUrls` is on.
+**Deploy:** `build.mjs` builds the app, puts its shell at `dist/app.html` and its files in `dist/assets/`, then copies the old pages as before. `vercel.json` rewrites React routes (now: `/b/:publicId/try`, `/demo/:template`, `/home`, `/login`, `/signup`, `/styleguide`) to `/app`, where Vercel serves `dist/app.html` because `cleanUrls` is on.
 
 **Rules:** see `context/coding-rules.md` (Frontend).
 - Never put patient or customer data in browser storage.
 - Never call the backend by absolute URL.
 - Never log personal data (ESLint blocks `console.log`).
 
-## Vapi Web SDK bundle
+## Vapi Web SDK bundle (old pages only)
+
+> The React app uses `@vapi-ai/web` 2.7.1 from npm instead, behind `app/src/lib/voice.ts`, and loads it only when a call starts. This committed bundle stays only for the old static try page at `/` until that page is removed.
 
 `static/vapi.bundle.js` is `@vapi-ai/web` **2.7.1** (MIT; it bundles `@daily-co/daily-js`, BSD-2-Clause), built once as an IIFE that sets `window.Vapi`. It is committed so nobody needs Node to run the demo. To rebuild it (Node LTS needed), in an empty folder outside the repo:
 

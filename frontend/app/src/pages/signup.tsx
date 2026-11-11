@@ -194,7 +194,12 @@ export function SignupPage() {
       <>
         {header}
         <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6 sm:py-14">
-          <SignupSuccess businessName={form.business.name.trim()} template={template} agent={done.agent} />
+          <SignupSuccess
+            businessName={form.business.name.trim()}
+            publicId={done.public_id}
+            template={template}
+            agent={done.agent}
+          />
         </main>
       </>
     );
