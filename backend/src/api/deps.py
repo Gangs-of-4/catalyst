@@ -4,10 +4,12 @@ import base64
 import hmac
 from collections.abc import Iterator
 
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 
+from .. import accounts
 from ..core import db, tenancy
 from ..core.config import env
+from .errors import ApiError
 
 
 def get_conn() -> Iterator[db.Conn]:
@@ -23,6 +25,43 @@ def get_conn() -> Iterator[db.Conn]:
         if tid is None:
             raise HTTPException(503, "The demo clinic isn't set up yet. Restart the backend.")
         yield conn.for_tenant(tid)
+    finally:
+        conn.close()
+
+
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "testserver"}
+
+
+def require_csrf_header(request: Request) -> None:
+    """Every write must carry `X-Requested-With: catalyst` (contracts.md §6). A cross-site form
+    post can't set it, which together with SameSite=Lax blocks CSRF."""
+    is_write = request.method in ("POST", "PUT", "DELETE", "PATCH")
+    if is_write and request.headers.get("x-requested-with") != "catalyst":
+        raise ApiError(403, "FORBIDDEN", "That request wasn't sent from the app. Reload the page.")
+
+
+def cookie_secure(request: Request) -> bool:
+    """Secure cookies everywhere except plain-http local development."""
+    return (request.url.hostname or "") not in LOCAL_HOSTS
+
+
+def current_session(request: Request) -> accounts.Session:
+    """The logged-in owner, or 401. Auth lookups run before the business is known."""
+    conn = db.connect_unchecked()
+    try:
+        found = accounts.lookup(conn, request.cookies.get(accounts.COOKIE))
+    finally:
+        conn.close()
+    if found is None:
+        raise ApiError(401, "UNAUTHENTICATED", "Please log in to continue.")
+    return found
+
+
+def get_user_conn(session: accounts.Session = Depends(current_session)) -> Iterator[db.Conn]:
+    """A connection scoped to the logged-in owner's business."""
+    conn = db.connect()
+    try:
+        yield conn.for_tenant(session.tenant_id)
     finally:
         conn.close()
 

@@ -89,17 +89,6 @@ class SettingsIn(BaseModel):
         return v
 
 
-def _slug(name: str, taken: set[str]) -> str:
-    base = "dr-" + (
-        re.sub(r"[^a-z0-9]+", "-", name.lower().replace("dr.", "").replace("dr ", "")).strip("-")
-        or "x"
-    )
-    slug, n = base, 2
-    while slug in taken:
-        slug, n = f"{base}-{n}", n + 1
-    return slug
-
-
 @router.get("/setup", include_in_schema=False)
 def setup_page() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "setup.html")
@@ -139,7 +128,7 @@ def save_setup(body: SettingsIn, conn: db.Conn = Depends(get_conn)) -> dict:
         did = (
             d.id
             if d.id and re.fullmatch(r"[a-z0-9-]{1,40}", d.id)
-            else _slug(d.name, taken | old_ids)
+            else cs.doctor_slug(d.name, taken | old_ids)
         )
         if did in taken:
             raise HTTPException(422, f"Two doctors share the id '{did}'.")

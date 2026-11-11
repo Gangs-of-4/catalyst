@@ -57,6 +57,27 @@ CREATE TABLE IF NOT EXISTS tenants (
   is_demo INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,         -- lowercased
+  password_hash TEXT NOT NULL,        -- scrypt$n$r$p$salt$hash, never the password
+  failed_logins INTEGER NOT NULL DEFAULT 0,
+  locked_until TEXT,
+  last_active_at TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS users_tenant ON users (tenant_id);
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash TEXT PRIMARY KEY,        -- SHA-256 of the cookie token; the token itself is never stored
+  user_id TEXT,                       -- NULL for admin
+  tenant_id TEXT REFERENCES tenants(id),   -- NULL for admin
+  kind TEXT NOT NULL,                 -- user | admin
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sessions_user ON sessions (user_id);
 CREATE TABLE IF NOT EXISTS blocks (
   id {ID},
   tenant_id TEXT NOT NULL REFERENCES tenants(id),

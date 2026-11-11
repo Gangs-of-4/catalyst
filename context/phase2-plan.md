@@ -19,9 +19,10 @@
 
 | Milestone | PR | State |
 |---|---|---|
-| M0: contracts v0.2, ADRs 0037–0041, wholesale `vertical.yaml` | #8 | CI green, merging |
-| M1: tenant-scoped SQL layer (SQLite + Postgres), `tenants` table | #9 | Waiting for #8; CI runs once its base is `main` |
-| M2–M12 | — | Not started |
+| M0: contracts v0.2, ADRs 0037–0041, wholesale `vertical.yaml` | #8 | Merged |
+| M1: tenant-scoped SQL layer (SQLite + Postgres), `tenants` table | #9 | Merged |
+| M2: accounts + onboarding API (signup, login, logout, me, templates; per-business assistant, Vapi mocked in tests) | #11 | Open |
+| M3–M12 | — | Not started |
 
 ---
 

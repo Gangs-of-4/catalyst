@@ -53,3 +53,15 @@ def match_doctor(s: dict, text: str | None) -> dict | None:
         if score > best_score:
             best, best_score = d, score
     return best if best_score >= 0.75 else None
+
+
+def doctor_slug(name: str, taken: set[str]) -> str:
+    """A stable id like 'dr-asha-verma' from a doctor's name, unique among `taken`."""
+    base = "dr-" + (
+        re.sub(r"[^a-z0-9]+", "-", name.lower().replace("dr.", "").replace("dr ", "")).strip("-")
+        or "x"
+    )
+    slug, n = base, 2
+    while slug in taken:
+        slug, n = f"{base}-{n}", n + 1
+    return slug
