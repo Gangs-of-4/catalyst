@@ -96,6 +96,33 @@ describe("<ConnectionBanner>", () => {
     window.removeEventListener("catalyst:reconnected", reconnected);
   });
 
+  it("treats a bare 500 from the dev proxy as trouble, but not the backend's own 500", async () => {
+    let backendBody = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        backendBody
+          ? new Response(JSON.stringify({ detail: "Something went wrong on our side.", code: "INTERNAL" }), {
+              status: 500,
+              headers: { "Content-Type": "application/json" },
+            })
+          : new Response("", { status: 500 }),
+      ),
+    );
+    const { unmount } = render(<ConnectionBanner />);
+    backendBody = true;
+    await act(async () => {
+      await api("/api/me").catch(() => {});
+    });
+    expect(screen.queryByText(/Can't reach Catalyst/)).toBeNull();
+    backendBody = false;
+    await act(async () => {
+      await api("/api/me").catch(() => {});
+    });
+    expect(screen.getByText(/Can't reach Catalyst right now/)).toBeTruthy();
+    unmount();
+  });
+
   it("ignores the backend's deliberate 503 VOICE_NOT_CONFIGURED", async () => {
     vi.stubGlobal(
       "fetch",

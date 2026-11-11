@@ -58,12 +58,10 @@ const INTERNAL: ApiErrorBody = {
   detail: "Something went wrong on our side. Please try again in a moment.",
 };
 
-/** Statuses that mean "the backend (or the forwarding to it) isn't answering", not "you did something wrong". */
-const UNREACHABLE = new Set([502, 503, 504]);
 type Listener = () => void;
 const troubleListeners = new Set<Listener>();
 
-/** Subscribe to connection trouble (network failure or 502/503/504). Returns an unsubscribe function. */
+/** Subscribe to connection trouble (network failure, or a 5xx not sent by the backend). Returns an unsubscribe function. */
 export function onConnectionTrouble(listener: Listener): () => void {
   troubleListeners.add(listener);
   return () => troubleListeners.delete(listener);
@@ -109,8 +107,10 @@ export async function api<T>(path: string, { method = "GET", body, signal }: Api
   const data: unknown = await res.json().catch(() => undefined);
 
   if (!res.ok) {
-    // VOICE_NOT_CONFIGURED is a 503 the backend sends on purpose; it isn't connection trouble.
-    if (UNREACHABLE.has(res.status) && !isErrorBody(data)) reportTrouble();
+    // A 5xx without our JSON error body came from the forwarding (Vercel's rewrite, Vite's dev proxy),
+    // not from the backend, so the backend isn't reachable. The backend's own errors, like the
+    // deliberate 503 VOICE_NOT_CONFIGURED or a 500 INTERNAL, always carry the body.
+    if (res.status >= 500 && !isErrorBody(data)) reportTrouble();
     if (isErrorBody(data)) throw new ApiError(res.status, data);
     throw new ApiError(res.status, GENERIC[res.status] ?? INTERNAL);
   }
