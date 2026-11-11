@@ -40,10 +40,12 @@ export function CallPanel({
   onStart,
   onStop,
 }: CallPanelProps) {
-  const busy = state === "checking" || state === "connecting" || state === "ending";
+  const busy = state === "waking" || state === "checking" || state === "connecting" || state === "ending";
   const inCall = state === "live" || state === "ending";
   const status =
-    state === "checking" || state === "connecting"
+    state === "waking"
+      ? "Waking up the desk… (up to a minute)"
+      : state === "checking" || state === "connecting"
       ? "Connecting… allow the microphone if your browser asks."
       : state === "ending"
         ? "Ending the call…"

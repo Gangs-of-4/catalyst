@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookingsBoard, OrdersBoard, TryInfo } from "@/features/try/api";
 import { type CallEvents, MicBlockedError } from "@/lib/voice";
 
+import { resetHealth } from "@/lib/health";
+
 import { DemoRedirect, TryPage } from "./try";
 
 const startCallMock = vi.fn();
@@ -83,7 +85,10 @@ const renderAt = (path: string) =>
     </MemoryRouter>,
   );
 
-beforeEach(() => startCallMock.mockReset());
+beforeEach(() => {
+  startCallMock.mockReset();
+  resetHealth();
+});
 afterEach(() => vi.unstubAllGlobals());
 
 describe("<TryPage>", () => {
@@ -126,6 +131,7 @@ describe("<TryPage>", () => {
         () => json(200, bookings()),
         () => json(200, bookings([{ time: "10:30", id: 2, name: "Sita K." }])),
       ],
+      "GET /healthz": () => json(200, { ok: true }),
       "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
     });
     renderAt("/b/abc123/try");
@@ -155,6 +161,7 @@ describe("<TryPage>", () => {
     mockApi({
       "GET /api/try/abc123": () => json(200, INFO),
       "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => json(200, { ok: true }),
       "POST /api/try/abc123/start": () =>
         json(429, { detail: "Today's free demo minutes are used up. Please try again tomorrow.", code: "MINUTES_USED_UP" }),
     });
@@ -169,6 +176,7 @@ describe("<TryPage>", () => {
     mockApi({
       "GET /api/try/abc123": () => json(200, INFO),
       "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => json(200, { ok: true }),
       "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
     });
     renderAt("/b/abc123/try");

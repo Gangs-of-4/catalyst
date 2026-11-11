@@ -1,11 +1,12 @@
 import * as React from "react";
 
 import { ApiError } from "@/lib/api";
+import { recentlyHealthy, waitForBackend } from "@/lib/health";
 import { MicBlockedError, startCall, type CallRole, type VoiceCall } from "@/lib/voice";
 
 import { startCheck, type TryInfo } from "./api";
 
-export type CallState = "idle" | "checking" | "connecting" | "live" | "ending";
+export type CallState = "idle" | "waking" | "checking" | "connecting" | "live" | "ending";
 
 /** Why a call can't start or stopped, each with its own one-line fix on the page. */
 export type CallProblem =
@@ -57,6 +58,15 @@ export function useCall(info: TryInfo | null, onCallEnded: () => void) {
     setProblem(null);
     setLines([]);
     setSeconds(0);
+    // Wake the backend before the call if it hasn't answered lately (phase2-plan §5, cold starts).
+    if (!recentlyHealthy()) {
+      setState("waking");
+      if (!(await waitForBackend())) {
+        setState("idle");
+        setProblem({ kind: "other", message: "Catalyst isn't responding right now. Please try again in a minute." });
+        return;
+      }
+    }
     setState("checking");
     try {
       const { max_call_seconds } = await startCheck(info.public_id);

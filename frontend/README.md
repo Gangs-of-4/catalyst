@@ -58,6 +58,12 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 | `/signup` | `src/pages/signup.tsx`, `src/features/signup/` | Self-serve onboarding: account + business in one step (`GET /api/templates`, `POST /api/signup`). The template section is picked by the template's `modules`. A success screen shows the voice agent's state. |
 | `/styleguide` | `src/pages/styleguide.tsx` | Every token and component, for review |
 
+**Failure states** (phase2-plan §5 cold starts, §6):
+- Pages that need the backend (`/signup`, `/login`, `/home`, `/b/:publicId/try`) sit behind `WakeGate`, wired in `src/App.tsx`. It pings `/healthz` and shows a "waking up" screen while the free backend host wakes.
+- `ConnectionBanner` appears when an API call can't reach the backend mid-session, and retries with backoff. When it reconnects it fires a `catalyst:reconnected` window event that pages can listen for.
+- The test page checks `/healthz` again before each call ("Waking up the desk… (up to a minute)") if it hasn't seen the backend lately.
+- Forms keep what the owner typed through all of this; nothing is cleared on a failed request.
+
 **Design:** `frontend/DESIGN.md` is the source of truth. `/styleguide` shows every token and component. Check new work there at 360px and desktop width.
 
 **Adding a page:**
