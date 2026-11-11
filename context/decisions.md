@@ -49,13 +49,13 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 | ADR-0033 | Verticals are config; generic booking model with exclusion constraint | Accepted | Free |
 | ADR-0034 | WhatsApp is its own channel module; preview-and-confirm on every write | Accepted — extends ADR-0017 | Free tier with limits (per-message pricing, D5) |
 | ADR-0035 | Demo build simplifications | Accepted — *revisit before the first real clinic pilot*; frontend hosting amended by ADR-0036; frontend stack amended by ADR-0042 | Free tier with limits (Vapi, Twilio sandbox trial credit) |
-| ADR-0036 | Vercel for frontend hosting, deployed from GitHub Actions | Accepted — **supersedes ADR-0013**; *decision 4 challenged by ADR-0041 (Proposed); hosting challenged by ADR-0043 (Proposed)* | Free tier with limits (Vercel Hobby — non-commercial terms, see Consequences) |
+| ADR-0036 | Vercel for frontend hosting, deployed from GitHub Actions | Accepted — **supersedes ADR-0013**; *decision 4 amended by ADR-0041; hosting challenged by ADR-0043 (Proposed)* | Free tier with limits (Vercel Hobby — non-commercial terms, see Consequences) |
 | ADR-0037 | Wholesale distributor template | Accepted — *amends the vertical order in ADR-0028* | Free |
 | ADR-0038 | Self-serve onboarding and owner custom instructions | Accepted | Free tier with limits (one Vapi assistant per business) |
 | ADR-0042 | React (Vite + TypeScript + Tailwind + shadcn/ui) for the frontend | Accepted — *amends the frontend row of ADR-0035; replaces the Next.js plan* | Free |
 | ADR-0039 | Render + Neon for the Phase 2 backend; residency exception; app-level tenant scoping | **Proposed** — *would supersede ADR-0003 for Phase 2; departs from ADR-0010, ADR-0016, ADR-0023* | Free tier with limits |
 | ADR-0040 | Target voice stack: self-hosted Pipecat + Sarvam in India | **Proposed** — *would change ADR-0008, ADR-0021, ADR-0029* | Deferred paid |
-| ADR-0041 | Vercel rewrites `/api` to the backend for first-party session cookies | **Proposed** — *would amend ADR-0036 decision 4* | Free tier with limits |
+| ADR-0041 | Vercel rewrites `/api` to the backend for first-party session cookies | Accepted — *amends ADR-0036 decision 4* | Free tier with limits |
 | ADR-0043 | Move the frontend from Vercel Hobby to Cloudflare Workers (static assets) | **Proposed** — *would supersede ADR-0036; would carry ADR-0041's `/api` forwarding over as a Worker script* | Free tier with limits |
 
 ---
@@ -583,9 +583,9 @@ ADR-0029 and ADR-0031 were accepted on 2026-10-27 and stay here so their history
 ### ADR-0041: Vercel rewrites `/api` to the backend for first-party session cookies
 
 - **Date:** 2026-11-10
-- **Status:** **Proposed** — team lead chose this option on 2026-11-10; Proposed because it amends an Accepted ADR.
+- **Status:** Accepted — team, 2026-11-11 (team lead chose this option on 2026-11-10). Implemented in PR #18. Before `NEXT_PUBLIC_API_URL` is set on Vercel (M10), check on the live site that login keeps the session cookie (VERIFY: Vercel doesn't document `Set-Cookie` passthrough on external rewrites).
 - **Cost implication:** Free tier with limits — rewrites to an external origin count against Vercel Hobby usage (VERIFY).
-- **Would change:** ADR-0036 decision 4 ("Vercel never proxies API traffic").
+- **Changes:** ADR-0036 decision 4 ("Vercel never proxies API traffic").
 
 **Context:** Phase 2 uses HttpOnly `SameSite=Lax` session cookies. The pages are on `*.vercel.app` and the backend on `*.onrender.com`. These are different sites, so the browser won't send a Lax cookie with the pages' `fetch` calls. `SameSite=None` would fail on Safari and iOS, which block third-party cookies, and many clinic owners use iPhones. A shared custom domain would work but costs money we haven't budgeted.
 
