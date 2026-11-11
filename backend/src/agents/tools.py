@@ -410,10 +410,11 @@ def check_stock(ctx: Ctx, args: dict) -> str:
     except catalog.CatalogError as e:
         if e.matches:
             return (
-                f"UNKNOWN_PRODUCT: '{spoken}' is not one exact product. The catalogue has: "
-                f"{_which(e.matches)}. Ask the caller which one they mean. " + NO_SUBSTITUTE
+                f"UNKNOWN_PRODUCT: '{spoken}' is not an exact product name. The catalogue has: "
+                f"{_which(e.matches)}. Ask the caller if they mean one of these by its full name, "
+                "and use that exact name. " + NO_SUBSTITUTE
             )
-        return f"UNKNOWN_PRODUCT: '{spoken}' is not in the catalogue. " + NO_SUBSTITUTE
+        return f"UNKNOWN_PRODUCT: {e} " + NO_SUBSTITUTE
     if not p["in_stock"]:
         return f"{_product_line(p)}. It is out of stock right now. " + NO_SUBSTITUTE
     return f"{_product_line(p)}."
@@ -491,14 +492,28 @@ def create_order(ctx: Ctx, args: dict) -> str:
     )
 
 
+def _order_number(value) -> int | None:
+    try:
+        number = int(str(value).strip().lstrip("#"))
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 1 else None
+
+
 def order_status(ctx: Ctx, args: dict) -> str:
-    number = _qty(args.get("order_number")) if args.get("order_number") else None
+    """Only the caller's own orders: a number must match the phone the order was placed with."""
+    number = _order_number(args.get("order_number")) if args.get("order_number") else None
     phone = _phone_arg(ctx, args.get("phone"))
-    found = orders.find_for_caller(ctx.conn, number=number, phone=None if number else phone)
+    if not phone:
+        return (
+            "Ask for the 10-digit mobile number the order was placed with, read it back, then call "
+            "order_status again with it (and the order number if they have it)."
+        )
+    found = orders.find_for_caller(ctx.conn, number=number, phone=phone)
     if not found:
         return (
-            "NOT_FOUND: no order with that number or phone. Read the number back to the caller to "
-            "check it, or offer a callback."
+            "NOT_FOUND: no order for that number and phone. Read the phone number back to the "
+            "caller to check it, or offer a callback. Never read out another order."
         )
     words = {
         "new": "received, not yet confirmed",

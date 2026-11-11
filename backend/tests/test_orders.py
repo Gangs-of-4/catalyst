@@ -115,8 +115,13 @@ def scoped(c):
 def test_spoken_names_find_one_product_or_ask(shop):
     conn = scoped(shop)
     try:
-        assert catalog.find(conn, "paracetamol 650")["name"] == "Paracetamol 650 mg tablets"
+        assert catalog.find(conn, "PARACETAMOL 650 mg tablets")["name"] == (
+            "Paracetamol 650 mg tablets"
+        )
         assert catalog.find(conn, "HAND sanitiser")["name"] == "Hand sanitiser"
+        with pytest.raises(catalog.CatalogError) as partial:  # even one fit is confirmed
+            catalog.find(conn, "paracetamol 650")
+        assert [m["name"] for m in partial.value.matches] == ["Paracetamol 650 mg tablets"]
         with pytest.raises(catalog.CatalogError) as ambiguous:
             catalog.find(conn, "paracetamol")
         assert {m["name"] for m in ambiguous.value.matches} == {
@@ -306,7 +311,10 @@ def test_spoken_product_names_resolve_in_the_service(shop):
     conn = scoped(shop)
     try:
         o = orders.create(
-            conn, "Sharma Stores", [orders.Line(qty=2, product="paracetamol 650")], "phone"
+            conn,
+            "Sharma Stores",
+            [orders.Line(qty=2, product="paracetamol 650 MG Tablets")],
+            "phone",
         )
         assert o["items"][0]["name"] == "Paracetamol 650 mg tablets" and o["source"] == "phone"
         with pytest.raises(orders.OrderError) as e:
@@ -405,13 +413,19 @@ def test_a_hidden_product_is_never_swapped_for_a_visible_one(shop):
         conn.close()
 
 
-def test_only_whole_words_stand_in_for_a_name(shop):
+def test_a_partial_name_is_confirmed_never_assumed(shop):
+    """'Crocin' with only 'Crocin Advance' in the catalogue: a different medicine, so ask."""
+    shop.post("/api/catalog", json={"name": "Crocin Advance", "rate": "20"})
     conn = scoped(shop)
     try:
-        assert catalog.find(conn, "sanitiser")["name"] == "Hand sanitiser"  # a whole word
-        with pytest.raises(catalog.CatalogError) as e:  # run-together words: confirm, never assume
-            catalog.find(conn, "paracetamol650")
-        assert [m["name"] for m in e.value.matches] == ["Paracetamol 650 mg tablets"]
+        for spoken, expected in (
+            ("crocin", "Crocin Advance"),
+            ("sanitiser", "Hand sanitiser"),
+            ("paracetamol650", "Paracetamol 650 mg tablets"),  # run-together words
+        ):
+            with pytest.raises(catalog.CatalogError) as e:
+                catalog.find(conn, spoken)
+            assert [m["name"] for m in e.value.matches] == [expected], spoken
     finally:
         conn.close()
 

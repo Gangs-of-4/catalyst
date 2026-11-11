@@ -193,11 +193,11 @@ def search(conn: db.Conn, query: str = "", limit: int = 10) -> list[dict]:
 def find(conn: db.Conn, spoken: str) -> dict:
     """The one active product a caller or the desk named. Never a different product instead.
 
-    Returns a product only for its exact name, or when it is the single product whose name has
-    every spoken word as a whole word ("gloves" → "Surgical gloves"). Otherwise raises CatalogError
-    UNKNOWN_PRODUCT with up to 3 `matches` to ask "which one?" about: the names that fit, or close
-    spellings. A product that exists but is hidden is "not available", never swapped for another
-    one whose name merely contains it."""
+    Returns a product only for its exact name (case, spacing and punctuation aside). Anything else
+    raises CatalogError UNKNOWN_PRODUCT with up to 3 `matches` for the agent to confirm with the
+    caller ("Surgical gloves?"): names containing every spoken word, else run-together words, else
+    close spellings. Medicines differ by one word ("Crocin" vs "Crocin Advance"), so even a single
+    fit is confirmed, never assumed. A hidden product is "not available", never swapped."""
     key = name_key(spoken or "")
     if not key:
         raise CatalogError("UNKNOWN_PRODUCT", "Which product?")
@@ -208,16 +208,9 @@ def find(conn: db.Conn, spoken: str) -> dict:
         raise CatalogError("UNKNOWN_PRODUCT", f"{exact['name']} isn't available right now.")
     products = list_products(conn)  # read once per lookup: this is on the live call path
     words = key.split()
-    whole = _word_matches(products, words)
-    if len(whole) == 1:
-        return whole[0]
-    if whole:
-        raise CatalogError("UNKNOWN_PRODUCT", f"More than one product matches {spoken}.", whole[:3])
-    partial = _joined_matches(products, words)
-    if partial:  # never assumed: the caller confirms which one
-        raise CatalogError(
-            "UNKNOWN_PRODUCT", f"Did they mean one of these for {spoken}?", partial[:3]
-        )
+    fits = _word_matches(products, words) or _joined_matches(products, words)
+    if fits:  # never assumed, even when only one fits: the caller confirms the exact name
+        raise CatalogError("UNKNOWN_PRODUCT", f"{spoken} isn't an exact product name.", fits[:3])
     names = {name_key(p["name"]): p for p in products}
     close = difflib.get_close_matches(key, list(names), n=3, cutoff=0.75)
     raise CatalogError(

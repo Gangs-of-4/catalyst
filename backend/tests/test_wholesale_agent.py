@@ -112,7 +112,7 @@ def test_check_stock_one_product_or_ask_which(shop):
         "Surgical gloves, Box of 100, ₹450, in stock."
     )
     text = tool(shop, "check_stock", {"product": "paracetamol"})
-    assert text.startswith("UNKNOWN_PRODUCT") and "Ask the caller which one" in text
+    assert text.startswith("UNKNOWN_PRODUCT") and "Ask the caller if they mean" in text
     assert "500 mg" in text and "650 mg" in text
     text = tool(shop, "check_stock", {"product": "cough syrup"})
     assert text.startswith("UNKNOWN_PRODUCT") and "Never suggest a different product" in text
@@ -132,7 +132,7 @@ def test_create_order_saves_at_catalogue_rates(shop):
             "contact_name": "Caller One",
             "phone": "9000000041",
             "items": [
-                {"product": "paracetamol 500", "qty": 10},
+                {"product": "Paracetamol 500 mg tablets", "qty": 10},
                 {"product": "Surgical gloves", "qty": "2"},
             ],
             "notes": "Deliver before 5",
@@ -152,7 +152,7 @@ def test_create_order_retry_with_the_same_tool_call_saves_once(shop):
     args = {
         "shop_name": "Test Medical",
         "phone": "9000000041",
-        "items": [{"product": "gloves", "qty": 1}],
+        "items": [{"product": "Surgical gloves", "qty": 1}],
     }
     first = tool(shop, "create_order", args, tc_id="tc-same")
     again = tool(shop, "create_order", args, tc_id="tc-same")
@@ -182,7 +182,7 @@ def test_create_order_needs_a_phone_number(shop):
     text = tool(
         shop,
         "create_order",
-        {"shop_name": "Test Medical", "items": [{"product": "gloves", "qty": 1}]},
+        {"shop_name": "Test Medical", "items": [{"product": "Surgical gloves", "qty": 1}]},
     )
     assert text.startswith("NOT SAVED") and "10-digit" in text
 
@@ -191,7 +191,7 @@ def test_duplicate_order_points_to_the_earlier_one(shop):
     args = {
         "shop_name": "Test Medical",
         "phone": "9000000041",
-        "items": [{"product": "gloves", "qty": 1}],
+        "items": [{"product": "Surgical gloves", "qty": 1}],
     }
     tool(shop, "create_order", args)
     text = tool(shop, "create_order", args)
@@ -202,14 +202,37 @@ def test_order_status_by_number_and_phone(shop):
     args = {
         "shop_name": "Test Medical",
         "phone": "9000000041",
-        "items": [{"product": "gloves", "qty": 3}],
+        "items": [{"product": "Surgical gloves", "qty": 3}],
     }
     tool(shop, "create_order", args)
     shop[0].post("/api/orders/1/status", json={"status": "confirmed"})
-    text = tool(shop, "order_status", {"order_number": 1})
+    text = tool(shop, "order_status", {"order_number": 1, "phone": "90000 00041"})
     assert "order 1 placed" in text and "confirmed, being packed" in text and "₹1,350" in text
     assert "order 1" in tool(shop, "order_status", {"phone": "90000 00041"})
-    assert tool(shop, "order_status", {"order_number": 99}).startswith("NOT_FOUND")
+    assert tool(shop, "order_status", {"order_number": 99, "phone": "9000000041"}).startswith(
+        "NOT_FOUND"
+    )
+
+
+def test_order_status_never_reads_out_another_shops_order(shop):
+    """Order numbers count 1, 2, 3: a number alone must not reveal anyone's order."""
+    args = {
+        "shop_name": "Test Medical",
+        "phone": "9000000041",
+        "items": [{"product": "Surgical gloves", "qty": 3}],
+    }
+    tool(shop, "create_order", args)
+    text = tool(shop, "order_status", {"order_number": 1})
+    assert text.startswith("Ask for the 10-digit mobile number") and "₹" not in text
+    text = tool(shop, "order_status", {"order_number": 1, "phone": "9000000099"})
+    assert text.startswith("NOT_FOUND") and "₹" not in text
+
+
+def test_large_order_numbers_are_understood(shop):
+    from src.agents import tools
+
+    assert tools._order_number("10012") == 10012 and tools._order_number("#42") == 42
+    assert tools._order_number("zero") is None and tools._order_number(0) is None
 
 
 # Facts, escalation, tool list
@@ -319,3 +342,37 @@ def test_end_of_call_review_uses_the_catalogue(shop):
         r["id"]: r["safety_review"] for r in rows(shop, "SELECT * FROM calls WHERE tenant_id = ?")
     }
     assert review == {"call-ok": 0, "call-bad": 1}
+
+
+# Review fixes (#33): advice that names a catalogue product is still advice
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Paracetamol 500 mg tablets bukhar mein le lijiye",
+        "take Paracetamol 500 mg tablets for the pain",
+        "Bachche ko Paracetamol 650 mg tablets de dijiye",
+        "Paracetamol 650 mg tablets sardi ke liye hai",
+        "Dard mein kaam karti hai, Paracetamol 500 mg tablets",
+        "Crocin bhi chalegi",  # a medicine that isn't in the catalogue
+    ],
+)
+def test_advice_naming_a_catalogue_product_is_flagged(line):
+    assert post_call.scan([line], CATALOGUE, selling=True)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "2 boxes Paracetamol 500 mg tablets, ₹120 each",
+        "Paracetamol 500mg tablets ka rate ₹18 hai",  # "500mg" read back as said
+        "PARACETAMOL-650 MG TABLETS, strip of 15",
+        "I can't suggest an alternative, sorry.",
+        "Main koi substitute nahi bata sakti, yeh doctor hi batayenge.",
+        "Main bukhar ke liye dawai nahi bata sakti.",
+        "Apna number de dijiye please.",
+    ],
+)
+def test_order_talk_and_refusals_are_not_flagged(line):
+    assert post_call.scan([line], CATALOGUE, selling=True) == []
