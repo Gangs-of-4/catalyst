@@ -1,6 +1,7 @@
 import { AlertCircle, Loader2 } from "lucide-react";
 import * as React from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { toast } from "sonner";
 
 import { AppHeader } from "@/components/app-header";
 import { Field } from "@/components/field";
@@ -29,7 +30,11 @@ export function LoginPage() {
   React.useEffect(() => {
     const ctrl = new AbortController();
     getMe(ctrl.signal)
-      .then(() => navigate(next, { replace: true }))
+      .then((me) => {
+        // Say why the form was skipped, rather than switching pages silently.
+        toast(`You're already logged in as ${me.user.email}.`);
+        navigate(next, { replace: true });
+      })
       .catch(() => {});
     return () => ctrl.abort();
   }, [navigate, next]);

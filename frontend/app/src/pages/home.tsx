@@ -1,6 +1,6 @@
-import { AlertCircle, Building2, Loader2, LogOut, RotateCw, UserRound } from "lucide-react";
+import { AlertCircle, Building2, Loader2, LogOut, Phone, RotateCw, UserRound } from "lucide-react";
 import * as React from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 import { AppHeader } from "@/components/app-header";
@@ -101,6 +101,24 @@ export function HomePage() {
           <p className="text-sm text-muted-foreground">Hello, {me.user.name.split(" ")[0]}</p>
           <h1 className="text-[28px] font-semibold leading-tight tracking-tight">{me.business.name}</h1>
         </div>
+
+        <Card className="gap-4 border-primary/15">
+          <CardHeader className="flex-row items-center gap-3">
+            <span className="flex size-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
+              <Phone aria-hidden className="size-[18px]" />
+            </span>
+            <CardTitle className="text-base">Talk to your front desk</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <p className="text-sm text-body">
+              Call it the way a {(me.business.labels.contact ?? "customer").toLowerCase()} would, and watch the
+              booking or order appear as you talk.
+            </p>
+            <Button asChild size="lg" className="w-full sm:w-fit">
+              <Link to={`/b/${encodeURIComponent(me.business.public_id)}/try`}>Open your test page</Link>
+            </Button>
+          </CardContent>
+        </Card>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Card className="gap-4">

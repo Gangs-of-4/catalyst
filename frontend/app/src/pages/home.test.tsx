@@ -47,6 +47,8 @@ describe("<HomePage>", () => {
     expect(screen.getByText("Hello, Test")).toBeTruthy();
     expect(screen.getByText("owner@example.com")).toBeTruthy();
     expect(screen.getByText("Your clinic")).toBeTruthy();
+    // A clear next step: the business's own test page.
+    expect(screen.getByRole("link", { name: "Open your test page" }).getAttribute("href")).toBe("/b/abc123/try");
   });
 
   it("sends a logged-out visitor to login, coming back here after", async () => {

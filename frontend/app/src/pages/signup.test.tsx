@@ -11,7 +11,8 @@ type Route = (init?: RequestInit) => Response;
 function mockApi(routes: Record<string, Route>) {
   const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
     const url = String(input);
-    const handler = routes[url];
+    // Not logged in, unless a test says otherwise.
+    const handler = routes[url] ?? (url === "/api/me" ? UNAUTH : undefined);
     if (!handler) throw new Error(`unexpected fetch ${url}`);
     return handler(init);
   });
@@ -23,6 +24,11 @@ const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 const templates = () => json(200, { templates: [CLINIC, WHOLESALE] });
+const UNAUTH = () => json(401, { detail: "Please log in to continue.", code: "UNAUTHENTICATED" });
+const ME = {
+  user: { name: "Test Owner", email: "owner@example.com" },
+  business: { name: "Example Dental", template: "clinic", public_id: "abc123", labels: {} },
+};
 
 function renderPage(path = "/signup") {
   return render(
@@ -81,7 +87,7 @@ describe("<SignupPage>", () => {
     expect(stepLabel()).toContain("1/3");
     // Step 2's errors (address, WhatsApp...) aren't shown yet.
     expect(screen.queryByText("Please fill in your address.")).toBeNull();
-    expect(fetchMock).toHaveBeenCalledTimes(1); // only the templates load
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/signup")).toBe(false); // nothing sent
   });
 
   it("goes back without checking, keeping what was typed", async () => {
@@ -189,5 +195,41 @@ describe("<SignupPage>", () => {
     expect(await screen.findByText(/didn't finish loading/)).toBeTruthy();
     expect(document.activeElement).toBe(retry);
     expect(stepLabel()).toContain("2/3");
+  });
+
+  it("says when you're already logged in, and lets you log out to set up another", async () => {
+    const fetchMock = mockApi({
+      "/api/templates": templates,
+      "/api/me": () => json(200, ME),
+      "/api/logout": () => json(200, { ok: true }),
+    });
+    renderPage();
+    expect(await screen.findByText("owner@example.com")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Go to your home page" }).getAttribute("href")).toBe("/home");
+    fireEvent.click(screen.getByRole("button", { name: "Log out to set up another" }));
+    await waitFor(() => expect(screen.queryByText("owner@example.com")).toBeNull());
+    expect(fetchMock.mock.calls.some(([url, init]) => url === "/api/logout" && init?.method === "POST")).toBe(true);
+  });
+
+  it("sends you home, not to login, when the taken email is the one you're logged in with", async () => {
+    mockApi({
+      "/api/templates": templates,
+      "/api/me": () => json(200, ME),
+      "/api/signup": () =>
+        json(409, {
+          detail: "That email already has an account. Log in instead.",
+          code: "EMAIL_TAKEN",
+          fields: { "user.email": "That email already has an account." },
+        }),
+    });
+    renderPage();
+    await screen.findByLabelText("Your name");
+    fillValidClinic();
+    submit();
+    const banner = await waitFor(() =>
+      screen.getAllByRole("alert").find((el) => el.textContent?.includes("logged in with"))!,
+    );
+    expect(within(banner).getByRole("link", { name: "Go to your home page" }).getAttribute("href")).toBe("/home");
+    expect(within(banner).queryByRole("link", { name: "Go to login" })).toBeNull();
   });
 });
