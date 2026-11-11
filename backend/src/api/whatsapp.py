@@ -65,19 +65,15 @@ async def incoming(request: Request, background: BackgroundTasks):
     text = (params.get("Body") or "").strip()
     if not sender:
         return twiml("Number samajh nahi aaya.")
-    lookup = db.connect_unchecked()  # the sender tells us the business
+    conn = db.connect()
     try:
-        tid = tenancy.for_sender(lookup, sender)
-    finally:
-        lookup.close()
-    if tid is None:
-        log.info("whatsapp: message from a number linked to no business")
-        return twiml(unknown_number_reply())
-    if not text:
-        return twiml("Sirf text commands chalte hain. 'help' bhejein.")
-    conn = db.connect().for_tenant(tid)
-    try:
-        reply, changed = commands.handle(conn, sender, text)
+        tid = tenancy.for_sender(conn, sender)  # the sender tells us the business
+        if tid is None:
+            log.info("whatsapp: message from a number linked to no business")
+            return twiml(unknown_number_reply())
+        if not text:
+            return twiml("Sirf text commands chalte hain. 'help' bhejein.")
+        reply, changed = commands.handle(conn.for_tenant(tid), sender, text)
     finally:
         conn.close()
     if changed:

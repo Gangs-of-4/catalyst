@@ -264,7 +264,7 @@ def signup(body: SignupIn, request: Request, response: Response) -> dict:
                 "That email already has an account. Log in instead.",
                 {"user.email": "That email already has an account."},
             )
-        if tenancy.by_whatsapp(pre, body.business.owner_whatsapp):
+        if tenancy.number_taken(pre, body.business.owner_whatsapp):
             raise ApiError(
                 409,
                 "WHATSAPP_TAKEN",

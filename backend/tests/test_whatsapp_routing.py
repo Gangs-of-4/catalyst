@@ -113,11 +113,54 @@ def test_a_listed_second_number_reaches_that_business(two):
     assert "Dr. Test" in send(wa, "aaj ke appointments", SECOND_DOCTOR)
 
 
-def test_a_number_listed_by_two_businesses_commands_neither(two):
+def test_one_business_cannot_claim_anothers_number(two):
+    """Numbers are unique across businesses: the shop can't lock the clinic's doctor out."""
     clinic, shop, wa = two
     add_number(clinic, SECOND_DOCTOR)
-    add_number(shop, SECOND_DOCTOR)
+    s = shop.get("/api/settings").json()["settings"]
+    body = {k: s[k] for k in ("name", "address", "sessions")}
+    for taken in ("90000 00203", CLINIC_OWNER):  # a listed number, and an owner's number
+        r = shop.put("/api/settings", json={**body, "whatsapp_numbers": [SHOP_OWNER, taken]})
+        assert r.status_code == 409 and r.json()["code"] == "WHATSAPP_TAKEN"
+    assert shop.get("/api/settings").json()["settings"]["whatsapp_numbers"] == [SHOP_OWNER]
+    assert "Dr. Test" in send(wa, "aaj ke appointments", SECOND_DOCTOR)
+
+
+def test_a_listed_number_need_not_be_stored_normalised(two):
+    """Settings saved before (or outside) /setup may hold "90000 00203"; it still matches."""
+    clinic, _, wa = two
+    add_number(clinic, "90000 00203")
+    assert "Dr. Test" in send(wa, "aaj ke appointments", SECOND_DOCTOR)
+
+
+def test_old_databases_are_indexed_at_startup(two, raw):
+    clinic, _, wa = two
+    add_number(clinic, SECOND_DOCTOR)
+    with raw:
+        raw.execute("DELETE FROM tenant_whatsapp_numbers")  # as before the index existed
     assert "juda nahi hai" in send(wa, "help", SECOND_DOCTOR)
+    with TestClient(app) as restarted:  # startup rebuilds the index from settings
+        assert "Dr. Test" in send(restarted, "aaj ke appointments", SECOND_DOCTOR)
+
+
+def test_signup_cannot_take_a_number_another_business_lists(two):
+    clinic, _, _ = two
+    add_number(clinic, SECOND_DOCTOR)
+    with TestClient(app, headers=APP_HEADERS) as c:
+        body = {
+            "user": {"name": "Owner", "email": "late@example.com", "password": "another pass"},
+            "business": {
+                "template": "wholesale",
+                "name": "Late Shop",
+                "address": "1 Test Road",
+                "hours": [["09:00", "19:00"]],
+                "owner_whatsapp": SECOND_DOCTOR[3:],
+                "consent": True,
+            },
+            "details": {},
+        }
+        r = c.post("/api/signup", json=body)
+        assert r.status_code == 409 and r.json()["code"] == "WHATSAPP_TAKEN"
 
 
 def test_commands_follow_the_template(two):
@@ -210,3 +253,76 @@ def test_one_owner_cannot_touch_another_business(two):
     send(wa, "rate Paracetamol 500 mg tablets 1", CLINIC_OWNER)
     send(wa, "haan", CLINIC_OWNER)
     assert catalogue(shop)["Paracetamol 500 mg tablets"]["rate"] == "₹18"
+
+
+# Review fixes (#35)
+
+
+@pytest.mark.parametrize("name", ["Potato", "Kabab", "Cars"])
+def test_rate_keeps_names_that_end_like_a_currency_word(two, name):
+    """'rate potato 40' used to read the product as 'pota' (the 'to' was taken as a separator)."""
+    _, shop, wa = two
+    shop.post("/api/catalog", json={"name": name, "rate": "10"})
+    reply = send(wa, f"rate {name.lower()} 40", SHOP_OWNER)
+    assert f"{name}: ₹10 → ₹40" in reply
+    send(wa, "haan", SHOP_OWNER)
+    assert catalogue(shop)[name]["rate"] == "₹40"
+
+
+@pytest.mark.parametrize("text", ["payment aaya", "driver aa gaya", "aaj ka kaam khatam"])
+def test_everyday_messages_are_not_stock_commands(two, raw, text):
+    _, _, wa = two
+    assert "Samajh nahi aaya" in send(wa, text, SHOP_OWNER)
+    note = raw.execute("SELECT note FROM inbox WHERE kind = 'ops' ORDER BY id DESC").fetchone()
+    assert note["note"] == f"WhatsApp: {text}"
+
+
+def test_a_disabled_command_is_refused_even_after_haan(two, monkeypatch):
+    from src.verticals import loader
+
+    _, shop, wa = two
+    send(wa, "rate Paracetamol 500 mg tablets 20", SHOP_OWNER)
+    real = loader.whatsapp_commands
+    monkeypatch.setattr(
+        loader,
+        "whatsapp_commands",
+        lambda t: real(t) - {"set_rate"} if t == "wholesale" else real(t),
+    )
+    assert "nahi hai" in send(wa, "haan", SHOP_OWNER)
+    assert catalogue(shop)["Paracetamol 500 mg tablets"]["rate"] == "₹18"
+
+
+def test_weekly_summary_counts_every_order(two, monkeypatch):
+    from src.orders import service as orders
+
+    _, _, wa = two
+    monkeypatch.setattr(orders, "PAGE_SIZE", 1)  # a page cap must never cap the counts
+    _, shop, _ = two
+    pid = catalogue(shop)["Paracetamol 500 mg tablets"]["id"]
+    shop.post("/api/orders", json={"shop_name": "Other", "items": [{"product_id": pid, "qty": 1}]})
+    assert "Aaj: 2 orders, ₹90" in send(wa, "summary", SHOP_OWNER)
+
+
+def test_every_enabled_command_is_one_the_code_handles():
+    from src.channels.whatsapp import commands
+    from src.verticals import loader
+
+    assert set(commands.ALL_INTENTS) - {"help"} == loader.WHATSAPP_COMMANDS
+    for template in ("clinic", "wholesale"):
+        assert loader.whatsapp_commands(template) <= loader.WHATSAPP_COMMANDS
+
+
+def test_an_unknown_command_in_vertical_yaml_fails_validation(tmp_path):
+    import shutil
+
+    from src.verticals import loader
+
+    copy = tmp_path / "wholesale"
+    shutil.copytree(loader.template_dir("wholesale"), copy)
+    text = (copy / "vertical.yaml").read_text(encoding="utf-8")
+    (copy / "vertical.yaml").write_text(
+        text.replace("commands: [orders_today,", "commands: [order_dispatch, orders_today,"),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="unknown whatsapp commands"):
+        loader.validate(copy)

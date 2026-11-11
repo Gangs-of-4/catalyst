@@ -38,7 +38,7 @@ booking:
   sources: [phone, whatsapp, walk_in]
 
 whatsapp:
-  commands: [block_day, block_range, set_hours, query_today]
+  commands: [query_day, callbacks, summary, block_day, late_start, early_close, add_instruction]  # see loader.WHATSAPP_COMMANDS
   confirm_words: [haan, ha, yes, ok]
   reject_words: [nahi, na, no]
   preview_expiry_min: 30

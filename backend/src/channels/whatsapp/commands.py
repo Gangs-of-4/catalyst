@@ -525,6 +525,8 @@ def handle(conn: db.Conn, sender: str, text: str) -> tuple[str, bool]:
             return "Woh preview purana ho gaya. Command dobara bhejein.", False
         if t in REJECT:
             return "Theek hai, kuch nahi badla.", False
+        if cmd.intent not in enabled:  # switched off since the preview
+            return NOT_ENABLED, False
         if cmd.intent in order_commands.WRITES:
             return order_commands.apply(conn, cmd), False  # rates and stock aren't in the prompt
         if cmd.intent == "add_instruction":
