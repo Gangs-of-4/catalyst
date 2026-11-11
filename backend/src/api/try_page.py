@@ -13,11 +13,12 @@ from fastapi import APIRouter, Depends
 from ..core import config, db, tenancy
 from ..core import settings as cs
 from ..core.config import env
+from ..orders import service as orders
 from ..providers.voice_orchestrator import vapi
 from ..verticals import loader
 from .deps import require_csrf_header
 from .errors import ApiError
-from .public import masked_days
+from .public import mask, masked_days
 from .sync import uses_env_assistant
 
 router = APIRouter(dependencies=[Depends(require_csrf_header)])
@@ -137,4 +138,22 @@ def board(public_id: str, conn: db.Conn = Depends(get_public_conn)) -> dict:
                     for sl in col["slots"]
                 ]
         return {"kind": "bookings", "days": days}
-    return {"kind": "orders", "orders": []}  # the order board arrives with M4
+    if "orders" not in loader.modules(t["template"]):
+        raise ApiError(404, "NOT_FOUND", "This business has no public board.")
+    today = config.now().date().isoformat()
+    return {
+        "kind": "orders",
+        "orders": [
+            {
+                "id": o["id"],
+                "number": str(o["number"]),
+                "shop": mask(o["shop_name"]),
+                "items": len(o["items"]),
+                "total": o["total"],
+                "status": o["status"],
+                "source": o["source"],
+                "created_at": o["created_at"],
+            }
+            for o in orders.list_orders(conn, day=today)
+        ],
+    }

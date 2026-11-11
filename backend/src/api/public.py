@@ -32,7 +32,7 @@ def public_config(conn: db.Conn = Depends(get_conn)) -> dict:
     }
 
 
-def _mask(name: str) -> str:
+def mask(name: str) -> str:
     """Public page shows 'Ramesh G.', never a full name or phone."""
     parts = name.split()
     return parts[0] if len(parts) == 1 else f"{parts[0]} {parts[-1][0]}."
@@ -57,7 +57,7 @@ def masked_days(conn: db.Conn, s: dict, resource_key: str = "doctor") -> list[di
                         "past": sl["past"],
                         "block": sl["block"],
                         "booking": (
-                            {"id": b["id"], "name": _mask(b["name"]), "source": b["source"]}
+                            {"id": b["id"], "name": mask(b["name"]), "source": b["source"]}
                             if b
                             else None
                         ),
