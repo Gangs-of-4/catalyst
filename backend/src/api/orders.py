@@ -88,12 +88,24 @@ def change_product(
         raise _catalog_error(e) from e
 
 
+async def _body_up_to(request: Request, limit: int) -> bytes:
+    """The request body, refused as soon as it passes `limit`: never buffers a huge upload."""
+    too_big = ApiError(422, "VALIDATION", "That file is too big. Keep it under 1 MB.")
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > limit:
+        raise too_big
+    raw = bytearray()
+    async for chunk in request.stream():
+        raw += chunk
+        if len(raw) > limit:
+            raise too_big
+    return bytes(raw)
+
+
 @router.post("/api/catalog/import")
 async def import_catalog(request: Request, conn: db.Conn = Depends(require_orders)) -> dict:
     """The CSV file as the raw request body (Content-Type: text/csv), at most 1 MB."""
-    raw = await request.body()
-    if len(raw) > MAX_CSV_BYTES:
-        raise ApiError(422, "VALIDATION", "That file is too big. Keep it under 1 MB.")
+    raw = await _body_up_to(request, MAX_CSV_BYTES)
     try:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -129,8 +141,11 @@ class OrderIn(BaseModel):
 def list_orders(
     status: str | None = None,
     date_: str | None = Query(None, alias="date"),
+    before_id: int | None = None,
+    limit: int = Query(orders.PAGE_SIZE, ge=1, le=orders.PAGE_SIZE),
     conn: db.Conn = Depends(require_orders),
 ) -> dict:
+    """Newest first. `next_before_id` is set when there are more: pass it as `before_id`."""
     if status and status not in orders.STATUSES:
         raise ApiError(422, "VALIDATION", f"Status must be one of: {', '.join(orders.STATUSES)}.")
     if date_:
@@ -138,7 +153,9 @@ def list_orders(
             date.fromisoformat(date_)
         except ValueError:
             raise ApiError(422, "VALIDATION", "Date must look like 2026-11-15.") from None
-    return {"orders": orders.list_orders(conn, status, date_)}
+    found = orders.list_orders(conn, status, date_, before_id, limit + 1)
+    more = len(found) > limit
+    return {"orders": found[:limit], "next_before_id": found[limit - 1]["id"] if more else None}
 
 
 @router.post("/api/orders")
@@ -147,8 +164,10 @@ def add_order(body: OrderIn, conn: db.Conn = Depends(require_orders)) -> dict:
     if body.phone.strip() and not phone:
         message = "Phone must be a 10-digit Indian mobile number."
         raise ApiError(422, "VALIDATION", message, fields={"phone": message})
-    if body.source not in ("walk_in", "whatsapp"):
-        raise ApiError(422, "VALIDATION", "Source must be walk_in or whatsapp.")
+    if body.source not in orders.DESK_SOURCES:
+        raise ApiError(
+            422, "VALIDATION", f"Source must be one of: {', '.join(orders.DESK_SOURCES)}."
+        )
     try:
         return orders.create(
             conn,

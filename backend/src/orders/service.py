@@ -22,6 +22,8 @@ TRANSITIONS = {
 }
 OPEN = ("new", "confirmed", "dispatched")
 SOURCES = ("phone", "whatsapp", "walk_in")
+DESK_SOURCES = ("walk_in", "whatsapp")  # what the desk may enter; "phone" is the agent's
+PAGE_SIZE = 200
 MAX_QTY = 9999
 MAX_LINES = 30
 
@@ -143,10 +145,20 @@ def _with_items(conn: db.Conn, rows: list[db.Row]) -> list[dict]:
     return out
 
 
-def list_orders(conn: db.Conn, status: str | None = None, day: str | None = None) -> list[dict]:
-    """Newest first. `day` is YYYY-MM-DD (IST, by creation time)."""
+def list_orders(
+    conn: db.Conn,
+    status: str | None = None,
+    day: str | None = None,
+    before_id: int | None = None,
+    limit: int = PAGE_SIZE,
+) -> list[dict]:
+    """Newest first, at most `limit`. `day` is YYYY-MM-DD (IST, by creation time). For the next
+    page pass the last order's id as `before_id`."""
     sql = "SELECT * FROM orders WHERE tenant_id = ?"
     params: list = [conn.tid]
+    if before_id is not None:
+        sql += " AND id < ?"
+        params.append(before_id)
     if status:
         sql += " AND status = ?"
         params.append(status)
@@ -154,7 +166,7 @@ def list_orders(conn: db.Conn, status: str | None = None, day: str | None = None
         start = date.fromisoformat(day)
         sql += " AND created_at >= ? AND created_at < ?"
         params += [start.isoformat(), (start + timedelta(days=1)).isoformat()]
-    rows = conn.execute(sql + " ORDER BY created_at DESC, id DESC LIMIT 200", params).fetchall()
+    rows = conn.execute(sql + " ORDER BY id DESC LIMIT ?", [*params, limit]).fetchall()
     return _with_items(conn, rows)
 
 
@@ -164,14 +176,14 @@ def _duplicate(conn: db.Conn, phone: str | None, shop: str, wanted: dict[int, in
     if phone:
         rows = conn.execute(
             "SELECT * FROM orders WHERE tenant_id = ? AND phone = ? AND created_at >= ?"
-            " AND created_at < ? AND status IN ('new', 'confirmed', 'dispatched')",
-            (conn.tid, phone, start, end),
+            " AND created_at < ? AND status IN (?, ?, ?)",
+            (conn.tid, phone, start, end, *OPEN),
         ).fetchall()
     else:
         rows = conn.execute(
             "SELECT * FROM orders WHERE tenant_id = ? AND created_at >= ? AND created_at < ?"
-            " AND status IN ('new', 'confirmed', 'dispatched')",
-            (conn.tid, start, end),
+            " AND status IN (?, ?, ?)",
+            (conn.tid, start, end, *OPEN),
         ).fetchall()
         rows = [r for r in rows if catalog.name_key(r["shop_name"]) == catalog.name_key(shop)]
     for order in _with_items(conn, rows):

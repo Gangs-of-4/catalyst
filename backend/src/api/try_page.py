@@ -138,6 +138,8 @@ def board(public_id: str, conn: db.Conn = Depends(get_public_conn)) -> dict:
                     for sl in col["slots"]
                 ]
         return {"kind": "bookings", "days": days}
+    if "orders" not in loader.modules(t["template"]):
+        raise ApiError(404, "NOT_FOUND", "This business has no public board.")
     today = config.now().date().isoformat()
     return {
         "kind": "orders",
