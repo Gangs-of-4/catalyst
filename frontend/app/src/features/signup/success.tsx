@@ -1,4 +1,5 @@
 import { AlertCircle, CheckCircle2, Clock } from "lucide-react";
+import { Link } from "react-router";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,7 @@ const AGENT: Record<AgentState, { badge: "success" | "neutral" | "destructive"; 
 
 /**
  * Shown after a successful signup. The owner is already logged in (the session cookie is set).
- * When the test page exists (a later M8 task), signup sends the owner there instead.
+ * Links to /home; when the test page exists (a later M8 task), signup sends the owner there instead.
  */
 export function SignupSuccess({ businessName, template, agent }: SuccessProps) {
   const a = AGENT[agent];
@@ -57,8 +58,8 @@ export function SignupSuccess({ businessName, template, agent }: SuccessProps) {
         <p className="text-body">{a.text}</p>
       </CardContent>
       <CardFooter>
-        <Button asChild variant="outline">
-          <a href="/">Back to the home page</a>
+        <Button asChild>
+          <Link to="/home">Go to your home page</Link>
         </Button>
       </CardFooter>
     </Card>

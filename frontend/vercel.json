@@ -6,6 +6,8 @@
   "cleanUrls": true,
   "git": { "deploymentEnabled": false },
   "rewrites": [
+    { "source": "/home", "destination": "/app.html" },
+    { "source": "/login", "destination": "/app.html" },
     { "source": "/signup", "destination": "/app.html" },
     { "source": "/styleguide", "destination": "/app.html" }
   ]

@@ -52,6 +52,11 @@ jobs:
       - name: Pull Vercel production settings and env vars
         run: npx --yes vercel@65.1.0 pull --yes --environment=production --token="$VERCEL_TOKEN"
 
+      # vercel.json can't read env vars, so write the /api and /healthz rewrites to the backend
+      # (NEXT_PUBLIC_API_URL, saved by the pull above) into it before building (ADR-0041).
+      - name: Add backend rewrites
+        run: node frontend/configure-vercel.mjs
+
       - name: Build
         run: npx --yes vercel@65.1.0 build --prod --token="$VERCEL_TOKEN"
 
