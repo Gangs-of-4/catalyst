@@ -135,6 +135,20 @@ export function SignupPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting) return;
+    // The button is never disabled without a reason; if the templates didn't load, say so here.
+    if (!templates) {
+      setFormError(
+        loadError
+          ? {
+              code: "NOT_LOADED",
+              detail:
+                "The form didn't finish loading, so it can't be sent yet. Press \"Try again\" under \"What kind of business is it?\".",
+            }
+          : { code: "LOADING", detail: "The form is still loading. Wait a moment, then press the button again." },
+      );
+      document.getElementById("templates-retry")?.focus();
+      return;
+    }
     const found = validate(form, template);
     if (found["faqs"] || Object.keys(found).some((k) => k.startsWith("faqs.") || k === "instructions"))
       setOptionalOpen(true);
@@ -240,7 +254,7 @@ export function SignupPage() {
                   title="The form didn't load"
                   description={loadError}
                   action={
-                    <Button variant="outline" onClick={() => setLoadAttempt((n) => n + 1)}>
+                    <Button id="templates-retry" variant="outline" onClick={() => setLoadAttempt((n) => n + 1)}>
                       <RotateCw /> Try again
                     </Button>
                   }
@@ -700,7 +714,7 @@ export function SignupPage() {
               </div>
             )}
 
-            <Button type="submit" size="lg" disabled={submitting || !templates} className="w-full sm:w-auto sm:self-end">
+            <Button type="submit" size="lg" disabled={submitting} className="w-full sm:w-auto sm:self-end">
               {submitting ? (
                 <>
                   <Loader2 aria-hidden className="animate-spin" /> Setting up your front desk…
