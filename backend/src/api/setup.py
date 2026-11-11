@@ -1,9 +1,10 @@
-"""Clinic settings page and API (C12). Saving re-syncs the voice agent and reports the result."""
+"""Settings page and API for the logged-in owner's business (C12; contracts.md §6.1). Saving
+re-syncs only that business's voice agent and reports the result."""
 
 import re
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -13,10 +14,12 @@ from ..core import config, db
 from ..core import phone as ph
 from ..core import settings as cs
 from ..core.config import FRONTEND_DIR
-from .deps import get_conn, require_staff
-from .sync import agent_configured, sync_agent
+from .deps import get_user_conn, modules, require_bookings, require_csrf_header
+from .errors import ApiError
+from .sync import agent_available, sync_agent
 
-router = APIRouter(dependencies=[Depends(require_staff)])
+pages = APIRouter()
+router = APIRouter(dependencies=[Depends(require_csrf_header)])
 HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
@@ -89,7 +92,7 @@ class SettingsIn(BaseModel):
         return v
 
 
-@router.get("/setup", include_in_schema=False)
+@pages.get("/setup", include_in_schema=False)
 def setup_page() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "setup.html")
 
@@ -113,14 +116,17 @@ def _blocks(conn: db.Conn, s: dict) -> list[dict]:
     return out
 
 
-@router.get("/api/setup")
-def get_setup(conn: db.Conn = Depends(get_conn)) -> dict:
+@router.get("/api/settings")
+def get_settings(conn: db.Conn = Depends(get_user_conn)) -> dict:
     s = cs.load(conn)
-    return {"settings": s, "blocks": _blocks(conn, s), "agentConfigured": agent_configured()}
+    blocks = _blocks(conn, s) if "bookings" in modules(conn) else []
+    return {"settings": s, "blocks": blocks, "agentConfigured": agent_available(conn)}
 
 
-@router.put("/api/setup")
-def save_setup(body: SettingsIn, conn: db.Conn = Depends(get_conn)) -> dict:
+@router.put("/api/settings")
+def save_settings(body: SettingsIn, conn: db.Conn = Depends(get_user_conn)) -> dict:
+    if "bookings" not in modules(conn):
+        raise ApiError(404, "NOT_FOUND", "This page can't edit this business's settings yet.")
     s = cs.load(conn)
     old_ids = {d["id"] for d in s["doctors"]}
     doctors, taken = [], set()
@@ -131,7 +137,7 @@ def save_setup(body: SettingsIn, conn: db.Conn = Depends(get_conn)) -> dict:
             else cs.doctor_slug(d.name, taken | old_ids)
         )
         if did in taken:
-            raise HTTPException(422, f"Two doctors share the id '{did}'.")
+            raise ApiError(422, "VALIDATION", f"Two doctors share the id '{did}'.")
         taken.add(did)
         prev = cs.doctor(s, did) or {}
         doctors.append({**prev, "id": did, "name": d.name.strip()})
@@ -143,8 +149,9 @@ def save_setup(body: SettingsIn, conn: db.Conn = Depends(get_conn)) -> dict:
             (conn.tid, gone, today),
         ).fetchone()[0]
         if n:
-            raise HTTPException(
+            raise ApiError(
                 422,
+                "VALIDATION",
                 f"{cs.doctor_name(s, gone)} has {n} upcoming booking(s). Move or cancel them before removing the doctor.",
             )
     s.update(body.model_dump(exclude={"doctors"}))
@@ -152,7 +159,7 @@ def save_setup(body: SettingsIn, conn: db.Conn = Depends(get_conn)) -> dict:
     s["sessions"] = [list(x) for x in body.sessions]
     s["red_flags"] = [r.strip() for r in body.red_flags if r.strip()]
     cs.save(conn, s)
-    return {"ok": True, "agent": sync_agent(conn.tid), "settings": s}
+    return {"saved": True, "agent": sync_agent(conn.tid), "settings": s}
 
 
 class BlockIn(BaseModel):
@@ -160,17 +167,17 @@ class BlockIn(BaseModel):
     doctor_id: str | None = None
 
 
-@router.post("/api/setup/blocks")
-def add_block(body: BlockIn, conn: db.Conn = Depends(get_conn)) -> dict:
+@router.post("/api/settings/blocks")
+def add_block(body: BlockIn, conn: db.Conn = Depends(require_bookings)) -> dict:
     s = cs.load(conn)
     try:
         d = date.fromisoformat(body.date)
     except ValueError:
-        raise HTTPException(422, "Pick a date.") from None
+        raise ApiError(422, "VALIDATION", "Pick a date.") from None
     if d < config.now().date():
-        raise HTTPException(422, "That date has passed.")
+        raise ApiError(422, "VALIDATION", "That date has passed.")
     if body.doctor_id and not cs.doctor(s, body.doctor_id):
-        raise HTTPException(422, "Unknown doctor.")
+        raise ApiError(422, "VALIDATION", "Unknown doctor.")
     affected = bk.affected_bookings(conn, s, d, body.doctor_id)
     bk.add_block(conn, d, "leave" if body.doctor_id else "holiday", "setup", body.doctor_id)
     note = (
@@ -181,9 +188,9 @@ def add_block(body: BlockIn, conn: db.Conn = Depends(get_conn)) -> dict:
     return {"blocks": _blocks(conn, s), "note": note, "agent": sync_agent(conn.tid)}
 
 
-@router.delete("/api/setup/blocks/{block_id}")
-def delete_block(block_id: int, conn: db.Conn = Depends(get_conn)) -> dict:
+@router.delete("/api/settings/blocks/{block_id}")
+def delete_block(block_id: int, conn: db.Conn = Depends(require_bookings)) -> dict:
     if not bk.remove_block(conn, block_id):
-        raise HTTPException(404, "That leave or holiday was already removed.")
+        raise ApiError(404, "NOT_FOUND", "That leave or holiday was already removed.")
     s = cs.load(conn)
     return {"blocks": _blocks(conn, s), "agent": sync_agent(conn.tid)}

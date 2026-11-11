@@ -123,6 +123,15 @@ CREATE TABLE IF NOT EXISTS inbox (
   done_at TEXT
 );
 CREATE INDEX IF NOT EXISTS inbox_tenant_open ON inbox (tenant_id, done_at);
+-- Usage evidence (contracts.md section 3.1). No payload column, so counts never carry names or numbers.
+CREATE TABLE IF NOT EXISTS events (
+  id {ID},
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  user_id TEXT,
+  type TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS events_type_time ON events (type, created_at);
 CREATE TABLE IF NOT EXISTS calls (
   tenant_id TEXT NOT NULL REFERENCES tenants(id),
   id TEXT NOT NULL,

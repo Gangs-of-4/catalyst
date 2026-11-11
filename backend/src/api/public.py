@@ -38,10 +38,9 @@ def _mask(name: str) -> str:
     return parts[0] if len(parts) == 1 else f"{parts[0]} {parts[-1][0]}."
 
 
-@router.get("/api/register")
-def register(conn: db.Conn = Depends(get_conn)) -> dict:
-    """Today and tomorrow, per doctor, with masked names."""
-    s = cs.load(conn)
+def masked_days(conn: db.Conn, s: dict, resource_key: str = "doctor") -> list[dict]:
+    """Today and tomorrow, one column per resource, with masked names and no phones. Shared by the
+    old try page and /api/try/{public_id}/board."""
     today = config.now().date()
     days = []
     for d in (today, today + timedelta(days=1)):
@@ -64,16 +63,22 @@ def register(conn: db.Conn = Depends(get_conn)) -> dict:
                         ),
                     }
                 )
-            cols.append({"doctor": col["doctor"]["name"], "slots": slots})
-        label = "Today" if d == today else "Tomorrow"
+            cols.append({resource_key: col["doctor"]["name"], "slots": slots})
         days.append(
             {
                 "date": d.isoformat(),
-                "label": label,
+                "label": "Today" if d == today else "Tomorrow",
                 "short": short_date(d),
                 "long": spoken_date(d),
                 "closed": grid["closed"],
                 "columns": cols,
             }
         )
-    return {"clinic": s["name"], "days": days}
+    return days
+
+
+@router.get("/api/register")
+def register(conn: db.Conn = Depends(get_conn)) -> dict:
+    """The old demo try page's register. Replaced by /api/try/{public_id}/board."""
+    s = cs.load(conn)
+    return {"clinic": s["name"], "days": masked_days(conn, s)}

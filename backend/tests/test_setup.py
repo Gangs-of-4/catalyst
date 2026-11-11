@@ -1,18 +1,14 @@
 import httpx
 import pytest
-from fastapi.testclient import TestClient
-
-from src.main import app
 
 
 @pytest.fixture
-def client(isolated):
-    with TestClient(app) as c:
-        yield c
+def client(owner):
+    return owner
 
 
 def current(client):
-    s = client.get("/api/setup").json()["settings"]
+    s = client.get("/api/settings").json()["settings"]
     return {
         k: s[k]
         for k in (
@@ -36,7 +32,7 @@ def current(client):
 
 def test_save_without_agent_says_so(client):
     body = {**current(client), "name": "Muskaan Dental Care", "whatsapp_numbers": ["98765 43210"]}
-    r = client.put("/api/setup", json=body).json()
+    r = client.put("/api/settings", json=body).json()
     assert r["settings"]["name"] == "Muskaan Dental Care"
     assert r["settings"]["whatsapp_numbers"] == ["+919876543210"]
     assert "isn't set up" in r["agent"]
@@ -55,7 +51,7 @@ def test_save_syncs_agent_and_reports_error(client, isolated, monkeypatch):
         return httpx.Response(200, json={"id": "a1"}, request=httpx.Request(method, url))
 
     monkeypatch.setattr(httpx, "request", fake)
-    r = client.put("/api/setup", json={**current(client), "voice": "male"}).json()
+    r = client.put("/api/settings", json={**current(client), "voice": "male"}).json()
     assert r["agent"] == "Agent updated (a1)."
     method, url, payload = calls[-1]
     assert (method, url) == ("PATCH", "https://api.vapi.ai/assistant/a1")
@@ -68,7 +64,7 @@ def test_save_syncs_agent_and_reports_error(client, isolated, monkeypatch):
             400, text='{"message":"bad voice"}', request=httpx.Request(m, u)
         ),
     )
-    r = client.put("/api/setup", json=current(client)).json()
+    r = client.put("/api/settings", json=current(client)).json()
     assert "failed" in r["agent"] and "bad voice" in r["agent"]
 
 
@@ -81,7 +77,7 @@ def test_save_syncs_agent_and_reports_error(client, isolated, monkeypatch):
     ],
 )
 def test_validation_is_readable(client, change, message):
-    r = client.put("/api/setup", json={**current(client), **change})
+    r = client.put("/api/settings", json={**current(client), **change})
     assert (
         r.status_code == 422
         and isinstance(r.json()["detail"], str)
@@ -92,20 +88,20 @@ def test_validation_is_readable(client, change, message):
 def test_new_doctor_gets_stable_id_and_old_ids_kept(client):
     body = current(client)
     body["doctors"] = body["doctors"] + [{"id": None, "name": "Dr. Meera Joshi"}]
-    docs = client.put("/api/setup", json=body).json()["settings"]["doctors"]
+    docs = client.put("/api/settings", json=body).json()["settings"]["doctors"]
     assert [d["id"] for d in docs] == ["dr-a", "dr-b", "dr-meera-joshi"]
 
 
 def test_cannot_remove_doctor_with_upcoming_bookings(client):
     body = current(client)
     body["doctors"] = [d for d in body["doctors"] if d["id"] != "dr-a"]
-    r = client.put("/api/setup", json=body)
+    r = client.put("/api/settings", json=body)
     assert r.status_code == 422 and "upcoming booking" in r.json()["detail"]
 
 
 def test_leave_add_and_remove(client):
-    r = client.post("/api/setup/blocks", json={"date": "2026-10-28", "doctor_id": "dr-b"}).json()
+    r = client.post("/api/settings/blocks", json={"date": "2026-10-28", "doctor_id": "dr-b"}).json()
     assert len(r["blocks"]) == 1 and "Dr. Vikram Saxena" in r["blocks"][0]["label"] and r["note"]
-    r = client.delete(f"/api/setup/blocks/{r['blocks'][0]['id']}").json()
+    r = client.delete(f"/api/settings/blocks/{r['blocks'][0]['id']}").json()
     assert r["blocks"] == []
-    assert client.post("/api/setup/blocks", json={"date": "2026-01-01"}).status_code == 422
+    assert client.post("/api/settings/blocks", json={"date": "2026-01-01"}).status_code == 422
