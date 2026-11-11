@@ -34,15 +34,14 @@ def get_webhook_conn(
 ) -> Iterator[db.Conn]:
     """A connection scoped to the business named in the webhook path (contracts.md §1.10).
 
-    Unknown `public_id` is 404; a missing or wrong secret is 401. The secret is the one stored on that
-    business's own row, so business A's secret never authorises business B.
+    An unknown `public_id` and a missing or wrong secret are both 401, so the response doesn't tell a
+    caller which business ids exist. The secret is the one stored on that business's own row, so
+    business A's secret never authorises business B.
     """
     conn = db.connect()
     try:
         t = tenancy.by_public_id(conn, public_id)
-        if t is None:
-            raise HTTPException(404, "Unknown business")
-        expected = t["tool_secret"] or ""
+        expected = (t["tool_secret"] or "") if t is not None else ""
         if not (
             expected
             and x_catalyst_secret

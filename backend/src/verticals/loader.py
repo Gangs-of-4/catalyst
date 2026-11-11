@@ -123,6 +123,11 @@ def template_dir(template: str) -> Path:
     return VERTICALS_DIR / template
 
 
+def tool_names(template: str) -> set[str]:
+    """The tools a template's agent may call (vertical.yaml `tools`). Raises ValueError if invalid."""
+    return set(validate(template_dir(template))["tools"])
+
+
 def template_defaults(template: str) -> dict:
     """What a new business of this template starts with: labels, WhatsApp words, safety red flags and
     the form defaults. Nothing from the fictional demo tenant."""

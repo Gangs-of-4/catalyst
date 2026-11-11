@@ -5,11 +5,12 @@ import json
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, ValidationError
 
-from ..agents import calls, tools
+from ..agents import calls, prompt, tools
 from ..core import db
 from ..core import phone as ph
 from ..core import settings as cs
 from ..core.log import log
+from ..verticals import loader
 from .deps import get_conn, get_webhook_conn, secret_ok
 
 router = APIRouter()
@@ -76,6 +77,7 @@ async def legacy_webhook(
     .env). Removed once every assistant is re-synced to its own path (contracts.md §1.10)."""
     if not secret_ok(x_catalyst_secret, "CATALYST_TOOL_SECRET"):
         raise HTTPException(401, "Bad or missing x-catalyst-secret")
+    log.info("vapi: legacy webhook used (re-sync this assistant to its own path)")
     return await _handle(request, background, conn)
 
 
@@ -100,6 +102,7 @@ async def _handle(request: Request, background: BackgroundTasks, conn: db.Conn):
             call_id=call_id,
             caller_phone=ph.normalize((call.get("customer") or {}).get("number")),
         )
+        allowed = loader.tool_names(prompt.template_name(conn))
         results = []
         for tc in tool_call_list(message):
             cached = conn.execute(
@@ -108,7 +111,7 @@ async def _handle(request: Request, background: BackgroundTasks, conn: db.Conn):
             if cached:
                 result = cached["result"]
             else:
-                result = tools.run(ctx, tc.function.name, _args(tc.function.arguments))
+                result = tools.run(ctx, tc.function.name, _args(tc.function.arguments), allowed)
                 with conn:
                     conn.execute(
                         "INSERT INTO tool_calls (tenant_id, id, result, created_at)"

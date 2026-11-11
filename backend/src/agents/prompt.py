@@ -40,12 +40,16 @@ class NoPrompt(Exception):
 
 
 def template_name(conn: db.Conn) -> str:
-    return tenancy.get(conn, conn.tid)["template"]
+    t = tenancy.get(conn, conn.tid)
+    if t is None:
+        raise LookupError("this connection's business doesn't exist")
+    return t["template"]
 
 
-def build(conn: db.Conn, s: dict) -> tuple[str, str]:
-    """(system prompt, first message) for this business's current settings."""
-    base = loader.template_dir(template_name(conn))
+def build(conn: db.Conn, s: dict, template: str | None = None) -> tuple[str, str]:
+    """(system prompt, first message) for this business's current settings. Pass `template` when the
+    caller already has the business's row, to skip reading it again."""
+    base = loader.template_dir(template or template_name(conn))
     if not (base / "agent-prompt.md").exists():
         raise NoPrompt(base.name)
     raw = loader.prompt_template(base)
