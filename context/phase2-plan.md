@@ -56,7 +56,7 @@ We'll reuse it in the deploy milestone, not rewrite it. Its SQLite-in-`/tmp` par
 5. **Vertical order (ADR-0028).** Coaching is second; wholesale is new. → New ADR, plus `mvp.md` "out of scope" edits: the setup form, non-clinic verticals in production, and the customisation panel (backlog 71–80) all move in.
 6. **"Phase 2" collision.** The backlog's "Phase 2" means after Gate 1 (pilot paying), which is not met. The program deliverable called "Phase 2" is a different thing. Docs will say "Phase 2 (program deliverable)" to avoid confusion.
 7. **Target voice stack ADR (Pipecat + Sarvam).** Sarvam contradicts **ADR-0008** (Kokoro/Piper chosen over paid Sarvam) and ADR-0021. The new Proposed ADR will name both as "would change".
-8. **`CLAUDE.md` says the frontend is Next.js.** It's static HTML (ADR-0035/0036). With 3 days we stay static and correct the stack row.
+8. **`CLAUDE.md` says the frontend is Next.js.** It's static HTML (ADR-0035/0036). With 3 days we stay static and correct the stack row. *Changed 2026-11-11: the team chose Vite + React instead (ADR-0042); see §6.*
 9. **Single-tenant leftovers:**
    - `config.VERTICAL_DIR` is hard-wired to `clinic`;
    - `vapi.sync()` writes `VAPI_ASSISTANT_ID` and `CATALYST_TOOL_SECRET` into `.env`, which breaks on Render because the disk is ephemeral;
@@ -163,7 +163,7 @@ Times are rough person-hours. Tests are listed per milestone. Each milestone is 
 | **M5** | **Custom instructions.** Screen, version, undo, regenerate + PATCH | `agents/instructions.py`, `api/setup.py` | **fenced section**, **conflicting line rejected / rest saved**, **500-char limit**, **owner text can't remove any safety rule** (every locked safety line still present and before the fence) | 3h |
 | **M6** | **WhatsApp per business.** Sender routing, unknown-number reply, wholesale commands, "agent ko bolo …" with preview → Haan | `api/whatsapp.py`, `channels/whatsapp/commands.py` | **routing**, unknown number, each wholesale command, **instruction preview flow** (Nahi = no change) | 5h |
 | **M7** | **Events, admin, feedback.** Event hooks, admin list, weekly buckets, counts-only CSV, feedback store + admin decisions + Sheet-matching CSV | `analytics.py`, `api/admin.py`, `api/feedback.py` | **admin counts + weekly breakdown** (fixed clock, boundary weeks), CSV has no names/phones, **feedback CSV columns and order** | 4h |
-| **M8** | **Design system + pages.** `frontend/DESIGN.md`, tokens in `app.css`, all pages restyled and built (§6), failure-path UI | `frontend/*`, `build.mjs`, `vercel.json` | manual checklist: 360px width, keyboard focus, AA contrast; backend tests for each failure-path error code | 12h |
+| **M8** | **Design system + pages.** Vite + React scaffold (ADR-0042), `frontend/DESIGN.md`, theme tokens, all pages rebuilt in React (§6), failure-path UI. One PR per task | `frontend/*`, `vercel.json`, `ci.yml` (frontend job), `deploy-frontend.yml` | manual checklist: 360px width, keyboard focus, AA contrast; backend tests for each failure-path error code | 12h |
 | **M9** | **Seed + demo data.** Two test logins with 4 weeks of history, reset in admin | `seed.py`, `verticals/*/demo-tenant.yaml` | seed is idempotent; dashboards non-empty; no real-looking PII | 3h |
 | **M10** | **Deploy.** `render.yaml` (from 79502fc), Neon, keep-alive, CORS/rewrite, `.env.example`, `doctor.py`, ADR | root + `scripts/` | `doctor.py` against live; smoke script hits `/healthz` and logs into the test account | 3h |
 | **M11** | **Docs + records.** `docs/phase2/*`, ADRs final, `mvp.md`, backlog, roadmap ticks, module READMEs | `docs/`, `context/` | — | 3h |
@@ -257,7 +257,7 @@ Never cut: tenant isolation tests, preview-and-confirm, safety rules, failure pa
   - Inter + Noto Sans Devanagari, replacing Mukta and the "paper register" theme in `app.css`;
   - AA contrast checked per token pair;
   - one accent for live/urgent states only.
-- **Implementation.** CSS custom properties in `app.css`, a few shared components in `common.js`: header, card, button, field + error, empty state, offline banner, toast, and the Feedback dialog. No framework.
+- **Implementation (ADR-0042, changed 2026-11-11).** Vite + React + TypeScript + Tailwind + shadcn/ui. The tokens are CSS variables / Tailwind theme values. Shared components: header, card, button, field + error, empty state, offline banner, toast, and the Feedback dialog. They come from shadcn/ui or 21st.dev (MCP) and are adapted to `DESIGN.md`. The old static pages are replaced one page per PR.
 - **Pages:**
   - landing `/`;
   - `/signup`, `/login`;
@@ -324,7 +324,7 @@ Never cut: tenant isolation tests, preview-and-confirm, safety rules, failure pa
 
 Also agreed:
 - keep `tenant_id` in code and contracts ("business" only in UI and docs);
-- keep the frontend static HTML;
+- keep the frontend static HTML (*changed 2026-11-11 by ADR-0042: Vite + React*);
 - use the cut order in §4;
 - start with M0 → M1, in small PRs with CI green.
 

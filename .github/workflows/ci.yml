@@ -1,4 +1,4 @@
-# Backend CI: lint/format, provider boundary, tests.
+# CI: backend lint/format, provider boundary and tests; frontend lint, types, tests and build.
 # mypy is not a gate yet: coding-rules.md makes `mypy --strict` a Post-MVP merge gate.
 name: CI
 
@@ -111,3 +111,39 @@ jobs:
 
       - name: Pytest on Postgres
         run: python -m pytest -v
+
+  # The React app (ADR-0042). Same Node major as the deploy; `node build.mjs` is the exact build Vercel runs.
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend/app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/app/package-lock.json
+
+      - name: Install (locked)
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Contrast (WCAG AA tokens)
+        run: npm run check:contrast
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build (as Vercel does)
+        working-directory: frontend
+        run: node build.mjs

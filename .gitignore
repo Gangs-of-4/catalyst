@@ -38,3 +38,4 @@ backend/data/
 # Vercel (ADR-0036)
 .vercel/
 frontend/dist/
+frontend/app/dist/

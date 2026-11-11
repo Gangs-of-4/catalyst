@@ -1,6 +1,11 @@
-// Vercel build (ADR-0036): copy the static pages into dist/ and write the API base URL.
-// No dependencies; runs with plain Node.
-import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+// Vercel build (ADR-0036, ADR-0042). Produces dist/ with:
+//   - the React app (frontend/app, built by Vite): its shell as dist/app.html, its files in dist/assets/
+//   - the old static pages and static/, unchanged, until M8 replaces each one
+// vercel.json rewrites each React route (e.g. /styleguide) to /app: with cleanUrls on, Vercel serves
+// dist/app.html at /app, and a rewrite to /app.html would 404.
+// Runs with plain Node; installs the app's locked dependencies if they aren't there yet.
+import { execSync } from "node:child_process";
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 
 const raw = (process.env.NEXT_PUBLIC_API_URL || "").trim().replace(/\/+$/, "");
 if (raw && !/^https:\/\/[^\s/]+(\/[^\s]*)?$/.test(raw)) {
@@ -8,8 +13,19 @@ if (raw && !/^https:\/\/[^\s/]+(\/[^\s]*)?$/.test(raw)) {
   process.exit(1);
 }
 
+const run = (cmd) => execSync(cmd, { cwd: "app", stdio: "inherit" });
+
+// 1. The React app.
+if (!existsSync("app/node_modules")) run("npm ci --no-audit --no-fund");
+run("npm run build");
+
 rmSync("dist", { recursive: true, force: true });
 mkdirSync("dist");
+// Everything Vite built except its index.html, which would clash with the old try page at "/".
+cpSync("app/dist", "dist", { recursive: true, filter: (src) => !/[\\/]app[\\/]dist[\\/]index\.html$/.test(src) });
+cpSync("app/dist/index.html", "dist/app.html");
+
+// 2. The old static pages (removed page by page during M8).
 for (const page of ["index.html", "desk.html", "setup.html"]) cpSync(page, `dist/${page}`);
 cpSync("static", "dist/static", { recursive: true });
 writeFileSync("dist/static/config.js",

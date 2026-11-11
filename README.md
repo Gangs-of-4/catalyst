@@ -25,7 +25,7 @@ The voice stack is decided (Vapi, ADR-0029). A real pilot number (D2, ADR-0030) 
 
 ## Quickstart: run the demo
 
-You need **Git**, **Python 3.11 or newer**, and **cloudflared** (Windows: `winget install --id Cloudflare.cloudflared`). Node is not needed. You also need a **Vapi** account (private and public keys), and optionally a **Twilio** account with the WhatsApp sandbox.
+You need **Git**, **Python 3.11 or newer**, and **cloudflared** (Windows: `winget install --id Cloudflare.cloudflared`). Node is not needed to run the demo; frontend work needs Node 24 LTS (ADR-0042). You also need a **Vapi** account (private and public keys), and optionally a **Twilio** account with the WhatsApp sandbox.
 
 ### Windows (PowerShell)
 
@@ -119,7 +119,7 @@ Also good: "aaj ke appointments" on WhatsApp, "consultation fee 400" → Haan (t
 context/      product, contracts, architecture, decisions, roadmap, team
 verticals/    customer types as config (clinic = DRAFT)
 backend/      Python 3.12 + FastAPI; module skeleton under backend/src/
-frontend/     demo pages: Try-it, desk, setup (plain HTML; Next.js later)
+frontend/     web app: Try-it, desk, setup (static HTML today; Vite + React during Phase 2, ADR-0042)
 scripts/      ops CLIs (clinic setup, call review)
 .claude/      optional Claude Code helper commands
 mcp/ open-source/   integration notes and dependency licences

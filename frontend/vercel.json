@@ -4,5 +4,9 @@
   "buildCommand": "node build.mjs",
   "outputDirectory": "dist",
   "cleanUrls": true,
-  "git": { "deploymentEnabled": false }
+  "git": { "deploymentEnabled": false },
+  "rewrites": [
+    { "source": "/signup", "destination": "/app" },
+    { "source": "/styleguide", "destination": "/app" }
+  ]
 }

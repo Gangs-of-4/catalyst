@@ -1,0 +1,113 @@
+/* Catalyst design tokens. The source of truth is frontend/DESIGN.md; keep the two in step.
+   Run `npm run check:contrast` after changing any colour. */
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/noto-sans-devanagari";
+
+:root {
+  --radius: 0.5rem; /* 8px: buttons, inputs. Cards use --radius-lg (12px). */
+
+  --background: #ffffff;
+  --foreground: #111111;
+  --body: #3f3f46;
+  --surface-soft: #fafafa;
+
+  --card: #ffffff;
+  --card-foreground: #111111;
+  --popover: #ffffff;
+  --popover-foreground: #111111;
+
+  --primary: #111111;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #111111;
+  --muted: #f4f4f5;
+  --muted-foreground: #5c5c66;
+  --accent: #f4f4f5;
+  --accent-foreground: #111111;
+
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+  --destructive-soft: #fef2f2;
+  --destructive-text: #991b1b;
+
+  /* The one warm accent: live and urgent states only (DESIGN.md §1). */
+  --live: #c2410c;
+  --live-soft: #fff7ed;
+  --live-text: #9a3412;
+
+  --success: #047857;
+  --success-soft: #ecfdf5;
+  --success-text: #065f46;
+
+  --border: #e4e4e7;
+  --input: #8b8b94;
+  --ring: #111111;
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", "Noto Sans Devanagari Variable", system-ui, sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-body: var(--body);
+  --color-surface-soft: var(--surface-soft);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-destructive-text: var(--destructive-text);
+  --color-live: var(--live);
+  --color-live-soft: var(--live-soft);
+  --color-live-text: var(--live-text);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-text: var(--success-text);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv11", "ss01";
+    line-height: 1.5;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
