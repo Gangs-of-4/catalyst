@@ -10,7 +10,6 @@
     { "source": "/demo/:template", "destination": "/app" },
     { "source": "/home", "destination": "/app" },
     { "source": "/login", "destination": "/app" },
-    { "source": "/signup", "destination": "/app" },
-    { "source": "/styleguide", "destination": "/app" }
+    { "source": "/signup", "destination": "/app" }
   ]
 }
