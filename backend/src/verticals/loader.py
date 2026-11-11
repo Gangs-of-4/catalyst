@@ -136,6 +136,11 @@ def tool_names(template: str) -> set[str]:
     return set(_checked(template)["tools"])
 
 
+def try_saying(template: str) -> list[str]:
+    """Example lines for the public test page (vertical.yaml `try_saying`, optional)."""
+    return [str(x) for x in _checked(template).get("try_saying") or []]
+
+
 def modules(template: str) -> list[str]:
     """The desk modules a template uses (vertical.yaml `modules`): bookings, orders."""
     return list(_checked(template)["modules"])
