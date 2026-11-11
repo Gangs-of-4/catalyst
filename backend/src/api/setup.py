@@ -138,6 +138,12 @@ def get_settings(conn: db.Conn = Depends(get_user_conn)) -> dict:
     return {"settings": s, "blocks": blocks, "agentConfigured": agent_available(conn)}
 
 
+SETTINGS_MODELS: dict[str, type[BaseModel]] = {
+    "bookings": SettingsIn,
+    "orders": OrdersSettingsIn,
+}
+
+
 def _parse(model: type[BaseModel], raw: dict) -> BaseModel:
     try:
         return model.model_validate(raw)
@@ -149,8 +155,11 @@ def _parse(model: type[BaseModel], raw: dict) -> BaseModel:
 
 @router.put("/api/settings")
 def save_settings(raw: dict = Body(...), conn: db.Conn = Depends(get_user_conn)) -> dict:
-    """The body is the template's settings shape: SettingsIn (bookings) or OrdersSettingsIn."""
-    if "bookings" not in modules(conn):
+    """The body is the template's settings shape, chosen by its module (SETTINGS_MODELS)."""
+    module = next((m for m in modules(conn) if m in SETTINGS_MODELS), None)
+    if module is None:
+        raise ApiError(404, "NOT_FOUND", "This page can't edit this business's settings yet.")
+    if module == "orders":
         body = _parse(OrdersSettingsIn, raw)
         s = cs.load(conn)
         s.update(body.model_dump())

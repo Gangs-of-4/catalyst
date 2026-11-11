@@ -381,3 +381,80 @@ def test_public_board_shows_todays_orders_masked(shop):
     assert o["shop"] == "Gupta S." and o["items"] == 1 and o["total"] == "₹54"
     assert o["number"] == "1" and o["status"] == "new"
     assert "98765" not in str(board) and "Medical" not in str(board)
+
+
+# Review fixes (#32)
+
+
+def test_a_hidden_product_is_never_swapped_for_a_visible_one(shop):
+    """'Cotton roll' is hidden and 'Cotton roll large' is active: 'cotton roll' must not order
+    the large one."""
+    shop.post("/api/catalog", json={"name": "Cotton roll", "rate": "58"})
+    shop.post("/api/catalog", json={"name": "Cotton roll large", "rate": "95"})
+    shop.put(f"/api/catalog/{products(shop)['Cotton roll']['id']}", json={"active": False})
+    conn = scoped(shop)
+    try:
+        with pytest.raises(catalog.CatalogError) as e:
+            catalog.find(conn, "cotton roll")
+        assert "isn't available right now" in str(e.value) and e.value.matches == []
+        with pytest.raises(orders.OrderError) as e:
+            orders.create(conn, "Test Shop", [orders.Line(qty=1, product="Cotton Roll")], "phone")
+        assert e.value.code == "UNKNOWN_PRODUCT"
+        assert catalog.find(conn, "cotton roll large")["name"] == "Cotton roll large"
+    finally:
+        conn.close()
+
+
+def test_only_whole_words_stand_in_for_a_name(shop):
+    conn = scoped(shop)
+    try:
+        assert catalog.find(conn, "sanitiser")["name"] == "Hand sanitiser"  # a whole word
+        with pytest.raises(catalog.CatalogError) as e:  # run-together words: confirm, never assume
+            catalog.find(conn, "paracetamol650")
+        assert [m["name"] for m in e.value.matches] == ["Paracetamol 650 mg tablets"]
+    finally:
+        conn.close()
+
+
+def test_unreadable_csv_saves_nothing_and_says_so(shop):
+    huge = '"' + "x" * 140_000 + '"'  # bigger than the csv module's field limit
+    text = f"name,pack_size,rate,in_stock\nCotton roll,100 g,58,yes\n{huge},1,10,yes\n"
+    r = upload(shop, text)
+    assert r.status_code == 200
+    body = r.json()
+    assert (body["added"], body["updated"]) == (0, 0) and "Nothing was imported" in body["errors"][
+        0
+    ]["message"]
+    assert "Cotton roll" not in products(shop)
+
+
+def test_nul_characters_from_excel_are_ignored(shop):
+    r = upload(shop, "name,pack_size,rate,in_stock\nCotton\x00 roll,100 g,58,yes\n").json()
+    assert r["added"] == 1 and r["errors"] == []
+
+
+def test_names_in_any_indian_script(shop):
+    text = "name,pack_size,rate,in_stock\nஅரிசி,1 kg,60,yes\nAtta ஆட்டா,5 kg,250,yes\nAtta ಹಿಟ್ಟು,5 kg,255,yes\n"
+    r = upload(shop, text).json()
+    assert r["added"] == 3 and r["errors"] == []
+    assert catalog.name_key("Atta ஆட்டா") != catalog.name_key("Atta ಹಿಟ್ಟು")
+    assert catalog.name_key("  PARACETAMOL-500 ") == "paracetamol 500"
+    assert catalog.name_key("आटा (5 किलो)") == "आटा 5 किलो"
+
+
+def test_too_big_upload_is_refused_before_it_is_read(shop):
+    r = shop.post(
+        "/api/catalog/import",
+        content=b"a" * (1_000_001),
+        headers={"Content-Type": "text/csv"},
+    )
+    assert r.status_code == 422 and "too big" in r.json()["detail"]
+
+
+def test_order_list_pages(shop):
+    pid = products(shop)["Paracetamol 500 mg tablets"]["id"]
+    ids = [order(shop, (pid, n)).json()["id"] for n in (1, 2, 3)]
+    first = shop.get("/api/orders", params={"limit": 2}).json()
+    assert [o["id"] for o in first["orders"]] == ids[:0:-1] and first["next_before_id"] == ids[1]
+    rest = shop.get("/api/orders", params={"limit": 2, "before_id": first["next_before_id"]}).json()
+    assert [o["id"] for o in rest["orders"]] == ids[:1] and rest["next_before_id"] is None
