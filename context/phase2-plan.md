@@ -27,7 +27,7 @@
 | M4a: wholesale data side (catalogue, CSV import, orders and lifecycle, `/api/catalog`, `/api/orders`, wholesale settings, order board on the test page) | #32 | Merged |
 | M4b: wholesale voice side (tools, prompt, escalation rules, safety suite, catalogue-aware post-call check) | #33 | Merged |
 | M6: WhatsApp per business (routing by sender, wholesale commands, no open demo mode) | #35 | Open |
-| M5: owner custom instructions (rule screen, versions and undo, fenced prompt section, `/api/instructions`, "agent ko bolo" on WhatsApp; LLM screen cut) | (this PR) | Open |
+| M5: owner custom instructions (rule screen, versions and undo, fenced prompt section, `/api/instructions`, "agent ko bolo" on WhatsApp; LLM screen cut) | #36 | Open |
 | M7–M12 | — | Not started |
 
 ---
