@@ -47,6 +47,13 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 - `src/lib/api.ts`: the only way to call the backend. It uses relative `/api` paths, adds the CSRF header and turns errors into plain sentences.
 - `src/pages/`: one file per route.
 
+**Pages so far:**
+
+| Route | File | What |
+|---|---|---|
+| `/signup` | `src/pages/signup.tsx`, `src/features/signup/` | Self-serve onboarding: account + business in one step (`GET /api/templates`, `POST /api/signup`). The template section is picked by the template's `modules`. A success screen shows the voice agent's state. |
+| `/styleguide` | `src/pages/styleguide.tsx` | Every token and component, for review |
+
 **Design:** `frontend/DESIGN.md` is the source of truth. `/styleguide` shows every token and component. Check new work there at 360px and desktop width.
 
 **Adding a page:**
@@ -54,7 +61,7 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 2. Add a rewrite for its path to `/app.html` in `frontend/vercel.json`.
 3. Delete the old static page in the same PR, if there is one.
 
-**Deploy:** `build.mjs` builds the app, puts its shell at `dist/app.html` and its files in `dist/assets/`, then copies the old pages as before. `vercel.json` rewrites React routes (now: `/styleguide`) to `/app.html`.
+**Deploy:** `build.mjs` builds the app, puts its shell at `dist/app.html` and its files in `dist/assets/`, then copies the old pages as before. `vercel.json` rewrites React routes (now: `/signup`, `/styleguide`) to `/app.html`.
 
 **Rules:** see `context/coding-rules.md` (Frontend).
 - Never put patient or customer data in browser storage.
