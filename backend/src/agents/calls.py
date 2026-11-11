@@ -2,8 +2,10 @@
 
 import json
 
-from ..core import db
+from ..core import db, tenancy
+from ..orders import catalog
 from ..safety import post_call
+from ..verticals import loader
 
 FLAGS = ("booked", "changed", "escalated", "callback")
 
@@ -58,6 +60,15 @@ def _transcript(message: dict) -> tuple[str, list[str], list[str]]:
     return (transcript if isinstance(transcript, str) else json.dumps(transcript)), assistant, user
 
 
+def _catalogue_terms(conn: db.Conn) -> tuple[list[str], bool]:
+    """(product names and pack sizes the agent may say, whether this business sells products)."""
+    t = tenancy.get(conn, conn.tid)
+    if t is None or "orders" not in loader.modules(t["template"]):
+        return [], False
+    products = catalog.list_products(conn, include_inactive=True)
+    return [x for p in products for x in (p["name"], p["pack_size"])], True
+
+
 def end_of_call(conn: db.Conn, message: dict) -> str | None:
     call = message.get("call") or {}
     call_id = call.get("id")
@@ -67,7 +78,7 @@ def end_of_call(conn: db.Conn, message: dict) -> str | None:
     transcript, assistant_lines, user_lines = _transcript(message)
     artifact = message.get("artifact") or {}
     analysis = message.get("analysis") or {}
-    hits = post_call.scan(assistant_lines)
+    hits = post_call.scan(assistant_lines, *_catalogue_terms(conn))
     row = conn.execute(
         "SELECT * FROM calls WHERE tenant_id = ? AND id = ?", (conn.tid, call_id)
     ).fetchone()

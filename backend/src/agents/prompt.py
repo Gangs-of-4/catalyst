@@ -20,17 +20,27 @@ def _fill(template: str, values: dict[str, str]) -> str:
 
 
 def snapshot(conn: db.Conn, s: dict) -> str:
+    """The business's approved facts for the prompt. Only what its settings have: a wholesaler's
+    rates are never here (they change; the agent reads them from the catalogue tools)."""
     f = answers.facts(conn, s)
     lines = [
         f"- Name: {s['name']}",
         f"- Address: {s['address']}"
         + (f" (landmark: {s['landmark']})" if s.get("landmark") else ""),
         f"- Timings: {f['hours']}",
-        "- Doctors: " + ", ".join(d["name"] for d in s["doctors"]),
-        "- Services and fees: "
-        + "; ".join(f"{x['name']}: {x['fee']}" for x in s["services"])
-        + ". Exact cost is decided by the doctor after a check-up.",
     ]
+    if s.get("doctors"):
+        lines.append("- Doctors: " + ", ".join(d["name"] for d in s["doctors"]))
+    if s.get("services"):
+        lines.append(
+            "- Services and fees: "
+            + "; ".join(f"{x['name']}: {x['fee']}" for x in s["services"])
+            + ". Exact cost is decided by the doctor after a check-up."
+        )
+    if s.get("min_order"):
+        lines.append(f"- Minimum order: {s['min_order']}")
+    if s.get("delivery_area"):
+        lines.append(f"- Delivery area: {s['delivery_area']}")
     lines += [f"- {x['q']} → {x['a']}" for x in s.get("faqs", [])]
     return "\n".join(lines)
 
@@ -55,12 +65,14 @@ def build(conn: db.Conn, s: dict, template: str | None = None) -> tuple[str, str
     raw = loader.prompt_template(base)
     body, _, first = raw.partition("## First message")
     voice = s.get("voice", "female") if s.get("voice") in VOICE_FORMS else "female"
+    facts = snapshot(conn, s)
     values = {
         "tenant_name": s["name"],
-        "clinic_snapshot": snapshot(conn, s),
-        "emergency_instruction": s["emergency_instruction"],
+        "clinic_snapshot": facts,
+        "business_snapshot": facts,
+        "emergency_instruction": s.get("emergency_instruction", ""),
         "voice_forms": VOICE_FORMS[voice],
-        "example_doctor": s["doctors"][0]["name"] if s["doctors"] else "the doctor",
+        "example_doctor": s["doctors"][0]["name"] if s.get("doctors") else "the doctor",
         "red_flags": "\n".join(f"  - {r}" for r in s.get("red_flags", []))
         or "  - (none listed: treat anything worrying as grey zone)",
     }

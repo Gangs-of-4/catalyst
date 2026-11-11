@@ -231,7 +231,7 @@ def create(
                 f"This looks like order {existing['number']}, placed earlier today.",
                 existing=existing,
             )
-    for attempt in range(3):  # two orders at once can pick the same next number; retry
+    for _ in range(3):  # two orders at once can pick the same next number; retry
         ts = db.stamp()
         try:
             with conn:
@@ -282,9 +282,7 @@ def create(
                 ).fetchone()
                 if again is not None:
                     return _with_items(conn, [again])[0]
-            if attempt == 2:
-                raise
-    raise AssertionError("unreachable")
+    raise OrderError("TRY_AGAIN", "Several orders arrived at once. Please save it again.")
 
 
 def set_status(conn: db.Conn, order_id: int, status: str) -> dict:
@@ -312,17 +310,20 @@ def set_status(conn: db.Conn, order_id: int, status: str) -> dict:
 
 
 def find_for_caller(conn: db.Conn, number: int | None = None, phone: str | None = None) -> list:
-    """Orders for an order-status question: by number, else the caller's last 3 by phone."""
+    """Orders for an order-status question, only ever the caller's own: by number *and* the phone
+    the order was placed with, else the last 3 for that phone. Without a phone, nothing: order
+    numbers count 1, 2, 3, so a number alone would let anyone hear any shop's orders."""
+    if not phone:
+        return []
     if number is not None:
         rows = conn.execute(
-            "SELECT * FROM orders WHERE tenant_id = ? AND number = ?", (conn.tid, number)
+            "SELECT * FROM orders WHERE tenant_id = ? AND number = ? AND phone = ?",
+            (conn.tid, number, phone),
         ).fetchall()
-    elif phone:
+    else:
         rows = conn.execute(
             "SELECT * FROM orders WHERE tenant_id = ? AND phone = ?"
             " ORDER BY created_at DESC, id DESC LIMIT 3",
             (conn.tid, phone),
         ).fetchall()
-    else:
-        rows = []
     return _with_items(conn, rows)

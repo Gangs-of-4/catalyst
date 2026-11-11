@@ -210,9 +210,9 @@ Same transport, auth, idempotency (`toolCallId`) and plain-text result rule as �
 |---|---|---|---|
 | `get_business_info` | `question` | Approved answers only (C3), or "not found" | — |
 | `get_catalog` | `query` (optional words) | Up to 10 matching products: name, pack size, rate in ₹, in stock yes/no | — |
-| `check_stock` | `product` | Matched product name, pack size, in stock yes/no, rate | `UNKNOWN_PRODUCT` with up to 3 close name matches *of the same product name* (spelling help, never a substitute) |
+| `check_stock` | `product` | Matched product name, pack size, in stock yes/no, rate | `UNKNOWN_PRODUCT` with up to 3 full catalogue names that fit what was said, or close spellings, for the caller to confirm (never a substitute). Only an exact name (case and punctuation aside) is a match; even a single partial fit is confirmed. A hidden product is "not available". |
 | `create_order` | `shop_name`, `contact_name`, `phone`, `items: [{product, qty}]`, `notes` | Order number, each line as name × qty × rate, total | `UNKNOWN_PRODUCT`, `OUT_OF_STOCK` (offer a callback), `VALIDATION` (qty must be a whole number 1–9999) |
-| `order_status` | `order_number` or `phone` | Status of the matching order(s) and created date | `NOT_FOUND` |
+| `order_status` | `phone` (the caller's, or the one they give), optional `order_number` | Status, date, item count and total of that phone's order with that number, else its last 3 orders | `NOT_FOUND`. Without a phone the result asks for it: a number alone never reveals an order. |
 | `create_callback` | as §1.6 / §1.10 | Callback ID | — |
 | `escalate` | as §1.7 / §1.10 | What happens next | — |
 
@@ -222,7 +222,8 @@ Rules the wholesale prompt and tools enforce together:
 - **Rates come only from the catalogue.** The agent never states a rate, discount or total that a tool did not return. Unknown → `create_callback` with reason `unanswered_question`.
 - **Read-back before saving.** The agent reads each line (name, pack size, quantity) back to the caller and gets a yes **before** calling `create_order`.
 - **No medical advice, even though the products are medicines.** No dosage, use, side effects, or "X ki jagah Y" (substitutes). Such questions → polite refusal + `create_callback`. Conflicts never offer another product as an alternative: out of stock offers a callback; a duplicate order points to the existing order number.
-- `source` is `phone` for agent orders, as for bookings.
+- `source` is `phone` for agent orders, as for bookings. A saved order counts as `booked` in the call's outcome (§1.10 `log_call_outcome` values).
+- The post-call safety check knows the catalogue: product names and pack sizes are not flags, but doses, "take this", diagnosis, reassurance and substitutes are (`backend/src/safety/post_call.py`).
 
 ---
 
@@ -409,7 +410,7 @@ The frontend pages (Vite + React, ADR-0042) call these. Built and consumed in pa
 - **CSRF.** Every write is a JSON `POST`/`PUT`/`DELETE` (except CSV upload, which sends the file as the raw body with `Content-Type: text/csv`) and must carry header `X-Requested-With: catalyst`; the backend rejects writes without it (`403`). Together with `SameSite=Lax` this blocks cross-site form posts.
 - **Errors.** Every non-2xx body is `{ "detail": "<one plain sentence for the page>", "code": "<CODE>", "fields": {"<field>": "<message>"}?, "alternatives": [ ... ]? }`. Pages show `detail` as-is. Never a stack trace.
 
-Common codes: `VALIDATION` (422, with `fields`), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `EMAIL_TAKEN`, `WHATSAPP_TAKEN`, `SLOT_TAKEN` (409, `alternatives` = up to 3 free slots), `DUPLICATE_ORDER` (409, `alternatives` = the existing order), `INVALID_TRANSITION` (409), `OUT_OF_STOCK` (409, no alternatives: never another product), `UNKNOWN_PRODUCT` (422, `alternatives` = up to 3 catalogue spellings of the name asked for), `LOCKED` (429, too many failed logins), `MINUTES_USED_UP` (429), `VOICE_NOT_CONFIGURED` (503), `INTERNAL` (500, generic sentence).
+Common codes: `VALIDATION` (422, with `fields`), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `EMAIL_TAKEN`, `WHATSAPP_TAKEN`, `SLOT_TAKEN` (409, `alternatives` = up to 3 free slots), `DUPLICATE_ORDER` (409, `alternatives` = the existing order), `INVALID_TRANSITION` (409), `OUT_OF_STOCK` (409, no alternatives: never another product), `TRY_AGAIN` (409, several orders took the same number at once; save again), `UNKNOWN_PRODUCT` (422, `alternatives` = up to 3 catalogue spellings of the name asked for), `LOCKED` (429, too many failed logins), `MINUTES_USED_UP` (429), `VOICE_NOT_CONFIGURED` (503), `INTERNAL` (500, generic sentence).
 
 ### 6.1 Endpoints
 

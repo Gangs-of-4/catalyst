@@ -1,6 +1,6 @@
 # Verticals
 
-Each customer type is config, not code (ADR-0033). Core code never branches on vertical. `modules` in `vertical.yaml` (`bookings` or `orders`) picks the data model and desk board; `tools` lists the agent tools served. The optional `try_saying` list shows example lines on the public test page. `backend/src/verticals/loader.py` `validate()` checks every vertical, and `backend/tests/test_verticals.py` runs it on each folder.
+Each customer type is config, not code (ADR-0033). Core code never branches on vertical. `modules` in `vertical.yaml` (`bookings` or `orders`) picks the data model and desk board; `tools` lists the agent tools served. The optional `try_saying` list shows example lines on the public test page. A template has a voice agent once it has `agent-prompt.md` (clinic and wholesale do). `backend/src/verticals/loader.py` `validate()` checks every vertical, and `backend/tests/test_verticals.py` runs it on each folder.
 
 | Folder | Status |
 |---|---|

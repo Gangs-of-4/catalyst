@@ -1,0 +1,26 @@
+# DRAFT, team to review. NOT APPROVED.
+# Wholesale distributor escalation rules (ADR-0037, contracts.md §1.11). The agent takes orders and
+# answers from the catalogue; anything about how a medicine is used goes to a person, never answered.
+
+version: 0.1.0
+approved_by: null            # role only, e.g. "the owner"
+approved_on: null
+
+red_flags: []                # no symptom triage here: someone unwell is told to see a doctor or call 108
+
+medical_question:            # polite refusal, then carry on or create_callback (never advice)
+  phrases: ["kis cheez ki dawai", "kitni leni hai", "dose", "side effect", "kya ye safe hai",
+            "iski jagah", "ki jagah kya de", "substitute", "same composition", "bachche ko de sakte"]
+
+callback:                    # not in the catalogue or the facts: a person calls back
+  phrases: ["credit", "udhaar", "scheme", "discount", "return", "expiry exchange", "bill galat"]
+
+caller_request_staff:
+  phrases: ["kisi se baat karni hai", "seth ji se baat", "owner se baat", "talk to a person", "insaan se baat"]
+
+never_say:                   # checked after each call by backend/src/safety/post_call.py (selling mode)
+  - what a medicine is for, or how to take it
+  - dosage
+  - side effects or "it's safe"
+  - one product "ki jagah" another (substitutes)
+  - a rate, discount or total that a tool did not return

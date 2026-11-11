@@ -2,7 +2,7 @@
 # Wholesale distributor vertical (ADR-0037). Retailers and chemists phone in orders;
 # the agent reads the catalogue, takes orders, and sends anything else to a callback.
 # The products can be medicines: the agent never advises on use, dosage or substitutes.
-# Prompt, escalation rules, seed knowledge and safety suite land in M4.
+# Prompt, escalation rules and safety suite: M4b. The demo tenant and its seed: M9.
 
 name: wholesale
 status: draft

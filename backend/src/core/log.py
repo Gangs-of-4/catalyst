@@ -6,11 +6,31 @@ import re
 _PHONE = re.compile(r"\+?\d[\d\s-]{8,}\d")
 
 
+_HIDDEN = "<redacted>"
+
+
+def _redact_arg(value):
+    """One log argument with anything phone-like hidden. Small numbers stay numbers, so %d works;
+    each argument is checked on its own, so "%d %d %d" IDs never join into a phone-like run."""
+    if isinstance(value, bool | float):
+        return value
+    if isinstance(value, int):
+        return value if abs(value) < 10**9 else _HIDDEN
+    return _PHONE.sub(_HIDDEN, str(value))
+
+
 class _Redact(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        record.msg = _PHONE.sub("<redacted>", str(record.msg))
-        if record.args:
-            record.args = tuple(_PHONE.sub("<redacted>", str(a)) for a in record.args)
+        record.msg = _PHONE.sub(_HIDDEN, str(record.msg))
+        if isinstance(record.args, dict):
+            record.args = {k: _redact_arg(v) for k, v in record.args.items()}
+        elif record.args:
+            record.args = tuple(_redact_arg(a) for a in record.args)
+        try:  # filters run outside the handler's error handling: never let a log line raise
+            record.getMessage()
+        except Exception:
+            record.msg = f"{record.msg} [log arguments didn't fit the message]"
+            record.args = None
         return True
 
 
