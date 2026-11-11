@@ -133,4 +133,26 @@ describe("<SignupPage>", () => {
     expect(await screen.findByText(/didn't finish loading/)).toBeTruthy();
     expect(document.activeElement).toBe(retry);
   });
+
+  it("clears the 'still loading' message once the form has loaded", async () => {
+    let release: () => void = () => {};
+    const slow = new Promise<void>((r) => (release = r));
+    // The templates answer only when the test says so.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async (input) => {
+        if (String(input) === "/api/templates") {
+          await slow;
+          return templates();
+        }
+        throw new Error(`unexpected fetch ${String(input)}`);
+      }),
+    );
+    renderPage();
+    submit();
+    expect(await screen.findByText(/still loading/)).toBeTruthy();
+    release();
+    await screen.findByRole("radio", { name: /Clinic/ });
+    expect(screen.queryByText(/still loading/)).toBeNull();
+  });
 });
