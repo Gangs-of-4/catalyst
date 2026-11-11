@@ -128,6 +128,63 @@ TOOLS = [
         ["category", "summary"],
     ),
     _fn("transfer", "Not available on this line; escalate instead.", {}),
+    # Wholesale (contracts.md §1.11)
+    _fn(
+        "get_business_info",
+        "Look up business-approved answers: timings, address, minimum order, delivery area. "
+        "Not for rates or stock: use get_catalog or check_stock.",
+        {"question": {"type": "string", "description": "The caller's question in their words."}},
+        ["question"],
+    ),
+    _fn(
+        "get_catalog",
+        "List catalogue products with pack size, rate and stock. Quote only names and rates this "
+        "returns.",
+        {"query": {"type": "string", "description": "Words of the product name, or omit for all."}},
+    ),
+    _fn(
+        "check_stock",
+        "Check one product's rate and stock by the name the caller said.",
+        {"product": {"type": "string", "description": "Product name as the caller said it."}},
+        ["product"],
+    ),
+    _fn(
+        "create_order",
+        "Save an order, only after reading every line back (name, pack size, quantity) and "
+        "getting a yes.",
+        {
+            "shop_name": {"type": "string", "description": "The shop or chemist's name."},
+            "contact_name": _NAME,
+            "phone": _PHONE,
+            "items": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "product": {
+                            "type": "string",
+                            "description": "Product name as get_catalog or check_stock returned.",
+                        },
+                        "qty": {"type": "integer", "description": "Whole number, 1 to 9999."},
+                    },
+                    "required": ["product", "qty"],
+                },
+            },
+            "notes": {"type": "string", "description": "Optional short note, e.g. delivery time."},
+        },
+        ["shop_name", "phone", "items"],
+    ),
+    _fn(
+        "order_status",
+        "Find an order's status by its order number, or the caller's recent orders by phone.",
+        {
+            "order_number": {
+                "type": "integer",
+                "description": "The order number, if they know it.",
+            },
+            "phone": _PHONE,
+        },
+    ),
     _fn(
         "log_call_outcome",
         "Optional. The outcome is recorded automatically.",

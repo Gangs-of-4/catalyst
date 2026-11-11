@@ -8,9 +8,10 @@ _PHONE = re.compile(r"\+?\d[\d\s-]{8,}\d")
 
 class _Redact(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        record.msg = _PHONE.sub("<redacted>", str(record.msg))
-        if record.args:
-            record.args = tuple(_PHONE.sub("<redacted>", str(a)) for a in record.args)
+        # Format first, then redact the finished line: redacting each argument turned numbers into
+        # strings, which broke every %d message.
+        record.msg = _PHONE.sub("<redacted>", record.getMessage())
+        record.args = None
         return True
 
 

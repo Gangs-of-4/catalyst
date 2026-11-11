@@ -10,13 +10,15 @@ from datetime import date
 
 from .. import inbox
 from ..booking import service as bk
-from ..booking.when import parse_date, parse_time, spoken_date, spoken_time
+from ..booking.when import parse_date, parse_time, short_date, spoken_date, spoken_time
 from ..channels.whatsapp import alerts
 from ..core import config, db
 from ..core import phone as ph
 from ..core import settings as cs
 from ..core.log import log
 from ..knowledge import answers
+from ..orders import catalog
+from ..orders import service as orders
 from . import calls
 
 FAILOVER = (
@@ -69,14 +71,23 @@ def _no_slots_reason(ctx: Ctx, d: date, doctor: dict | None) -> str:
     return "that day is fully booked" if d > _today() else "no time is left today"
 
 
+def _tenant(ctx: Ctx) -> str:
+    """The template's word for the business ("clinic", "distributor")."""
+    return str(ctx.settings.get("labels", {}).get("tenant") or "business").lower()
+
+
 def get_clinic_info(ctx: Ctx, args: dict) -> str:
     found = answers.lookup(ctx.conn, ctx.settings, str(args.get("question", "")))
     if not found:
         return (
-            "NOT FOUND in the clinic-approved answers. Say you don't have that answer, take the caller's "
-            "name and number, and call create_callback with reason unanswered_question."
+            f"NOT FOUND in the {_tenant(ctx)}-approved answers. Say you don't have that answer, "
+            "take the caller's name and number, and call create_callback with reason "
+            "unanswered_question."
         )
-    return "Clinic-approved answer (say only this, in the caller's language): " + " | ".join(found)
+    return (
+        f"{_tenant(ctx).capitalize()}-approved answer (say only this, in the caller's language): "
+        + " | ".join(found)
+    )
 
 
 def find_slots(ctx: Ctx, args: dict) -> str:
@@ -298,9 +309,10 @@ def create_callback(ctx: Ctx, args: dict) -> str:
         if phone
         else " The number was not valid; ask for the 10-digit mobile number and call create_callback again."
     )
+    who = _tenant(ctx)
     return (
-        "Callback logged for the clinic team. Tell the caller the clinic will call them back "
-        + ("very soon." if urgent else "today during clinic hours.")
+        f"Callback logged for the {who} team. Tell the caller the {who} will call them back "
+        + ("very soon." if urgent else f"today during {who} hours.")
         + missing
     )
 
@@ -334,8 +346,9 @@ def escalate(ctx: Ctx, args: dict) -> str:
     )
     calls.flag(ctx.conn, ctx.call_id, "escalated")
     _alert(ctx, item)
-    parts = ["ESCALATED: the doctor has been alerted on WhatsApp as urgent."]
-    if category != "caller_request":
+    who = "doctor" if ctx.settings.get("doctors") else "owner"
+    parts = [f"ESCALATED: the {who} has been alerted on WhatsApp as urgent."]
+    if category != "caller_request" and ctx.settings.get("emergency_instruction"):
         if not _open_now(ctx.settings):
             parts.append("The clinic is closed right now, so the instruction matters even more.")
         parts.append(
@@ -343,11 +356,166 @@ def escalate(ctx: Ctx, args: dict) -> str:
             f"\"{ctx.settings['emergency_instruction']}\""
         )
     parts.append(
-        "Live transfer is not available on this line. Tell the caller the clinic will call them back "
-        "very soon. If you don't have their name and 10-digit number yet, ask for them and call escalate "
+        f"Live transfer is not available on this line. Tell the caller the {_tenant(ctx)} will call "
+        "them back very soon. If you don't have their name and 10-digit number yet, ask for them and call escalate "
         "again with them. Give no medical advice."
     )
     return " ".join(parts)
+
+
+# Wholesale (orders template; contracts.md §1.11). Rates come only from the catalogue, and a product
+# that is unknown or out of stock is never swapped for another one.
+
+NO_SUBSTITUTE = (
+    "Never suggest a different product instead, and give no advice about medicines; offer a "
+    "callback (create_callback, reason other) if they want help choosing."
+)
+
+
+def _product_line(p: dict) -> str:
+    pack = f", {p['pack_size']}" if p["pack_size"] else ""
+    stock = "in stock" if p["in_stock"] else "OUT OF STOCK"
+    return f"{p['name']}{pack}, {p['rate']}, {stock}"
+
+
+def _which(matches: list[dict]) -> str:
+    return "; ".join(_product_line(m) for m in matches)
+
+
+def get_business_info(ctx: Ctx, args: dict) -> str:
+    return get_clinic_info(ctx, args)
+
+
+def get_catalog(ctx: Ctx, args: dict) -> str:
+    query = str(args.get("query") or "").strip()
+    found = catalog.search(ctx.conn, query, limit=10)
+    if not found:
+        return (
+            f"Nothing in the catalogue matches '{query}'. Say so; don't guess a product or a rate. "
+            + NO_SUBSTITUTE
+        )
+    more = "" if len(found) < 10 else " There may be more: ask what exactly they need."
+    return (
+        "Catalogue (quote only these names and rates): "
+        + "; ".join(_product_line(p) for p in found)
+        + "."
+        + more
+    )
+
+
+def check_stock(ctx: Ctx, args: dict) -> str:
+    spoken = str(args.get("product") or "").strip()
+    try:
+        p = catalog.find(ctx.conn, spoken)
+    except catalog.CatalogError as e:
+        if e.matches:
+            return (
+                f"UNKNOWN_PRODUCT: '{spoken}' is not one exact product. The catalogue has: "
+                f"{_which(e.matches)}. Ask the caller which one they mean. " + NO_SUBSTITUTE
+            )
+        return f"UNKNOWN_PRODUCT: '{spoken}' is not in the catalogue. " + NO_SUBSTITUTE
+    if not p["in_stock"]:
+        return f"{_product_line(p)}. It is out of stock right now. " + NO_SUBSTITUTE
+    return f"{_product_line(p)}."
+
+
+def _qty(value) -> int | None:
+    try:
+        qty = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return qty if 1 <= qty <= orders.MAX_QTY else None
+
+
+def create_order(ctx: Ctx, args: dict) -> str:
+    shop = str(args.get("shop_name") or "").strip()
+    phone = _phone_arg(ctx, args.get("phone"))
+    if not shop:
+        return "NOT SAVED: ask the shop's name first."
+    if not phone:
+        return (
+            "NOT SAVED: the phone number must be a 10-digit Indian mobile number. Ask again and "
+            "read it back."
+        )
+    raw_items = args.get("items") if isinstance(args.get("items"), list) else []
+    lines = []
+    for item in raw_items:
+        item = item if isinstance(item, dict) else {}
+        qty = _qty(item.get("qty"))
+        if qty is None:
+            return (
+                f"NOT SAVED: the quantity for '{item.get('product', '')}' must be a whole number "
+                f"from 1 to {orders.MAX_QTY}. Ask the caller."
+            )
+        lines.append(orders.Line(qty=qty, product=str(item.get("product") or "")))
+    try:
+        o = orders.create(
+            ctx.conn,
+            shop,
+            lines,
+            "phone",
+            contact_name=str(args.get("contact_name") or "").strip() or None,
+            phone=phone,
+            notes=str(args.get("notes") or "").strip() or None,
+            call_id=ctx.call_id,
+        )
+    except orders.OrderError as e:
+        if e.code == "UNKNOWN_PRODUCT":
+            listed = f" The catalogue has: {_which(e.matches)}." if e.matches else ""
+            return (
+                f"NOT SAVED: {e}{listed} Ask which product they mean, read the order back again, "
+                "then call create_order. " + NO_SUBSTITUTE
+            )
+        if e.code == "OUT_OF_STOCK":
+            return (
+                f"NOT SAVED: {e} Ask if they want the rest of the order without it, or offer a "
+                "callback when it is back. " + NO_SUBSTITUTE
+            )
+        if e.code == "DUPLICATE_ORDER" and e.existing:
+            return (
+                f"NOT SAVED: this caller already placed order {e.existing['number']} today with "
+                f"the same items (status {e.existing['status']}). Tell them that order is already "
+                "with us. If they really want a second, separate order, offer a callback."
+            )
+        return f"NOT SAVED: {e} Ask the caller and try again."
+    calls.flag(ctx.conn, ctx.call_id, "booked")
+    listing = "; ".join(
+        f"{x['name']}"
+        + (f" ({x['pack_size']})" if x["pack_size"] else "")
+        + f" × {x['qty']} × {x['rate']} = {x['amount']}"
+        for x in o["items"]
+    )
+    return (
+        f"ORDER SAVED, order number {o['number']}: {listing}. Total {o['total']}. Tell the caller "
+        f"the order number and the total. Say these rates and nothing else."
+    )
+
+
+def order_status(ctx: Ctx, args: dict) -> str:
+    number = _qty(args.get("order_number")) if args.get("order_number") else None
+    phone = _phone_arg(ctx, args.get("phone"))
+    found = orders.find_for_caller(ctx.conn, number=number, phone=None if number else phone)
+    if not found:
+        return (
+            "NOT_FOUND: no order with that number or phone. Read the number back to the caller to "
+            "check it, or offer a callback."
+        )
+    words = {
+        "new": "received, not yet confirmed",
+        "confirmed": "confirmed, being packed",
+        "dispatched": "dispatched, on the way",
+        "delivered": "delivered",
+        "cancelled": "cancelled",
+    }
+    return (
+        "Orders: "
+        + "; ".join(
+            f"order {o['number']} placed {short_date(date.fromisoformat(o['created_at'][:10]))}: "
+            f"{words[o['status']]}, {len(o['items'])} item(s), total {o['total']}"
+            for o in found
+        )
+        + "."
+    )
 
 
 def transfer(ctx: Ctx, args: dict) -> str:
@@ -374,6 +542,11 @@ HANDLERS: dict[str, Callable[[Ctx, dict], str]] = {
         escalate,
         transfer,
         log_call_outcome,
+        get_business_info,
+        get_catalog,
+        check_stock,
+        create_order,
+        order_status,
     )
 }
 

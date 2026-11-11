@@ -222,7 +222,8 @@ Rules the wholesale prompt and tools enforce together:
 - **Rates come only from the catalogue.** The agent never states a rate, discount or total that a tool did not return. Unknown → `create_callback` with reason `unanswered_question`.
 - **Read-back before saving.** The agent reads each line (name, pack size, quantity) back to the caller and gets a yes **before** calling `create_order`.
 - **No medical advice, even though the products are medicines.** No dosage, use, side effects, or "X ki jagah Y" (substitutes). Such questions → polite refusal + `create_callback`. Conflicts never offer another product as an alternative: out of stock offers a callback; a duplicate order points to the existing order number.
-- `source` is `phone` for agent orders, as for bookings.
+- `source` is `phone` for agent orders, as for bookings. A saved order counts as `booked` in the call's outcome (§1.10 `log_call_outcome` values).
+- The post-call safety check knows the catalogue: product names and pack sizes are not flags, but doses, "take this", diagnosis, reassurance and substitutes are (`backend/src/safety/post_call.py`).
 
 ---
 

@@ -261,12 +261,14 @@ def test_templates_endpoint_lists_both_with_defaults(client):
     by = {t["template"]: t for t in j}
     assert {"clinic", "wholesale"} <= set(by)
     assert by["clinic"]["label"] == "Clinic" and by["clinic"]["defaults"]["slot_min"] == 15
-    assert by["clinic"]["has_voice"] and not by["wholesale"]["has_voice"]
+    assert by["clinic"]["has_voice"] and by["wholesale"]["has_voice"]
     assert by["wholesale"]["modules"] == ["orders"]
 
 
-def test_template_without_a_prompt_gets_no_assistant(client, isolated, monkeypatch):
-    """Wholesale has no agent-prompt.md until M4, so signup must not call Vapi for it."""
+def test_template_without_a_prompt_gets_no_assistant(
+    client, isolated, monkeypatch, no_wholesale_prompt
+):
+    """A template with no agent-prompt.md has no voice agent, so signup must not call Vapi."""
     isolated.write_text(
         "PUBLIC_URL=https://api.example.com\nVAPI_PRIVATE_KEY=k\n", encoding="utf-8"
     )

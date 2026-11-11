@@ -99,3 +99,19 @@ def owner(isolated, monkeypatch):
         r = c.post("/api/login", json={"email": accounts.DEMO_EMAIL, "password": DEMO_PASSWORD})
         assert r.status_code == 200, r.text
         yield c
+
+
+@pytest.fixture
+def no_wholesale_prompt(tmp_path, monkeypatch):
+    """The wholesale template as it was before it had a voice agent: no agent-prompt.md. For the
+    tests of how a template without a prompt behaves (no assistant, `not_configured`)."""
+    import shutil
+
+    from src.verticals import loader
+
+    real = loader.template_dir
+    copy = tmp_path / "templates" / "wholesale"
+    shutil.copytree(real("wholesale"), copy, ignore=shutil.ignore_patterns("agent-prompt.md"))
+    monkeypatch.setattr(
+        loader, "template_dir", lambda name: copy if name == "wholesale" else real(name)
+    )

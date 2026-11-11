@@ -141,7 +141,7 @@ def test_prompt_uses_the_businesses_template(conn):
     assert "Muskaan Dental Clinic" in system
 
 
-def test_template_without_prompt_raises_no_prompt(isolated):
+def test_template_without_prompt_raises_no_prompt(isolated, no_wholesale_prompt):
     tid, _, _ = make("wholesale", "No prompt yet")
     conn = db.connect().for_tenant(tid)
     try:
@@ -250,12 +250,22 @@ def test_business_without_own_assistant_never_touches_the_demo_assistant(isolate
         conn.close()
 
 
-def test_wholesale_settings_save_is_a_message_not_a_500(isolated, monkeypatch):
+def test_settings_save_without_a_prompt_is_a_message_not_a_500(
+    isolated, monkeypatch, no_wholesale_prompt
+):
     configure_demo_assistant(isolated)
     seen = record(monkeypatch)
     w, _, _ = make("wholesale", "Shop A")
     assert "isn't set up" in sync.sync_agent(w)
     assert seen == []
+
+
+def test_wholesale_save_creates_its_own_assistant_never_the_demos(isolated, monkeypatch):
+    configure_demo_assistant(isolated)
+    seen = record(monkeypatch)
+    w, _, _ = make("wholesale", "Shop A")
+    assert "updated" in sync.sync_agent(w)
+    assert seen == [("POST", "https://api.vapi.ai/assistant")]
 
 
 def test_demo_clinic_still_uses_its_original_assistant(isolated, monkeypatch):

@@ -239,6 +239,14 @@ def test_booking_errors_suggest_free_times(owner):
 
 
 def test_settings_page_says_a_save_will_create_the_agent(isolated, monkeypatch):
+    _settings_page_agent_flags(isolated, monkeypatch, wholesale_expected=True)
+
+
+def test_settings_page_says_no_agent_without_a_prompt(isolated, monkeypatch, no_wholesale_prompt):
+    _settings_page_agent_flags(isolated, monkeypatch, wholesale_expected=False)
+
+
+def _settings_page_agent_flags(isolated, monkeypatch, wholesale_expected):
     """A new business whose assistant creation failed at signup: with Vapi set up, a save creates
     one, so the page must not say the agent isn't configured. A template with no voice agent yet
     says it isn't."""
@@ -248,7 +256,7 @@ def test_settings_page_says_a_save_will_create_the_agent(isolated, monkeypatch):
     monkeypatch.setattr(  # Vapi is down during signup
         httpx, "request", lambda m, u, **k: httpx.Response(500, request=httpx.Request(m, u))
     )
-    for template, n, expected in (("clinic", 3, True), ("wholesale", 4, False)):
+    for template, n, expected in (("clinic", 3, True), ("wholesale", 4, wholesale_expected)):
         with TestClient(app, headers=APP_HEADERS) as c:
             assert c.post("/api/signup", json=signup_body(template, n)).status_code == 200
             assert c.get("/api/settings").json()["agentConfigured"] is expected

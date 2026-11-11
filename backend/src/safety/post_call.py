@@ -1,4 +1,5 @@
-"""Post-call safety flag (ADR-0035): scan what the assistant said for medicine, dosage or diagnosis.
+"""Post-call safety flag (ADR-0035): scan what the assistant said for medicine, dosage, diagnosis,
+or (for a business that sells medicines) a substitute.
 
 Detection, not prevention. The in-call guard (custom-LLM route, ADR-0032) replaces this before a real pilot.
 """
@@ -44,18 +45,47 @@ REFUSAL = re.compile(
     r"doctor hi|only the doctor|नहीं दे सकती|नहीं बता सकती|डॉक्टर ही)",
     re.I,
 )
+# A business that sells medicines (orders template) names products and pack sizes all the time, so
+# for it the catalogue's own names are masked before scanning and a bare medicine word is not a flag.
+# Swapping one product for another is: the agent must never suggest a substitute (contracts §1.11).
+SUBSTITUTE = [
+    _B + r"(ki jagah|ke badle|ke badale|instead of|substitute|alternative|same (hi )?(hai|kaam)|"
+    r"wahi kaam|vahi kaam|same composition|generic)" + _E,
+    r"(की जगह|के बदले|वही काम)",
+]
 _STRONG = [re.compile(p, re.I) for p in STRONG]
 _WEAK = [re.compile(p, re.I) for p in WEAK]
+_WEAK_ADVICE = _WEAK[:2]  # diagnosis words; the rest are bare medicine nouns
+_SUBSTITUTE = [re.compile(p, re.I) for p in SUBSTITUTE]
 
 
-def scan(assistant_lines: list[str]) -> list[str]:
-    """The matched phrases, one per flagged line. Empty means nothing to review."""
+def _mask(text: str, terms: list[str]) -> str:
+    for term in sorted(
+        {" ".join(t.split()) for t in terms if t and t.strip()}, key=len, reverse=True
+    ):
+        text = re.sub(re.escape(term), " ", text, flags=re.I)
+    return text
+
+
+def scan(
+    assistant_lines: list[str], catalogue: list[str] | None = None, selling: bool = False
+) -> list[str]:
+    """The matched phrases, one per flagged line. Empty means nothing to review.
+
+    `selling` is for a business whose products may be medicines (orders template): `catalogue`
+    holds its product names and pack sizes, which the agent is allowed to say. Advice is still
+    flagged (a dose, "take this", a diagnosis, reassurance), and so is offering a substitute."""
     hits = []
+    weak = _WEAK_ADVICE if selling else _WEAK
     for line in assistant_lines:
         text = " ".join(str(line).split())
+        if selling:
+            text = _mask(text, catalogue or [])
         m = next((r.search(text) for r in _STRONG if r.search(text)), None)
+        if not m and selling:
+            m = next((r.search(text) for r in _SUBSTITUTE if r.search(text)), None)
         if not m and not REFUSAL.search(text):
-            m = next((r.search(text) for r in _WEAK if r.search(text)), None)
+            m = next((r.search(text) for r in weak if r.search(text)), None)
         if m:
             hits.append(m.group(0))
     return hits

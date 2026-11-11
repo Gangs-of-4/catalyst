@@ -1,4 +1,6 @@
-"""Clinic-approved answers (C3). Built live from settings; nothing here is invented."""
+"""Business-approved answers (C3). Built live from settings; nothing here is invented. Each
+business gets only the topics its settings have: doctors and fees for a clinic, minimum order
+and delivery for a wholesaler (whose rates come from the catalogue tools, never from here)."""
 
 import re
 from datetime import date, timedelta
@@ -50,6 +52,21 @@ TOPIC_WORDS = {
         "पता",
     ],
     "doctors": ["doctor", "doctors", "dr", "daktar", "dentist", "kaun", "डॉक्टर"],
+    "ordering": [
+        "minimum",
+        "min",
+        "delivery",
+        "deliver",
+        "deliveries",
+        "area",
+        "bhejte",
+        "bhejoge",
+        "pahuncha",
+        "order",
+        "orders",
+        "dispatch",
+        "डिलीवरी",
+    ],
     "fees": [
         "fee",
         "fees",
@@ -87,7 +104,7 @@ def upcoming_changes(conn: db.Conn, s: dict, days: int = 7) -> list[str]:
         d = date.fromisoformat(b["date"])
         if d > today + timedelta(days=days):
             continue
-        who = cs.doctor_name(s, b["resource_id"]) if b["resource_id"] else "The whole clinic"
+        who = cs.doctor_name(s, b["resource_id"]) if b["resource_id"] else "The whole business"
         when = short_date(d)
         if b["kind"] in ("leave", "holiday"):
             out.append(f"{who}: not available on {when}.")
@@ -108,11 +125,21 @@ def facts(conn: db.Conn, s: dict) -> dict[str, str]:
     out = {
         "hours": hours_text(s) + " " + " ".join(upcoming_changes(conn, s)),
         "location": location,
-        "doctors": "Doctors: " + ", ".join(d["name"] for d in s["doctors"]) + ".",
-        "fees": "Fees: "
-        + "; ".join(f"{x['name']} {x['fee']}" for x in s["services"])
-        + ". Final cost depends on the doctor's check-up.",
     }
+    if s.get("doctors"):
+        out["doctors"] = "Doctors: " + ", ".join(d["name"] for d in s["doctors"]) + "."
+    if s.get("services"):
+        out["fees"] = (
+            "Fees: "
+            + "; ".join(f"{x['name']} {x['fee']}" for x in s["services"])
+            + ". Final cost depends on the doctor's check-up."
+        )
+    ordering = [
+        f"Minimum order: {s['min_order']}." if s.get("min_order") else "",
+        f"Delivery area: {s['delivery_area']}." if s.get("delivery_area") else "",
+    ]
+    if any(ordering):
+        out["ordering"] = " ".join(x for x in ordering if x)
     for i, f in enumerate(s.get("faqs", [])):
         out[f"faq:{i}"] = f"Q: {f['q']} A: {f['a']}"
     return {k: v.strip() for k, v in out.items()}
@@ -183,9 +210,9 @@ def lookup(conn: db.Conn, s: dict, question: str) -> list[str]:
         else:
             score = len(q & set(TOPIC_WORDS[key])) * 2
             if key == "fees":
-                score += sum(2 for x in s["services"] if _words(x["name"]) & q)
+                score += sum(2 for x in s.get("services", []) if _words(x["name"]) & q)
             if key == "doctors":
-                score += sum(2 for d in s["doctors"] if _words(d["name"]) & q)
+                score += sum(2 for d in s.get("doctors", []) if _words(d["name"]) & q)
         if score:
             scored.append((score, text))
     scored.sort(key=lambda x: -x[0])
