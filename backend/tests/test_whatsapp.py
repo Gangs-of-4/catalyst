@@ -156,13 +156,15 @@ def test_walk_in_from_whatsapp(client):
 
 def test_unregistered_number_rejected(client):
     allow([DOCTOR])
-    assert "registered nahi" in send(client, "kal chhutti", sender="+919000000999")
+    assert "juda nahi hai" in send(client, "kal chhutti", sender="+919000000999")
     assert demo_conn().execute("SELECT COUNT(*) FROM pending_actions").fetchone()[0] == 0
 
 
-def test_open_mode_warns(client):
+def test_no_numbers_means_nobody_commands(client):
+    """No more open demo mode: a business with no WhatsApp numbers takes no commands."""
     allow([])
-    assert "Demo mode" in send(client, "aaj ke appointments")
+    reply = send(client, "aaj ke appointments")
+    assert "juda nahi hai" in reply and "appointments" not in reply
 
 
 def test_unparsed_creates_ops_item(client):
@@ -183,6 +185,7 @@ def test_xml_is_escaped(client):
 
 
 def test_twilio_signature(client, isolated):
+    allow([DOCTOR])
     isolated.write_text(
         "TWILIO_AUTH_TOKEN=tok\nPUBLIC_URL=https://demo.trycloudflare.com\n", encoding="utf-8"
     )

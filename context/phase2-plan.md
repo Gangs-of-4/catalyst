@@ -23,10 +23,11 @@
 | M1: tenant-scoped SQL layer (SQLite + Postgres), `tenants` table | #9 | Merged |
 | M2: accounts + onboarding API (signup, login, logout, me, templates; per-business assistant, Vapi mocked in tests) | #11 | Merged |
 | M3: per-business voice (`/vapi/webhook/{public_id}`, per-tenant secret, template-aware prompt and tools, settings save PATCHes only its own assistant) | #12 | Merged |
-| M2b: desk, inbox, calls, stats and settings scoped to the session's business; session login replaces Basic auth; demo owner login from `DEMO_LOGIN_PASSWORD` | #28 | Open |
-| M4a: wholesale data side (catalogue, CSV import, orders and lifecycle, `/api/catalog`, `/api/orders`, wholesale settings, order board on the test page) | #32 | Open |
-| M4b: wholesale voice side (tools, prompt, escalation rules, safety suite, catalogue-aware post-call check) | #33 | Open |
-| M5–M12 | — | Not started |
+| M2b: desk, inbox, calls, stats and settings scoped to the session's business; session login replaces Basic auth; demo owner login from `DEMO_LOGIN_PASSWORD` | #28 | Merged |
+| M4a: wholesale data side (catalogue, CSV import, orders and lifecycle, `/api/catalog`, `/api/orders`, wholesale settings, order board on the test page) | #32 | Merged |
+| M4b: wholesale voice side (tools, prompt, escalation rules, safety suite, catalogue-aware post-call check) | #33 | Merged |
+| M6: WhatsApp per business (routing by sender, wholesale commands, no open demo mode) | (this PR) | Open |
+| M5, M7–M12 | — | Not started |
 
 ---
 

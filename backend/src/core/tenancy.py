@@ -64,6 +64,22 @@ def by_whatsapp(conn: db.Conn, e164: str) -> db.Row | None:
     return conn.execute("SELECT * FROM tenants WHERE owner_whatsapp = ?", (e164,)).fetchone()
 
 
+def for_sender(conn: db.Conn, e164: str) -> str | None:
+    """The business a WhatsApp number commands (contracts.md §4): the one whose owner number it is
+    (unique across businesses), else the one business that lists it among its WhatsApp numbers
+    (e.g. a second doctor). A number listed by several businesses commands none: it can't be told
+    apart. `conn` is unchecked: the business isn't known yet."""
+    owner = by_whatsapp(conn, e164)
+    if owner is not None:
+        return owner["id"]
+    listed = [
+        row["id"]
+        for row in conn.execute("SELECT id, settings FROM tenants").fetchall()
+        if e164 in (json.loads(row["settings"]).get("whatsapp_numbers") or [])
+    ]
+    return listed[0] if len(listed) == 1 else None
+
+
 def demo_id(conn: db.Conn, template: str = "clinic") -> str | None:
     row = by_public_id(conn, DEMO_PUBLIC_ID.format(template=template))
     return row["id"] if row else None

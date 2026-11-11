@@ -34,7 +34,7 @@ emergency_instruction: >-
   Agar saans lene ya nigalne mein dikkat hai, sujan tezi se badh rahi hai, ya khoon ruk nahi raha,
   to turant nazdeeki hospital ki emergency mein jaaiye ya 108 par call kijiye.
 
-whatsapp_numbers: []  # fill on /setup; empty = any number may command (demo only, with a warning)
+whatsapp_numbers: []  # fill on /setup; empty = no number can command this business
 
 seed:                # relative days: 0 = today, 1 = next open day
   bookings:

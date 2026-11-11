@@ -309,6 +309,14 @@ def set_status(conn: db.Conn, order_id: int, status: str) -> dict:
     return get(conn, order_id)
 
 
+def by_number(conn: db.Conn, number: int) -> dict | None:
+    """The business's order with this number (for the owner; callers go through find_for_caller)."""
+    row = conn.execute(
+        "SELECT * FROM orders WHERE tenant_id = ? AND number = ?", (conn.tid, number)
+    ).fetchone()
+    return _with_items(conn, [row])[0] if row else None
+
+
 def find_for_caller(conn: db.Conn, number: int | None = None, phone: str | None = None) -> list:
     """Orders for an order-status question, only ever the caller's own: by number *and* the phone
     the order was placed with, else the last 3 for that phone. Without a phone, nothing: order

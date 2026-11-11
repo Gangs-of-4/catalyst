@@ -141,6 +141,11 @@ def try_saying(template: str) -> list[str]:
     return [str(x) for x in _checked(template).get("try_saying") or []]
 
 
+def whatsapp_commands(template: str) -> set[str]:
+    """The owner commands a template enables (vertical.yaml `whatsapp.commands`)."""
+    return set(_checked(template)["whatsapp"].get("commands") or [])
+
+
 def modules(template: str) -> list[str]:
     """The desk modules a template uses (vertical.yaml `modules`): bookings, orders."""
     return list(_checked(template)["modules"])

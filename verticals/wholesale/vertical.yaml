@@ -41,7 +41,7 @@ orders:
   readback_before_create: true
 
 whatsapp:
-  commands: [orders_today, set_rate, stock_out, stock_in, order_dispatch, summary, add_instruction]
+  commands: [orders_today, order_status, set_rate, stock_out, stock_in, summary, callbacks, add_instruction]
   confirm_words: [haan, ha, yes, ok]
   reject_words: [nahi, na, no]
   preview_expiry_min: 30
