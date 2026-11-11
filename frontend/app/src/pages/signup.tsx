@@ -107,6 +107,8 @@ export function SignupPage() {
       .then(({ templates: list }) => {
         setTemplates(list);
         setLoadError(null);
+        // The form has loaded, so a "still loading" / "didn't load" message from an earlier press is stale.
+        setFormError((e) => (e && (e.code === "LOADING" || e.code === "NOT_LOADED") ? null : e));
         const wanted = list.find((t) => t.template === wantedTemplate) ?? list[0];
         if (wanted) setForm((f) => (f.business.template ? f : switchTemplate(f, wanted)));
       })

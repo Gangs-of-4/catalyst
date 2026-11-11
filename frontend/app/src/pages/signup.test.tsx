@@ -190,4 +190,32 @@ describe("<SignupPage>", () => {
     expect(document.activeElement).toBe(retry);
     expect(stepLabel()).toContain("2/3");
   });
+
+  it("clears the 'still loading' message once the form has loaded", async () => {
+    let release: () => void = () => {};
+    const slow = new Promise<void>((r) => (release = r));
+    // The templates answer only when the test says so.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async (input) => {
+        const url = String(input);
+        if (url === "/api/templates") {
+          await slow;
+          return templates();
+        }
+        if (url === "/api/me") return json(401, { detail: "Please log in to continue.", code: "UNAUTHENTICATED" });
+        throw new Error(`unexpected fetch ${url}`);
+      }),
+    );
+    renderPage();
+    type("Your name", "Test Owner");
+    type("Email", "owner@example.com");
+    type("Password", "long enough");
+    nextStep(); // step 2 needs the business types, which are still loading
+    nextStep();
+    expect(await screen.findByText(/still loading/)).toBeTruthy();
+    release();
+    await screen.findByRole("radio", { name: /Clinic/ });
+    expect(screen.queryByText(/still loading/)).toBeNull();
+  });
 });
