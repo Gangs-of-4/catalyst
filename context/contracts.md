@@ -290,6 +290,7 @@ Every table below except `tenants` has `tenant_id`, and every query on it filter
 | Table | Purpose | Key columns |
 |---|---|---|
 | `tenants` | one business | `id` (UUID), `public_id` (random URL slug, unique; demo businesses use `demo-<template>`), `name`, `template` (`clinic` \| `wholesale`), `settings` (JSON: city, address, landmark, hours, closed days, resources, services, FAQs, emergency text, minimum order, delivery area), `owner_whatsapp` (E.164, **unique across businesses**), `vapi_assistant_id`, `tool_secret`, `is_demo`, `created_at` |
+| `tenant_whatsapp_numbers` | WhatsApp routing index | `number` (E.164, unique), `tenant_id`: the owner number plus `settings.whatsapp_numbers`, rebuilt on every settings save and at startup |
 | `users` | the owner's login | `id`, `tenant_id`, `name`, `email` (unique, lowercased), `password_hash` (`hashlib.scrypt`, per-user salt), `failed_logins`, `locked_until`, `last_active_at`, `created_at` |
 | `sessions` | logins | `token_hash` (SHA-256 of the cookie token), `user_id`, `tenant_id` (null for admin), `kind` (`user` \| `admin`), `expires_at`, `created_at` |
 | `bookings`, `blocks`, `inbox`, `calls`, `tool_calls`, `pending_actions` | as today (demo schema) | + `tenant_id`. Slot lock: unique (`tenant_id`, `resource_id`, `date`, `time`) where status is active. `tool_calls` key (`tenant_id`, `id`). |
@@ -337,7 +338,7 @@ Rules:
 - If the intent is `unknown` or confidence is below a configured threshold, the reply is "Samajh nahi aaya — hamari team aaj hi dekh legi." An ops task is created, and our team handles it manually the same day (C8).
 - Each vertical enables commands in `vertical.yaml` (`whatsapp.commands`).
 
-**Routing (v0.2).** One Twilio sandbox number serves every business. The backend finds the business by the sender's number: `tenants.owner_whatsapp` (unique across businesses), else the one business whose settings list it in `whatsapp_numbers` (e.g. a second doctor). A number listed by several businesses commands none. There is no open demo mode: a business with no numbers takes no commands. An unknown number gets: "Yeh number kisi Catalyst business se juda nahi hai. {PUBLIC_APP_URL}/signup par apna front desk banaiye, ya Settings mein yahi WhatsApp number daaliye." Nothing else happens, and the attempt is logged by ID only.
+**Routing (v0.2).** One Twilio sandbox number serves every business. The backend finds the business by the sender's number: its owner number or one of the numbers in its settings' `whatsapp_numbers` (e.g. a second doctor), compared normalised (E.164). Every such number belongs to exactly one business (`tenant_whatsapp_numbers`, unique): a settings save that lists another business's number is `409 WHATSAPP_TAKEN`, and so is a signup with one. There is no open demo mode: a business with no numbers takes no commands. An unknown number gets: "Yeh number kisi Catalyst business se juda nahi hai. {PUBLIC_APP_URL}/signup par apna front desk banaiye, ya Settings mein yahi WhatsApp number daaliye." Nothing else happens, and the attempt is logged by ID only.
 
 **Wholesale commands (v0.2).** Rule-parsed first; the LLM parser is a fallback. Every write is previewed.
 

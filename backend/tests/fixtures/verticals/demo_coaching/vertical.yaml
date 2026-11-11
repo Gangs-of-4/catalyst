@@ -33,7 +33,7 @@ booking:
   sources: [phone, whatsapp, walk_in]
 
 whatsapp:
-  commands: [block_day, set_hours, query_today]
+  commands: [query_day, block_day, late_start]
   confirm_words: [haan, yes]
   reject_words: [nahi, no]
   preview_expiry_min: 30

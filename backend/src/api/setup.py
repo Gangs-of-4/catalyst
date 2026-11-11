@@ -144,6 +144,14 @@ SETTINGS_MODELS: dict[str, type[BaseModel]] = {
 }
 
 
+def _save(conn: db.Conn, s: dict) -> None:
+    try:
+        cs.save(conn, s)
+    except db.Conflict:
+        message = "One of these WhatsApp numbers already belongs to another business."
+        raise ApiError(409, "WHATSAPP_TAKEN", message, {"whatsapp_numbers": message}) from None
+
+
 def _parse(model: type[BaseModel], raw: dict) -> BaseModel:
     try:
         return model.model_validate(raw)
@@ -164,7 +172,7 @@ def save_settings(raw: dict = Body(...), conn: db.Conn = Depends(get_user_conn))
         s = cs.load(conn)
         s.update(body.model_dump())
         s["sessions"] = [list(x) for x in body.sessions]
-        cs.save(conn, s)
+        _save(conn, s)
         return {"saved": True, "agent": sync_agent(conn.tid), "settings": s}
     body = _parse(SettingsIn, raw)
     s = cs.load(conn)
@@ -198,7 +206,7 @@ def save_settings(raw: dict = Body(...), conn: db.Conn = Depends(get_user_conn))
     s["doctors"] = doctors
     s["sessions"] = [list(x) for x in body.sessions]
     s["red_flags"] = [r.strip() for r in body.red_flags if r.strip()]
-    cs.save(conn, s)
+    _save(conn, s)
     return {"saved": True, "agent": sync_agent(conn.tid), "settings": s}
 
 

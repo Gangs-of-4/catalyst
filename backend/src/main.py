@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import accounts, seed
 from .api import auth, desk, errors, onboarding, orders, public, setup, try_page, vapi, whatsapp
-from .core import db
+from .core import db, tenancy
 from .core.config import FRONTEND_DIR, env
 
 
@@ -17,6 +17,7 @@ async def lifespan(app: FastAPI):
     accounts.ensure_session_secret()
     conn = db.connect()
     demo = seed.ensure(conn)
+    tenancy.reindex_whatsapp(conn)
     conn.close()
     conn = db.connect_unchecked()  # startup, before any request: the demo owner's login
     try:

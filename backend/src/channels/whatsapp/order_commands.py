@@ -51,19 +51,35 @@ _STATUS = "|".join(sorted((re.escape(w) for w in STATUS_WORDS), key=len, reverse
 _ORDER = re.compile(
     rf"^order\s*(?:no\.?|number)?\s*#?\s*(\d+)\s+(?:ko\s+)?({_STATUS})(?:\s+karo|\s+kar do)?$"
 )
+# The product ends at a separator: "=", ":", "->", or a space (optionally then "ab"/"to" as their
+# own words). Currency words are their own tokens, so "potato", "kabab" and "cars" stay whole.
 _RATE = re.compile(
-    r"^(?:rate|price|bhav|daam)\s+(.+?)\s*(?:=|:|->|ab|to)?\s*(?:₹|rs\.?|rupees?)?\s*"
-    r"(\d+(?:\.\d{1,2})?)\s*(?:rs|rupees?|rupaye)?$"
+    r"^(?:rate|price|bhav|daam)\s+(.+?)(?:\s*(?:=|:|->)\s*|\s+(?:(?:ab|to)\s+)?)"
+    r"(?:(?:₹|rs\.?|rupees?)\s*)?(\d+(?:\.\d{1,2})?)(?:\s*(?:rs|rupees?|rupaye))?$"
 )
+# (pattern, explicit). An explicit form starts with the stock words, so it is a stock command
+# whatever the name. The trailing forms ("X khatam", "X aa gaya") read like everyday messages
+# ("payment aaya", "driver aa gaya"), so they count only when X names catalogue products.
 _OUT = (
-    re.compile(r"^(?:stock\s+khatam|out\s+of\s+stock|stock\s+out)\s+(.+)$"),
-    re.compile(
-        r"^(.+?)\s+(?:ka\s+|ki\s+)?(?:stock\s+)?khatam(?:\s+hai|\s+ho\s+gaya|\s+ho\s+gayi)?$"
+    (re.compile(r"^(?:stock\s+khatam|out\s+of\s+stock|stock\s+out)\s+(.+)$"), True),
+    (
+        re.compile(
+            r"^(.+?)\s+(?:ka\s+|ki\s+)?(?:stock\s+)?khatam(?:\s+hai|\s+ho\s+gaya|\s+ho\s+gayi)?$"
+        ),
+        False,
     ),
 )
 _IN = (
-    re.compile(r"^(?:stock\s+aa\s+gaya|stock\s+aaya|in\s+stock|back\s+in\s+stock)\s+(.+)$"),
-    re.compile(r"^(.+?)\s+(?:ka\s+|ki\s+)?(?:stock\s+)?(?:aa\s+gaya|aa\s+gayi|aaya|wapas\s+aaya)$"),
+    (
+        re.compile(r"^(?:stock\s+aa\s+gaya|stock\s+aaya|in\s+stock|back\s+in\s+stock)\s+(.+)$"),
+        True,
+    ),
+    (
+        re.compile(
+            r"^(.+?)\s+(?:ka\s+|ki\s+)?(?:stock\s+)?(?:aa\s+gaya|aa\s+gayi|aaya|wapas\s+aaya)$"
+        ),
+        False,
+    ),
 )
 
 
@@ -101,14 +117,26 @@ def parse(conn: db.Conn, text: str, make) -> object | str | None:
             return str(e)
         return make(intent="set_rate", product_id=p["id"], rate_paise=paise)
     for intent, patterns in (("stock_out", _OUT), ("stock_in", _IN)):
-        for pattern in patterns:
+        for pattern, explicit in patterns:
             m = pattern.match(t)
-            if m:
-                p = _product(conn, m[1])
-                if isinstance(p, str):
-                    return p
-                return make(intent=intent, product_id=p["id"])
+            if not m:
+                continue
+            if not explicit and not _names_a_product(conn, m[1]):
+                return None  # "payment aaya": not a stock command; it goes to the ops inbox
+            p = _product(conn, m[1])
+            if isinstance(p, str):
+                return p
+            return make(intent=intent, product_id=p["id"])
     return None
+
+
+def _names_a_product(conn: db.Conn, spoken: str) -> bool:
+    """The words name a catalogue product exactly, or fit some (then we ask which one)."""
+    try:
+        catalog.find(conn, spoken)
+        return True
+    except catalog.CatalogError as e:
+        return bool(e.matches)
 
 
 def preview(conn: db.Conn, cmd) -> tuple[str, bool]:
@@ -183,14 +211,11 @@ def orders_today(conn: db.Conn) -> str:
 def summary(conn: db.Conn, name: str) -> str:
     """Today's and this week's (Monday to today, IST) order counts and value. Counts only."""
     today = config.now().date()
-    week = [today - timedelta(days=i) for i in range(today.weekday() + 1)]
-    day_orders = orders.list_orders(conn, day=today.isoformat())
-    week_orders = [o for d in week for o in orders.list_orders(conn, day=d.isoformat())]
+    tomorrow = (today + timedelta(days=1)).isoformat()
+    monday = (today - timedelta(days=today.weekday())).isoformat()
 
-    def line(found: list[dict]) -> str:
-        live = [o for o in found if o["status"] != "cancelled"]
-        value = catalog.format_inr(sum(o["total_paise"] for o in live))
-        pending = sum(1 for o in live if o["status"] in ("new", "confirmed"))
-        return f"{len(live)} orders, {value}, {pending} dispatch baaki"
+    def line(start: str) -> str:
+        t = orders.totals(conn, start, tomorrow)
+        return f"{t['orders']} orders, {catalog.format_inr(t['value_paise'])}, {t['pending']} dispatch baaki"
 
-    return f"{name}\nAaj: {line(day_orders)}\nIs hafte: {line(week_orders)}"
+    return f"{name}\nAaj: {line(today.isoformat())}\nIs hafte: {line(monday)}"

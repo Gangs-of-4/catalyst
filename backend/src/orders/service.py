@@ -309,6 +309,24 @@ def set_status(conn: db.Conn, order_id: int, status: str) -> dict:
     return get(conn, order_id)
 
 
+def totals(conn: db.Conn, start: str, end: str) -> dict:
+    """Counts for orders created in [start, end) (IST dates), cancelled ones left out: how many,
+    their value in paise, and how many still wait for dispatch. One query each, no page limit."""
+    row = conn.execute(
+        "SELECT COUNT(*), SUM(CASE WHEN status IN ('new', 'confirmed') THEN 1 ELSE 0 END)"
+        " FROM orders WHERE tenant_id = ? AND created_at >= ? AND created_at < ?"
+        " AND status != 'cancelled'",
+        (conn.tid, start, end),
+    ).fetchone()
+    value = conn.execute(
+        "SELECT SUM(i.qty * i.rate_paise) FROM orders o JOIN order_items i ON i.order_id = o.id"
+        " WHERE o.tenant_id = ? AND i.tenant_id = ? AND o.created_at >= ? AND o.created_at < ?"
+        " AND o.status != 'cancelled'",
+        (conn.tid, conn.tid, start, end),
+    ).fetchone()
+    return {"orders": row[0] or 0, "pending": row[1] or 0, "value_paise": value[0] or 0}
+
+
 def by_number(conn: db.Conn, number: int) -> dict | None:
     """The business's order with this number (for the owner; callers go through find_for_caller)."""
     row = conn.execute(
