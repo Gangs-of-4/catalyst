@@ -9,8 +9,8 @@ import { backendUrl, withBackendRewrites } from "../../configure-vercel.mjs";
 const base = {
   cleanUrls: true,
   rewrites: [
-    { source: "/signup", destination: "/app.html" },
-    { source: "/styleguide", destination: "/app.html" },
+    { source: "/signup", destination: "/app" },
+    { source: "/styleguide", destination: "/app" },
   ],
 };
 

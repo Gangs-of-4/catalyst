@@ -1,7 +1,8 @@
 // Vercel build (ADR-0036, ADR-0042). Produces dist/ with:
 //   - the React app (frontend/app, built by Vite): its shell as dist/app.html, its files in dist/assets/
 //   - the old static pages and static/, unchanged, until M8 replaces each one
-// vercel.json rewrites each React route (e.g. /styleguide) to /app.html.
+// vercel.json rewrites each React route (e.g. /styleguide) to /app: with cleanUrls on, Vercel serves
+// dist/app.html at /app, and a rewrite to /app.html would 404.
 // Runs with plain Node; installs the app's locked dependencies if they aren't there yet.
 import { execSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
