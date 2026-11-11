@@ -402,9 +402,9 @@ The channel is the team's WhatsApp/ops group; the exact channel is TBD with D7.
 
 ## 6. Browser API (v0.2, 2026-11-10)
 
-The static pages call these. Built and consumed in parallel by the backend and frontend tracks; change here first.
+The frontend pages (Vite + React, ADR-0042) call these. Built and consumed in parallel by the backend and frontend tracks; change here first.
 
-- **Origin.** In production the pages call `/api/...` on their own (Vercel) origin and Vercel rewrites it to the backend (ADR-0041), so the session cookie is first-party. Locally FastAPI serves pages and API on one origin.
+- **Origin.** In production the pages call `/api/...` on their own (Vercel) origin and Vercel rewrites it to the backend (ADR-0041), so the session cookie is first-party. Locally the Vite dev server proxies `/api` to FastAPI, so pages and API share one origin (the old static pages, still served by FastAPI until M8 replaces them, are same-origin too).
 - **Session cookie.** `catalyst_session`: random token signed with HMAC-SHA256 (`SESSION_SECRET`), `HttpOnly`, `Secure` (except on `http://localhost`), `SameSite=Lax`, `Path=/`, 30-day expiry. The DB stores only the token's SHA-256 hash. Logout deletes the row.
 - **CSRF.** Every write is a JSON `POST`/`PUT`/`DELETE` (multipart only for CSV upload) and must carry header `X-Requested-With: catalyst`; the backend rejects writes without it (`403`). Together with `SameSite=Lax` this blocks cross-site form posts.
 - **Errors.** Every non-2xx body is `{ "detail": "<one plain sentence for the page>", "code": "<CODE>", "fields": {"<field>": "<message>"}?, "alternatives": [ ... ]? }`. Pages show `detail` as-is. Never a stack trace.

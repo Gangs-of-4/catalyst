@@ -8,7 +8,9 @@ MCP servers extend Claude Code with additional tools/data sources. This director
 
 ## Current state
 
-No MCP servers are configured in this project yet.
+| Server | Used for | Scope | Doc |
+|---|---|---|---|
+| 21st.dev (Magic MCP) | UI components for the M8 React redesign (adapted to `frontend/DESIGN.md` tokens, ADR-0042) | each member's local config | `servers/21st/21st.md` |
 
 ## Where MCP documentation belongs
 
