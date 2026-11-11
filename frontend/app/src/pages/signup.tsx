@@ -1,6 +1,7 @@
 import { AlertCircle, ChevronLeft, ChevronRight, Loader2, Plus, RotateCw, X } from "lucide-react";
 import * as React from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
+import { toast } from "sonner";
 
 import { AppHeader } from "@/components/app-header";
 import { EmptyState } from "@/components/empty-state";
@@ -38,6 +39,7 @@ import { SignupSuccess } from "@/features/signup/success";
 import { TemplatePicker } from "@/features/signup/template-picker";
 import { WeekdayPicker } from "@/features/signup/weekday-picker";
 import { api, ApiError } from "@/lib/api";
+import { getMe, logout, type Me } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
 const selectClass =
@@ -98,7 +100,30 @@ export function SignupPage() {
   const [submitting, setSubmitting] = React.useState(false);
   const [optionalOpen, setOptionalOpen] = React.useState(false);
   const [done, setDone] = React.useState<SignupResponse | null>(null);
+  const [me, setMe] = React.useState<Me | null>(null);
   const formRef = React.useRef<HTMLFormElement>(null);
+
+  // Already logged in? Say so, so a second signup (or a taken email) isn't a mystery.
+  React.useEffect(() => {
+    const ctrl = new AbortController();
+    getMe(ctrl.signal)
+      .then(setMe)
+      .catch(() => {}); // 401 is the normal case here
+    return () => ctrl.abort();
+  }, []);
+
+  async function onLogout() {
+    try {
+      await logout();
+    } catch {
+      // Still logged in: keep the note and say so, rather than pretend (review on #31).
+      toast.error("Couldn't log out just now. Please try again.");
+      return;
+    }
+    setMe(null);
+    setFormError(null);
+    toast.success("Logged out. You can set up another business now.");
+  }
 
   // Load the templates (labels, modules and form defaults) once, with a retry on failure.
   React.useEffect(() => {
@@ -289,6 +314,26 @@ export function SignupPage() {
     <>
       {header}
       <main className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-10 sm:px-6 sm:py-14">
+        {me && (
+          <div
+            role="status"
+            className="flex flex-col gap-3 rounded-lg border bg-surface-soft px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+          >
+            <p className="text-body">
+              You&apos;re logged in as <span className="break-all font-medium text-foreground">{me.user.email}</span> (
+              {me.business.name}).
+            </p>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button asChild size="sm">
+                <Link to="/home">Go to your home page</Link>
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => void onLogout()}>
+                Log out to set up another
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col gap-3">
           <h1 className="text-[28px] font-semibold leading-tight tracking-tight">Set up your front desk</h1>
           {step === 1 && (
@@ -812,14 +857,37 @@ export function SignupPage() {
               <AlertCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
               <p>
                 {formError.detail}
-                {formError.code === "EMAIL_TAKEN" && (
-                  <>
-                    {" "}
-                    <a href="/login" className="font-semibold underline underline-offset-2">
-                      Go to login
-                    </a>
-                  </>
-                )}
+                {formError.code === "EMAIL_TAKEN" &&
+                  (me && me.user.email.toLowerCase() === form.user.email.trim().toLowerCase() ? (
+                    // It's the account they're already logged in with: send them home, not to login.
+                    <>
+                      {" "}
+                      That&apos;s the account you&apos;re logged in with.{" "}
+                      <Link to="/home" className="font-semibold underline underline-offset-2">
+                        Go to your home page
+                      </Link>
+                    </>
+                  ) : me ? (
+                    // Taken by a different account while logged in: /login would just bounce home.
+                    <>
+                      {" "}
+                      You&apos;re logged in as {me.user.email}.{" "}
+                      <button
+                        type="button"
+                        onClick={() => void onLogout()}
+                        className="font-semibold underline underline-offset-2"
+                      >
+                        Log out to set up another
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {" "}
+                      <a href="/login" className="font-semibold underline underline-offset-2">
+                        Go to login
+                      </a>
+                    </>
+                  ))}
               </p>
             </div>
           )}
