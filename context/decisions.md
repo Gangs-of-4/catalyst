@@ -49,13 +49,14 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 | ADR-0033 | Verticals are config; generic booking model with exclusion constraint | Accepted | Free |
 | ADR-0034 | WhatsApp is its own channel module; preview-and-confirm on every write | Accepted — extends ADR-0017 | Free tier with limits (per-message pricing, D5) |
 | ADR-0035 | Demo build simplifications | Accepted — *revisit before the first real clinic pilot*; frontend hosting amended by ADR-0036; frontend stack amended by ADR-0042 | Free tier with limits (Vapi, Twilio sandbox trial credit) |
-| ADR-0036 | Vercel for frontend hosting, deployed from GitHub Actions | Accepted — **supersedes ADR-0013**; *decision 4 challenged by ADR-0041 (Proposed)* | Free tier with limits (Vercel Hobby — non-commercial terms, see Consequences) |
+| ADR-0036 | Vercel for frontend hosting, deployed from GitHub Actions | Accepted — **supersedes ADR-0013**; *decision 4 challenged by ADR-0041 (Proposed); hosting challenged by ADR-0043 (Proposed)* | Free tier with limits (Vercel Hobby — non-commercial terms, see Consequences) |
 | ADR-0037 | Wholesale distributor template | Accepted — *amends the vertical order in ADR-0028* | Free |
 | ADR-0038 | Self-serve onboarding and owner custom instructions | Accepted | Free tier with limits (one Vapi assistant per business) |
 | ADR-0042 | React (Vite + TypeScript + Tailwind + shadcn/ui) for the frontend | Accepted — *amends the frontend row of ADR-0035; replaces the Next.js plan* | Free |
 | ADR-0039 | Render + Neon for the Phase 2 backend; residency exception; app-level tenant scoping | **Proposed** — *would supersede ADR-0003 for Phase 2; departs from ADR-0010, ADR-0016, ADR-0023* | Free tier with limits |
 | ADR-0040 | Target voice stack: self-hosted Pipecat + Sarvam in India | **Proposed** — *would change ADR-0008, ADR-0021, ADR-0029* | Deferred paid |
 | ADR-0041 | Vercel rewrites `/api` to the backend for first-party session cookies | **Proposed** — *would amend ADR-0036 decision 4* | Free tier with limits |
+| ADR-0043 | Move the frontend from Vercel Hobby to Cloudflare Workers (static assets) | **Proposed** — *would supersede ADR-0036; would carry ADR-0041's `/api` forwarding over as a Worker script* | Free tier with limits |
 
 ---
 
@@ -591,6 +592,45 @@ ADR-0029 and ADR-0031 were accepted on 2026-10-27 and stay here so their history
 **Decision (proposed):** `frontend/vercel.json` rewrites `/api/:path*` to the backend's public URL. The pages call `/api/...` on their own origin, so the cookie is first-party and no CORS is needed for the app. Webhooks (Vapi, Twilio) still call the backend directly. No Vercel functions or middleware touch API data; the rewrite only forwards it.
 
 **Consequences:** API data, including names and phone numbers, passes through Vercel's network (not India-hosted), in addition to the Singapore backend under ADR-0039's exception. The ADR-0039 revisit covers this too. A Render cold start must finish within Vercel's external-rewrite timeout (VERIFY); the pages ping `/healthz` first and show a "waking up" state. `NEXT_PUBLIC_API_URL` becomes the rewrite target at build time instead of a browser-side base URL.
+
+---
+
+### ADR-0043: Move the frontend from Vercel Hobby to Cloudflare Workers (static assets)
+
+- **Date:** 2026-11-11
+- **Status:** **Proposed**. It needs the whole team's agreement, and the timing is an open question (see below).
+- **Cost implication:** Free tier with limits. Static asset requests are free and unlimited; requests that run the Worker script (only `/api/*` and `/healthz`) count toward 100,000 a day on the Free plan.
+- **Would change:** supersede ADR-0036 (Vercel). ADR-0041's `/api` forwarding would become a small Worker script instead of a `vercel.json` rewrite. ADR-0042 (React) is unchanged.
+
+**Context:**
+- **Vercel Hobby is non-commercial only.** Vercel's fair use guidelines: "Hobby teams are restricted to non-commercial personal use only. All commercial usage of the platform requires either a Pro or Enterprise plan." Our landing and Try-it pages market the service to businesses, which likely counts as commercial (ADR-0036 already flags this). Vercel Pro is a paid plan we haven't budgeted.
+- **It is one member's personal account.** The Vercel project lives on a teammate's personal Hobby account. A pause for a terms breach would take down their other projects too, not only ours.
+- **The repo must stay public.** On Hobby, Vercel can't deploy a private repository in a GitHub organisation (ADR-0036). Cloudflare has no such rule.
+- **The forwarding is partly undocumented.** Vercel's docs don't say whether an external rewrite passes `Set-Cookie` through, or what its timeout is (checked 2026-11-11). Login depends on that cookie (ADR-0041, PR #18). A Worker script forwards the request in our own code, so we control what happens to the cookie and the timeout.
+- **This is not a return to ADR-0013.** ADR-0013 picked Cloudflare **Pages**. This ADR uses **Workers static assets**, which can also run a small script on chosen paths.
+
+**Decision (proposed):**
+1. **Hosting.** Deploy the built React app (`frontend/app/dist`) as **Cloudflare Workers static assets**, with `not_found_handling = "single-page-application"`, so every page route serves the app shell.
+2. **`/api` forwarding.** A Worker script runs only for `/api/*` and `/healthz` (`run_worker_first = ["/api/*", "/healthz"]`). It forwards the request to the backend URL from a Worker variable (`BACKEND_URL`, set in `wrangler` config or the dashboard; it isn't a secret) and returns the response unchanged, including `Set-Cookie`. No other logic and no storage: the script only forwards. Webhooks (Vapi, Twilio) still call the backend directly.
+3. **Deploys.** The same GitHub Actions gate as today: after CI succeeds on `main`, deploy the commit CI tested, using `cloudflare/wrangler-action` (`wrangler deploy`). Repo secrets: `CLOUDFLARE_API_TOKEN` (permission "Edit Cloudflare Workers", scoped to our one account) and `CLOUDFLARE_ACCOUNT_ID`.
+4. **Cut-over.** Keep the Vercel project until the Cloudflare site passes the checks below. Then remove the Vercel deploy workflow, `frontend/vercel.json`, `frontend/configure-vercel.mjs` and the `VERCEL_*` secrets in one PR, and delete the Vercel project.
+5. **Old static pages.** The SPA fallback assumes `index.html` is the React shell. If we move before M8 has replaced the old static pages, the build must keep them at their own paths (as `build.mjs` does now). The simplest order is to move after the old pages are gone.
+
+**Checks before cut-over** (each is VERIFY until done):
+- Login on the deployed site stays logged in: the Worker passes `Set-Cookie` through. The docs only show a passthrough example and don't say this outright.
+- A Render cold start (about a minute, VERIFY) completes through the Worker and the pages show "waking up". The docs say there's no hard duration limit while the client stays connected.
+- Every React route loads on refresh (SPA fallback), and `/api` 404s and errors still come back as JSON.
+- Whether `*.workers.dev` addresses are fine for production traffic, and whether the Free plan needs a card. The docs don't say.
+
+**Consequences:**
+- **Limits.** Only Worker-script requests count toward the 100,000/day limit, with 10 ms of CPU each and 50 subrequests (Cloudflare limits page). Our script makes one subrequest and does almost no work. If the daily limit is ever hit, `/api` calls get **429** (static pages still load), so pages must show a plain "try again later" for 429. Asset files: at most 20,000 per version and 25 MiB each.
+- **Data residency is unchanged.** API data, including names and phone numbers, passes through Cloudflare's network instead of Vercel's. Neither is India-pinned, so ADR-0039's exception and its revisit still apply.
+- **No commercial-use restriction found** in Cloudflare's Self-Serve terms (reviewed 2026-11-10; VERIFY before marketing). The repo could later go private without breaking deploys.
+- **Effort:** about 0.5–1 day. That's the Worker script, the wrangler config, the deploy workflow, docs, and one account-level setup step: a member creates the API token in the Cloudflare dashboard.
+
+**Open question for the team: when?**
+- **Option A, after 15 Nov (Phase 2 deadline).** Ship Phase 2 on Vercel as planned, then move. Nothing changes before the deadline, but the cookie check happens twice: once on Vercel at M10, once on Cloudflare.
+- **Option B, before M10 (backend deploy).** Move first, so the live login is tested only once, on the final host. It costs about a day out of the last 4 before the deadline, while M8 and M10 are still open.
 
 ---
 
