@@ -4,9 +4,9 @@ re-syncs only that business's voice agent and reports the result."""
 import re
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ..booking import service as bk
 from ..booking.when import short_date, spoken_time
@@ -15,7 +15,7 @@ from ..core import phone as ph
 from ..core import settings as cs
 from ..core.config import FRONTEND_DIR
 from .deps import get_user_conn, modules, require_bookings, require_csrf_header
-from .errors import ApiError
+from .errors import ApiError, plain_fields
 from .sync import agent_available, sync_agent
 
 pages = APIRouter()
@@ -38,19 +38,16 @@ class Faq(BaseModel):
     a: str = Field(min_length=1, max_length=400)
 
 
-class SettingsIn(BaseModel):
+class BusinessSettingsIn(BaseModel):
+    """What every business's settings have, whatever its template."""
+
     name: str = Field(min_length=2, max_length=80)
     city: str = Field(default="", max_length=60)
     address: str = Field(min_length=2, max_length=200)
     landmark: str = Field(default="", max_length=120)
     sessions: list[tuple[str, str]] = Field(min_length=1, max_length=4)
     closed_weekdays: list[int] = []
-    slot_min: int = Field(ge=10, le=120)
-    doctors: list[Doctor] = Field(min_length=1, max_length=8)
-    services: list[Service] = []
     faqs: list[Faq] = []
-    red_flags: list[str] = []
-    emergency_instruction: str = Field(min_length=10, max_length=600)
     whatsapp_numbers: list[str] = []
     voice: str = "female"
 
@@ -60,7 +57,7 @@ class SettingsIn(BaseModel):
         for start, end in v:
             if not (HHMM.match(start) and HHMM.match(end)) or start >= end:
                 raise ValueError(
-                    f"Clinic hours '{start}-{end}' must look like 10:00-14:00, start before end."
+                    f"Opening hours '{start}-{end}' must look like 10:00-14:00, start before end."
                 )
         return sorted(v)
 
@@ -90,6 +87,24 @@ class SettingsIn(BaseModel):
         if v not in ("female", "male"):
             raise ValueError("Voice must be female or male.")
         return v
+
+
+class SettingsIn(BusinessSettingsIn):
+    """A bookings template (clinic): doctors, services, slot length, emergency text."""
+
+    slot_min: int = Field(ge=10, le=120)
+    doctors: list[Doctor] = Field(min_length=1, max_length=8)
+    services: list[Service] = []
+    red_flags: list[str] = []
+    emergency_instruction: str = Field(min_length=10, max_length=600)
+
+
+class OrdersSettingsIn(BusinessSettingsIn):
+    """An orders template (wholesale): minimum order and delivery area. Products live in the
+    catalogue (/api/catalog), not here."""
+
+    min_order: str = Field(default="", max_length=60)
+    delivery_area: str = Field(default="", max_length=120)
 
 
 @pages.get("/setup", include_in_schema=False)
@@ -123,10 +138,26 @@ def get_settings(conn: db.Conn = Depends(get_user_conn)) -> dict:
     return {"settings": s, "blocks": blocks, "agentConfigured": agent_available(conn)}
 
 
+def _parse(model: type[BaseModel], raw: dict) -> BaseModel:
+    try:
+        return model.model_validate(raw)
+    except ValidationError as e:
+        fields = plain_fields(e.errors())
+        detail = " ".join(dict.fromkeys(fields.values())) or "Invalid input."
+        raise ApiError(422, "VALIDATION", detail, fields) from None
+
+
 @router.put("/api/settings")
-def save_settings(body: SettingsIn, conn: db.Conn = Depends(get_user_conn)) -> dict:
+def save_settings(raw: dict = Body(...), conn: db.Conn = Depends(get_user_conn)) -> dict:
+    """The body is the template's settings shape: SettingsIn (bookings) or OrdersSettingsIn."""
     if "bookings" not in modules(conn):
-        raise ApiError(404, "NOT_FOUND", "This page can't edit this business's settings yet.")
+        body = _parse(OrdersSettingsIn, raw)
+        s = cs.load(conn)
+        s.update(body.model_dump())
+        s["sessions"] = [list(x) for x in body.sessions]
+        cs.save(conn, s)
+        return {"saved": True, "agent": sync_agent(conn.tid), "settings": s}
+    body = _parse(SettingsIn, raw)
     s = cs.load(conn)
     old_ids = {d["id"] for d in s["doctors"]}
     doctors, taken = [], set()

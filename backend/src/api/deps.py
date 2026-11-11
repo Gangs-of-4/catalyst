@@ -103,6 +103,14 @@ def require_bookings(conn: db.Conn = Depends(get_user_conn)) -> db.Conn:
     return conn
 
 
+def require_orders(conn: db.Conn = Depends(get_user_conn)) -> db.Conn:
+    """The session's business connection, for catalogue and order routes. A business whose template
+    has no orders module (a clinic) gets 404."""
+    if "orders" not in modules(conn):
+        raise ApiError(404, "NOT_FOUND", "This business doesn't take orders.")
+    return conn
+
+
 def secret_ok(given: str | None, name: str) -> bool:
     expected = env(name)
     return bool(expected and given) and hmac.compare_digest(given.encode(), expected.encode())

@@ -123,6 +123,49 @@ CREATE TABLE IF NOT EXISTS inbox (
   done_at TEXT
 );
 CREATE INDEX IF NOT EXISTS inbox_tenant_open ON inbox (tenant_id, done_at);
+-- Wholesale (orders module, contracts.md section 3.1). Money is integer paise.
+CREATE TABLE IF NOT EXISTS products (
+  id {ID},
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  name TEXT NOT NULL,
+  name_key TEXT NOT NULL,        -- lowercased, punctuation folded: one product per name
+  pack_size TEXT NOT NULL DEFAULT '',
+  rate_paise INTEGER NOT NULL,
+  in_stock INTEGER NOT NULL DEFAULT 1,
+  active INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS products_name ON products (tenant_id, name_key);
+CREATE TABLE IF NOT EXISTS orders (
+  id {ID},
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  number INTEGER NOT NULL,       -- per-business counter: "order 42"
+  shop_name TEXT NOT NULL,
+  contact_name TEXT,
+  phone TEXT,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'new',  -- new | confirmed | dispatched | delivered | cancelled
+  source TEXT NOT NULL,          -- phone | whatsapp | walk_in
+  call_id TEXT,
+  idempotency_key TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS orders_number ON orders (tenant_id, number);
+CREATE UNIQUE INDEX IF NOT EXISTS orders_idempotency
+  ON orders (tenant_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS orders_tenant_created ON orders (tenant_id, created_at);
+CREATE TABLE IF NOT EXISTS order_items (
+  id {ID},
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  order_id INTEGER NOT NULL REFERENCES orders(id),
+  product_id INTEGER REFERENCES products(id),
+  name TEXT NOT NULL,            -- copied at order time: a later catalogue edit never changes an order
+  pack_size TEXT NOT NULL DEFAULT '',
+  qty INTEGER NOT NULL,
+  rate_paise INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS order_items_order ON order_items (tenant_id, order_id);
 -- Usage evidence (contracts.md section 3.1). No payload column, so counts never carry names or numbers.
 CREATE TABLE IF NOT EXISTS events (
   id {ID},

@@ -224,6 +224,21 @@ def templates() -> dict:
     return {"templates": out}
 
 
+@router.get("/templates/{template}/sample-catalog.csv")
+def sample_catalog(template: str) -> Response:
+    """The template's example catalogue, for the "Download sample" link next to CSV upload."""
+    if template not in tenancy.templates():
+        raise ApiError(404, "NOT_FOUND", "No such template.")
+    path = loader.template_dir(template) / "sample-catalog.csv"
+    if not path.exists():
+        raise ApiError(404, "NOT_FOUND", "This template has no catalogue.")
+    return Response(
+        path.read_bytes(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{template}-sample-catalog.csv"'},
+    )
+
+
 def _undo_signup(conn: db.Conn, tid: str) -> None:
     try:
         tenancy.delete(conn, tid)

@@ -24,7 +24,9 @@
 | M2: accounts + onboarding API (signup, login, logout, me, templates; per-business assistant, Vapi mocked in tests) | #11 | Merged |
 | M3: per-business voice (`/vapi/webhook/{public_id}`, per-tenant secret, template-aware prompt and tools, settings save PATCHes only its own assistant) | #12 | Merged |
 | M2b: desk, inbox, calls, stats and settings scoped to the session's business; session login replaces Basic auth; demo owner login from `DEMO_LOGIN_PASSWORD` | #28 | Open |
-| M4–M12 | — | Not started |
+| M4a: wholesale data side (catalogue, CSV import, orders and lifecycle, `/api/catalog`, `/api/orders`, wholesale settings, order board on the test page) | (this PR) | Open |
+| M4b: wholesale voice side (tools, prompt, safety suite) | — | Next |
+| M5–M12 | — | Not started |
 
 ---
 
