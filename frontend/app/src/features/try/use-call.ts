@@ -1,7 +1,7 @@
 import * as React from "react";
 
 import { ApiError } from "@/lib/api";
-import { MicBlockedError, startCall, type CallRole, type VoiceCall } from "@/lib/voice";
+import { requestMicrophone, startCall, type CallRole, type VoiceCall } from "@/lib/voice";
 
 import { startCheck, type TryInfo } from "./api";
 
@@ -58,6 +58,17 @@ export function useCall(info: TryInfo | null, onCallEnded: () => void) {
     setLines([]);
     setSeconds(0);
     setState("checking");
+    // Microphone first: /start counts the call, so a denied mic mustn't use up a daily call.
+    try {
+      await requestMicrophone();
+    } catch {
+      setState("idle");
+      setProblem({
+        kind: "mic",
+        message: "Your browser blocked the microphone. Allow it from the lock icon next to the address, then try again.",
+      });
+      return;
+    }
     try {
       const { max_call_seconds } = await startCheck(info.public_id);
       setMaxSeconds(max_call_seconds || DEFAULT_MAX_SECONDS);
@@ -85,15 +96,7 @@ export function useCall(info: TryInfo | null, onCallEnded: () => void) {
       });
     } catch (err) {
       setState("idle");
-      setProblem(
-        err instanceof MicBlockedError || (err instanceof Error && err.name === "MicBlockedError")
-          ? {
-              kind: "mic",
-              message:
-                "Your browser blocked the microphone. Allow it from the lock icon next to the address, then try again.",
-            }
-          : { kind: "other", message: err instanceof Error ? err.message : "The call couldn't start." },
-      );
+      setProblem({ kind: "other", message: err instanceof Error ? err.message : "The call couldn't start." });
     }
   }, [info, state, finish]);
 

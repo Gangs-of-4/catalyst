@@ -25,8 +25,12 @@ export class MicBlockedError extends Error {
   }
 }
 
-/** Ask for the microphone first, so a denial gets a clear message instead of a vague SDK error. */
-async function ensureMicrophone() {
+/**
+ * Ask for the microphone. Call this before the cap check (`POST /api/try/{id}/start`), so a denied
+ * microphone never uses up one of the business's daily calls, and the denial gets a clear message
+ * instead of a vague SDK error. Throws MicBlockedError.
+ */
+export async function requestMicrophone() {
   if (!navigator.mediaDevices?.getUserMedia) throw new MicBlockedError();
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -43,8 +47,8 @@ function errorText(e: unknown): string {
   return String(any?.errorMsg || any?.message || any?.error?.message || "The call couldn't connect.");
 }
 
+/** Start the web call. Call `requestMicrophone()` first. */
 export async function startCall(publicKey: string, assistantId: string, events: CallEvents): Promise<VoiceCall> {
-  await ensureMicrophone();
   const { default: Vapi } = await import("@vapi-ai/web");
   const vapi = new Vapi(publicKey);
   vapi.on("call-start", events.onLive);

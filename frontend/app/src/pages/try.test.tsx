@@ -8,10 +8,15 @@ import { type CallEvents, MicBlockedError } from "@/lib/voice";
 import { DemoRedirect, TryPage } from "./try";
 
 const startCallMock = vi.fn();
+const micMock = vi.fn();
 vi.mock("@/lib/voice", async () => {
   const actual = await vi.importActual<typeof import("@/lib/voice")>("@/lib/voice");
   return {
     ...actual,
+    requestMicrophone: async (...args: unknown[]) => {
+      const result = await micMock(...args);
+      if (result instanceof Error) throw result;
+    },
     // If the spy returns an Error, throw it here, outside the spy, as the real startCall would.
     startCall: async (...args: unknown[]) => {
       const result = await startCallMock(...args);
@@ -83,7 +88,10 @@ const renderAt = (path: string) =>
     </MemoryRouter>,
   );
 
-beforeEach(() => startCallMock.mockReset());
+beforeEach(() => {
+  startCallMock.mockReset();
+  micMock.mockReset();
+});
 afterEach(() => vi.unstubAllGlobals());
 
 describe("<TryPage>", () => {
@@ -164,9 +172,9 @@ describe("<TryPage>", () => {
     expect(startCallMock).not.toHaveBeenCalled();
   });
 
-  it("gives a one-line fix when the microphone is blocked", async () => {
-    startCallMock.mockReturnValue(new MicBlockedError());
-    mockApi({
+  it("asks for the microphone first, so a blocked mic never uses up a daily call", async () => {
+    micMock.mockReturnValue(new MicBlockedError());
+    const fetchMock = mockApi({
       "GET /api/try/abc123": () => json(200, INFO),
       "GET /api/try/abc123/board": () => json(200, bookings()),
       "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
@@ -174,6 +182,9 @@ describe("<TryPage>", () => {
     renderAt("/b/abc123/try");
     fireEvent.click(await screen.findByRole("button", { name: "Talk to your front desk" }));
     expect(await screen.findByText(/blocked the microphone/)).toBeTruthy();
+    // /start counts the call, so it must not be reached when the mic is blocked.
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/try/abc123/start")).toBe(false);
+    expect(startCallMock).not.toHaveBeenCalled();
   });
 
   it("shows an orders board for an orders template", async () => {
