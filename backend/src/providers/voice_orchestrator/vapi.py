@@ -66,7 +66,10 @@ def payload(conn: db.Conn, secret: str, webhook_path: str = "/vapi/webhook") -> 
             "model": env("VAPI_MODEL", "gpt-4.1-mini"),
             "temperature": 0.3,
             "messages": [{"role": "system", "content": system}],
-            "tools": [{"type": "function", "function": fn, "server": server} for fn in template_tools(conn)]
+            "tools": [
+                {"type": "function", "function": fn, "server": server}
+                for fn in template_tools(conn)
+            ]
             + [{"type": "endCall"}],
         },
         "voice": {

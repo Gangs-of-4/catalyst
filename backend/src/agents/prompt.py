@@ -1,5 +1,6 @@
 """Builds a business's system prompt and first message from its template's agent-prompt.md plus a
-settings snapshot. The template comes from the business's `tenants` row, never from a hard-wired folder."""
+settings snapshot. The template comes from the business's `tenants` row, never from a hard-wired folder.
+"""
 
 import re
 
