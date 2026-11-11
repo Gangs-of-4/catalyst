@@ -48,10 +48,11 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 | ADR-0032 | Backend owns the brain: agent tools API, safety guard in our code | Accepted | Free |
 | ADR-0033 | Verticals are config; generic booking model with exclusion constraint | Accepted | Free |
 | ADR-0034 | WhatsApp is its own channel module; preview-and-confirm on every write | Accepted — extends ADR-0017 | Free tier with limits (per-message pricing, D5) |
-| ADR-0035 | Demo build simplifications | Accepted — *revisit before the first real clinic pilot*; frontend hosting amended by ADR-0036 | Free tier with limits (Vapi, Twilio sandbox trial credit) |
+| ADR-0035 | Demo build simplifications | Accepted — *revisit before the first real clinic pilot*; frontend hosting amended by ADR-0036; frontend stack amended by ADR-0042 | Free tier with limits (Vapi, Twilio sandbox trial credit) |
 | ADR-0036 | Vercel for frontend hosting, deployed from GitHub Actions | Accepted — **supersedes ADR-0013**; *decision 4 challenged by ADR-0041 (Proposed)* | Free tier with limits (Vercel Hobby — non-commercial terms, see Consequences) |
 | ADR-0037 | Wholesale distributor template | Accepted — *amends the vertical order in ADR-0028* | Free |
 | ADR-0038 | Self-serve onboarding and owner custom instructions | Accepted | Free tier with limits (one Vapi assistant per business) |
+| ADR-0042 | React (Vite + TypeScript + Tailwind + shadcn/ui) for the frontend | Accepted — *amends the frontend row of ADR-0035; replaces the Next.js plan* | Free |
 | ADR-0039 | Render + Neon for the Phase 2 backend; residency exception; app-level tenant scoping | **Proposed** — *would supersede ADR-0003 for Phase 2; departs from ADR-0010, ADR-0016, ADR-0023* | Free tier with limits |
 | ADR-0040 | Target voice stack: self-hosted Pipecat + Sarvam in India | **Proposed** — *would change ADR-0008, ADR-0021, ADR-0029* | Deferred paid |
 | ADR-0041 | Vercel rewrites `/api` to the backend for first-party session cookies | **Proposed** — *would amend ADR-0036 decision 4* | Free tier with limits |
@@ -397,7 +398,7 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 |---|---|---|
 | SQLite file (`backend/data/clinic.db`) | Postgres + pgvector (ADR-0010) | Docker on Windows would eat the day. The double-booking lock is kept as a **partial unique index** on `(resource_id, date, time)` for active bookings, so the DB, not app code, still refuses a double booking. It only covers fixed-length aligned slots; the overlap exclusion constraint (ADR-0033) returns with Postgres. |
 | Single clinic, no `tenant_id` / RLS | ADR-0016 | One fictional clinic. Keep a `clinic_id` seam in mind; add `tenant_id` + RLS with the Postgres migration. |
-| Plain HTML, CSS and JS served by FastAPI | Next.js on Cloudflare Pages (ADR-0013) | No build step. The Vapi Web SDK is bundled once with esbuild and committed. *Amended 2026-11-09 by ADR-0036:* the same static files are also deployed to Vercel; FastAPI still serves them for local runs. |
+| Plain HTML, CSS and JS served by FastAPI | Next.js on Cloudflare Pages (ADR-0013) | No build step. The Vapi Web SDK is bundled once with esbuild and committed. *Amended 2026-11-09 by ADR-0036:* the same static files are also deployed to Vercel; FastAPI still serves them for local runs. *Amended 2026-11-11 by ADR-0042:* the frontend becomes a Vite + React app; the static pages are replaced page by page during Phase 2 M8. |
 | Cloudflare quick tunnel | A hosted VM | Public HTTPS URL for Vapi and Twilio webhooks; the URL changes on every restart. |
 | Vapi web calls | A phone number (ADR-0030, still Proposed) | Prospects talk to the agent from our web page. Live transfer is impossible on web calls, so `transfer` is a stub. |
 | One `POST /vapi/webhook` with `x-catalyst-secret` | `POST /v1/tools/<name>` with `X-Catalyst-Tool-Key` (`contracts.md` §1) | Vapi sends every tool call and server message to one URL. Tool logic is the same; see `contracts.md` §1.10. |
@@ -462,6 +463,32 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 4. Usage events (no payload) and an in-app feedback button, for the usage evidence and feedback log.
 
 **Consequences:** Prompt rule 7 holds: the prompt still lives in `verticals/<name>/agent-prompt.md`; owner text is data inserted into one placeholder. A test proves no owner text can remove or reorder a safety line. WhatsApp writes still need "Haan" (ADR-0034).
+
+---
+
+### ADR-0042: React (Vite + TypeScript + Tailwind + shadcn/ui) for the frontend
+
+- **Date:** 2026-11-11
+- **Status:** Accepted — team, 2026-11-11. Amends the frontend row of ADR-0035 and the "keep the frontend static HTML" answer in `phase2-plan.md` §8. Replaces the Next.js plan (ADR-0013's app, `CLAUDE.md` stack row).
+- **Cost implication:** Free — open-source libraries (MIT); the build runs in the existing GitHub Actions + Vercel pipeline.
+
+**Context:** Phase 2 M8 redesigns every page and adds signup, login, onboarding, settings and admin. The static pages are small (about 1k lines), so they are cheap to replace. Building the new screens in plain JS means hand-writing every form, dialog and state change. The team wants better UI/UX and to use component libraries directly (shadcn/ui, and 21st.dev patterns through its MCP, `mcp/servers/21st/21st.md`), and those are React + Tailwind. Next.js was the long-term plan, but nothing needs server rendering: every page is behind login or is a client-side web call, and the backend owns all logic (ADR-0032).
+
+**Decision:**
+1. **`frontend/` becomes a Vite + React + TypeScript (strict) single-page app**, with Tailwind CSS, shadcn/ui components and React Router. Exact versions are pinned in `package-lock.json`.
+2. **No Next.js.** A static build fits Vercel and the `/api` rewrite (ADR-0041) as they are. Revisit only if a page needs server rendering.
+3. **The browser API is unchanged.** Pages call relative `/api/...` (contracts.md §6). Locally, the Vite dev server proxies `/api`, `/vapi` and `/healthz` to FastAPI on port 8000, so cookies stay same-origin. In production the Vercel rewrite does the same (ADR-0041). Pages still hold no business rules, never touch the database and keep no patient data in browser storage.
+4. **Migration is page by page in M8, one PR per task.** The old static pages and FastAPI's page routes keep working until their React replacement merges, then they are deleted.
+5. **The Vapi Web SDK becomes an npm dependency** (`@vapi-ai/web`, pinned), replacing the committed `static/vapi.bundle.js` once the try page is ported.
+6. **CI gets a frontend job** (install, type-check, lint, build), and the Vercel deploy builds the Vite app. Both come with the scaffold PR.
+7. **Design** stays in `frontend/DESIGN.md` (phase2-plan §6). Tokens become Tailwind theme values / CSS variables, as shadcn/ui expects. 21st.dev or shadcn components are adapted to those tokens and the "Catalyst"-only brand rule before they ship.
+
+**Consequences:**
+- Frontend work needs **Node 24 LTS** on every OS (the deploy workflow already uses Node 24). Running only the backend still needs no Node until the old static pages are deleted. After that, local runs use `npm run dev` beside `uvicorn`.
+- A build step exists now: a broken frontend build blocks the deploy, as a failing CI already does.
+- `coding-rules.md` Frontend rules change from Next.js App Router to Vite + React (no server components).
+- Bundle size and AA contrast are checked per page in the M8 checklist (360px width, keyboard focus).
+- Every new dependency's licence is recorded in `open-source/open-source.md`.
 
 ---
 
