@@ -9,6 +9,7 @@ import type { AgentState, Template } from "./model";
 
 type SuccessProps = {
   businessName: string;
+  publicId: string;
   template: Template;
   agent: AgentState;
 };
@@ -33,9 +34,9 @@ const AGENT: Record<AgentState, { badge: "success" | "neutral" | "destructive"; 
 
 /**
  * Shown after a successful signup. The owner is already logged in (the session cookie is set).
- * Links to /home; when the test page exists (a later M8 task), signup sends the owner there instead.
+ * Offers the test page (talk to the agent) and the home page.
  */
-export function SignupSuccess({ businessName, template, agent }: SuccessProps) {
+export function SignupSuccess({ businessName, publicId, template, agent }: SuccessProps) {
   const a = AGENT[agent];
   const Icon = agent === "updated" ? CheckCircle2 : agent === "failed" ? AlertCircle : Clock;
   return (
@@ -57,8 +58,11 @@ export function SignupSuccess({ businessName, template, agent }: SuccessProps) {
         </Badge>
         <p className="text-body">{a.text}</p>
       </CardContent>
-      <CardFooter>
+      <CardFooter className="flex-wrap">
         <Button asChild>
+          <Link to={`/b/${encodeURIComponent(publicId)}/try`}>Talk to your front desk</Link>
+        </Button>
+        <Button asChild variant="outline">
           <Link to="/home">Go to your home page</Link>
         </Button>
       </CardFooter>
