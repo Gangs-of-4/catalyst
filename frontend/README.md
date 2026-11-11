@@ -55,7 +55,7 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 | `/demo/:template` | `src/pages/try.tsx` | Opens the demo business's test page (`/b/demo-<template>/try`) |
 | `/login` | `src/pages/login.tsx` | Owner login (`POST /api/login`). Already logged in → straight on. Honors a same-app `?next=` path |
 | `/home` | `src/pages/home.tsx` | The owner's signed-in home (`GET /api/me`), with Log out. Logged-out visitors go to `/login?next=/home`. Later tasks add the desk, settings and test page here |
-| `/signup` | `src/pages/signup.tsx`, `src/features/signup/` | Self-serve onboarding: account + business in one step (`GET /api/templates`, `POST /api/signup`). The template section is picked by the template's `modules`. A success screen shows the voice agent's state. |
+| `/signup` | `src/pages/signup.tsx`, `src/features/signup/` | Self-serve onboarding: account + business in one step (`GET /api/templates`, `POST /api/signup`), **one step per screen** (1/3 You, 2/3 Your business, 3/3 the template section + optional + consent) with Back/Next in a bar pinned to the bottom on phones. Next checks only that step; the step is in the URL (`?step=2`) so the phone's back button goes to the previous step. The template section is picked by the template's `modules`. A success screen shows the voice agent's state. |
 | `/styleguide` | `src/pages/styleguide.tsx` | Every token and component, for review |
 
 **Failure states** (phase2-plan §5 cold starts, §6):

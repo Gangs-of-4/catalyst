@@ -2,7 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import { CLINIC, filledClinic, WHOLESALE } from "@/test/fixtures";
 
-import { initialForm, normalizeMobile, remapErrors, switchTemplate, toPayload, validate } from "./model";
+import {
+  errorsForStep,
+  firstErrorStep,
+  initialForm,
+  normalizeMobile,
+  remapErrors,
+  stepOf,
+  switchTemplate,
+  toPayload,
+  validate,
+} from "./model";
 
 describe("initialForm", () => {
   it("prefills hours, closed days and the template section from vertical.yaml defaults", () => {
@@ -129,5 +139,24 @@ describe("remapErrors", () => {
       "details.doctors.2.name": "Please fill in name.",
       "user.email": "That email already has an account.",
     });
+  });
+});
+
+describe("steps", () => {
+  it("puts each error key on the screen that shows its input", () => {
+    expect(stepOf("user.email")).toBe(1);
+    expect(stepOf("business.hours.0")).toBe(2);
+    expect(stepOf("business.owner_whatsapp")).toBe(2);
+    expect(stepOf("business.consent")).toBe(3);
+    expect(stepOf("details.doctors.0.name")).toBe(3);
+    expect(stepOf("faqs.1.q")).toBe(3);
+    expect(stepOf("instructions")).toBe(3);
+  });
+
+  it("finds the earliest step with an error and filters errors per step", () => {
+    const errors = { "details.doctors": "Add one.", "business.name": "Fill it.", "user.email": "Bad." };
+    expect(firstErrorStep(errors)).toBe(1);
+    expect(firstErrorStep({})).toBeUndefined();
+    expect(errorsForStep(errors, 2)).toEqual({ "business.name": "Fill it." });
   });
 });

@@ -74,6 +74,29 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export const hasModule = (t: Pick<Template, "modules"> | undefined, m: string) => !!t?.modules.includes(m);
 
+/** The signup form is shown one step per screen (mobile first): 1 You, 2 Your business, 3 the rest. */
+export type Step = 1 | 2 | 3;
+export const STEPS: Step[] = [1, 2, 3];
+
+/** Which step's screen shows the input for an error key (the API's field paths). */
+export function stepOf(key: string): Step {
+  if (key.startsWith("user.") || key === "user") return 1;
+  if (key === "business.consent") return 3; // the consent box sits just above "Create my front desk"
+  if (key.startsWith("business.") || key === "business") return 2;
+  return 3; // details.*, faqs.*, instructions
+}
+
+/** The earliest step with an error, or undefined when there are none. */
+export function firstErrorStep(errors: FieldErrors): Step | undefined {
+  const steps = Object.keys(errors).map(stepOf);
+  return steps.length ? (Math.min(...steps) as Step) : undefined;
+}
+
+/** Only the errors that belong on `step`'s screen. */
+export function errorsForStep(errors: FieldErrors, step: Step): FieldErrors {
+  return Object.fromEntries(Object.entries(errors).filter(([k]) => stepOf(k) === step));
+}
+
 /** A fresh form for `template`, prefilled from its vertical.yaml onboarding defaults. */
 export function initialForm(template?: Template): SignupForm {
   const d = template?.defaults ?? {};
