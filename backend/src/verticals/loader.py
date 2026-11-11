@@ -15,6 +15,23 @@ def load_yaml(name: str, base: Path = VERTICAL_DIR) -> Any:
         return yaml.safe_load(f)
 
 
+# Owner WhatsApp intents the code handles (channels/whatsapp); "help" always works.
+WHATSAPP_COMMANDS = {
+    "query_day",
+    "callbacks",
+    "summary",
+    "block_day",
+    "late_start",
+    "early_close",
+    "set_fee",
+    "walk_in",
+    "add_instruction",
+    "orders_today",
+    "order_status",
+    "set_rate",
+    "stock_out",
+    "stock_in",
+}
 MODULES = {"bookings": "booking", "orders": "orders"}  # module -> its required config section
 TOOLS = {
     "get_clinic_info",
@@ -67,6 +84,11 @@ def validate(base: Path) -> dict:
     unknown = set(v["tools"]) - TOOLS
     if unknown:
         raise ValueError(f"{base.name}: unknown tools {sorted(unknown)}")
+    commands = set((v.get("whatsapp") or {}).get("commands") or [])
+    if commands - WHATSAPP_COMMANDS:
+        raise ValueError(
+            f"{base.name}: unknown whatsapp commands {sorted(commands - WHATSAPP_COMMANDS)}"
+        )
     return v
 
 
@@ -139,6 +161,11 @@ def tool_names(template: str) -> set[str]:
 def try_saying(template: str) -> list[str]:
     """Example lines for the public test page (vertical.yaml `try_saying`, optional)."""
     return [str(x) for x in _checked(template).get("try_saying") or []]
+
+
+def whatsapp_commands(template: str) -> set[str]:
+    """The owner commands a template enables (vertical.yaml `whatsapp.commands`)."""
+    return set(_checked(template)["whatsapp"].get("commands") or [])
 
 
 def modules(template: str) -> list[str]:

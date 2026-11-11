@@ -1,6 +1,8 @@
-"""Doctor commands on WhatsApp (C8): parse -> preview -> "Haan" -> apply. Rule-based, with an optional LLM fallback.
+"""Owner commands on WhatsApp (C8): parse -> preview -> "Haan" -> apply. Rule-based, with an optional LLM fallback.
 
 Every write is previewed and stored as a pending action per sender (ADR-0034). Reads answer at once.
+Which commands a business has comes from its template: the module picks the parser (bookings here,
+orders in order_commands.py) and `vertical.yaml` `whatsapp.commands` lists what is enabled.
 """
 
 import json
@@ -12,14 +14,17 @@ from pydantic import BaseModel, ValidationError, field_validator
 from ... import inbox
 from ...booking import service as bk
 from ...booking.when import parse_date, parse_time, short_date, spoken_time
-from ...core import config, db
+from ...core import config, db, tenancy
 from ...core import phone as ph
 from ...core import settings as cs
 from ...providers.llm import groq
-from . import summary
+from ...verticals import loader
+from . import order_commands, summary
 
-READ_INTENTS = ("help", "query_day", "callbacks", "summary")
+READ_INTENTS = ("help", "query_day", "callbacks", "summary", "add_instruction")
 WRITE_INTENTS = ("block_day", "late_start", "early_close", "set_fee", "walk_in")
+ALL_INTENTS = READ_INTENTS + WRITE_INTENTS + order_commands.READS + order_commands.WRITES
+ORDER_STATUSES = ("new", "confirmed", "dispatched", "delivered", "cancelled")
 
 
 class Command(BaseModel):
@@ -33,12 +38,23 @@ class Command(BaseModel):
     fee: int | None = None
     name: str | None = None
     phone: str | None = None
+    product_id: int | None = None
+    rate_paise: int | None = None
+    order_id: int | None = None
+    status: str | None = None
 
     @field_validator("intent")
     @classmethod
     def _intent(cls, v: str) -> str:
-        if v not in READ_INTENTS + WRITE_INTENTS:
+        if v not in ALL_INTENTS:
             raise ValueError("unknown intent")
+        return v
+
+    @field_validator("status")
+    @classmethod
+    def _status(cls, v):
+        if v is not None and v not in ORDER_STATUSES:
+            raise ValueError("unknown order status")
         return v
 
     @field_validator("date")
@@ -442,10 +458,38 @@ def has_pending(conn: db.Conn, sender: str) -> bool:
     )
 
 
+INSTRUCTION = re.compile(r"^(?:agent|assistant)\s+(?:ko\s+)?(?:bolo|batao|bata do|bol do)\b", re.I)
+INSTRUCTION_REPLY = (
+    "Agent ke liye nayi baatein jaldi WhatsApp se bhi de payenge. Abhi Settings page par "
+    "'Agent ko aur kya batana hai' mein likhiye."
+)
+NOT_ENABLED = "Yeh command is business ke liye nahi hai. 'help' bhejein."
+
+
+def _parse(conn: db.Conn, s: dict, text: str, today: date, selling: bool) -> Command | str | None:
+    """The module's parser: orders (wholesale) or bookings (clinic). A str is a reply asking again."""
+    t = " ".join(text.lower().strip(" .!?।").split())
+    if INSTRUCTION.match(t):
+        return Command(intent="add_instruction")
+    if selling:
+        if _words(t, "help", "madad", "commands", "menu") or t in ("?", "hi", "hello", "namaste"):
+            return Command(intent="help")
+        if _words(t, "summary", "report", "hisaab", "hisab"):
+            return Command(intent="summary")
+        if _words(t, "callback", "callbacks", "call back", "pending"):
+            return Command(intent="callbacks")
+        return order_commands.parse(conn, text, Command)
+    return parse_rules(text, s, today) or parse_llm(text, s, today)
+
+
 def handle(conn: db.Conn, sender: str, text: str) -> tuple[str, bool]:
-    """Reply to one message from an allowed sender. Returns (reply, settings_changed)."""
+    """Reply to one message from one of the business's own numbers. Returns (reply, agent_changed):
+    agent_changed means the voice agent's facts changed and it must be re-synced."""
     s = cs.load(conn)
     today = config.now().date()
+    template = tenancy.get(conn, conn.tid)["template"]
+    selling = "orders" in loader.modules(template)
+    enabled = loader.whatsapp_commands(template) | {"help"}
     t = " ".join(text.lower().strip(" .!?।").split())
     if has_pending(conn, sender) and (t in CONFIRM or t in REJECT):
         cmd = take_pending(conn, s, sender)
@@ -453,19 +497,40 @@ def handle(conn: db.Conn, sender: str, text: str) -> tuple[str, bool]:
             return "Woh preview purana ho gaya. Command dobara bhejein.", False
         if t in REJECT:
             return "Theek hai, kuch nahi badla.", False
+        if cmd.intent not in enabled:  # switched off since the preview
+            return NOT_ENABLED, False
+        if cmd.intent in order_commands.WRITES:
+            return order_commands.apply(conn, cmd), False  # rates and stock aren't in the prompt
         return apply(conn, s, cmd), cmd.intent != "walk_in"
     if t in CONFIRM or t in REJECT:
         return "Abhi koi badlav pending nahi hai. 'help' bhejein.", False
 
-    cmd = parse_rules(text, s, today) or parse_llm(text, s, today)
+    cmd = _parse(conn, s, text, today, selling)
+    if isinstance(cmd, str):
+        return cmd, False
+    if cmd is not None and cmd.intent not in enabled:
+        return NOT_ENABLED, False
     if cmd is None:
         # The message text goes to the inbox (DB) so our team can act on it the same day; never to logs.
         inbox.create(
             conn, "ops", phone=sender, reason="whatsapp_unparsed", note=f"WhatsApp: {text[:300]}"
         )
         return "Samajh nahi aaya — team dekh legi.", False
+    if cmd.intent == "add_instruction":
+        return INSTRUCTION_REPLY, False
+    if selling and cmd.intent == "help":
+        return order_commands.HELP, False
+    if selling and cmd.intent == "summary":
+        return order_commands.summary(conn, s["name"]), False
+    if cmd.intent == "orders_today":
+        return order_commands.orders_today(conn), False
     if cmd.intent in READ_INTENTS:
         return answer_read(conn, s, cmd, today), False
+    if cmd.intent in order_commands.WRITES:
+        text_preview, needs_confirm = order_commands.preview(conn, cmd)
+        if needs_confirm:
+            save_pending(conn, sender, cmd)
+        return text_preview, False
     text_preview = preview(conn, s, cmd, today)
     if text_preview is None:
         return "Yeh date nikal chuki hai. Aaj ya aage ki date bhejein.", False

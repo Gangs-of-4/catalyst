@@ -57,6 +57,14 @@ CREATE TABLE IF NOT EXISTS tenants (
   is_demo INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
+-- Every WhatsApp number a business commands from (owner + settings.whatsapp_numbers),
+-- normalised; UNIQUE so one business can't claim another's number. A lookup index like
+-- tenants.owner_whatsapp, rebuilt from settings on every save and at startup.
+CREATE TABLE IF NOT EXISTS tenant_whatsapp_numbers (
+  number TEXT PRIMARY KEY,       -- E.164
+  tenant_id TEXT NOT NULL REFERENCES tenants(id)
+);
+CREATE INDEX IF NOT EXISTS tenant_whatsapp_numbers_tenant ON tenant_whatsapp_numbers (tenant_id);
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL REFERENCES tenants(id),

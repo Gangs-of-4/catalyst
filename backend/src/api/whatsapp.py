@@ -1,4 +1,4 @@
-"""POST /whatsapp/incoming: Twilio WhatsApp sandbox webhook. Replies with TwiML."""
+"""POST /whatsapp/incoming: Twilio WhatsApp sandbox webhook, routed by sender. Replies with TwiML."""
 
 import base64
 import hashlib
@@ -6,20 +6,16 @@ import hmac
 from urllib.parse import parse_qsl
 from xml.sax.saxutils import escape
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Request, Response
 
-from ..channels.whatsapp import alerts, commands
-from ..core import db
+from ..channels.whatsapp import commands
+from ..core import db, tenancy
 from ..core import phone as ph
-from ..core import settings as cs
 from ..core.config import env
 from ..core.log import log
-from .deps import get_conn
 from .sync import sync_agent
 
 router = APIRouter()
-
-OPEN_WARNING = "\n\n⚠️ Demo mode: koi bhi number commands de sakta hai. Setup page par WhatsApp numbers add karein."
 
 
 def twiml(text: str) -> Response:
@@ -36,10 +32,19 @@ def signature_ok(signature: str | None, url: str, params: dict[str, str], token:
     return bool(signature) and hmac.compare_digest(signature, expected)
 
 
+def unknown_number_reply() -> str:
+    app_url = env("PUBLIC_APP_URL").rstrip("/")
+    where = f"{app_url}/signup par" if app_url else "Catalyst par signup karke"
+    return (
+        f"Yeh number kisi Catalyst business se juda nahi hai. {where} apna front desk banaiye, "
+        "ya Settings mein yahi WhatsApp number daaliye."
+    )
+
+
 @router.post("/whatsapp/incoming")
-async def incoming(
-    request: Request, background: BackgroundTasks, conn: db.Conn = Depends(get_conn)
-):
+async def incoming(request: Request, background: BackgroundTasks):
+    """One sandbox number serves every business: the sender's number picks the business
+    (contracts.md §4). An unknown number changes nothing and is logged without the number."""
     raw = (await request.body()).decode("utf-8", errors="replace")
     params = dict(parse_qsl(raw, keep_blank_values=True))
     token, public = env("TWILIO_AUTH_TOKEN"), env("PUBLIC_URL").rstrip("/")
@@ -60,17 +65,17 @@ async def incoming(
     text = (params.get("Body") or "").strip()
     if not sender:
         return twiml("Number samajh nahi aaya.")
-    s = cs.load(conn)
-    allowed = alerts.recipients(s)
-    if allowed and sender not in allowed:
-        log.info("whatsapp: ignored a message from an unregistered number")
-        return twiml("Yeh number clinic ke commands ke liye registered nahi hai.")
-    if not text:
-        return twiml(
-            "Sirf text commands chalte hain. 'help' bhejein." + ("" if allowed else OPEN_WARNING)
-        )
-
-    reply, changed = commands.handle(conn, sender, text)
+    conn = db.connect()
+    try:
+        tid = tenancy.for_sender(conn, sender)  # the sender tells us the business
+        if tid is None:
+            log.info("whatsapp: message from a number linked to no business")
+            return twiml(unknown_number_reply())
+        if not text:
+            return twiml("Sirf text commands chalte hain. 'help' bhejein.")
+        reply, changed = commands.handle(conn.for_tenant(tid), sender, text)
+    finally:
+        conn.close()
     if changed:
-        background.add_task(sync_agent, conn.tid)
-    return twiml(reply + ("" if allowed else OPEN_WARNING))
+        background.add_task(sync_agent, tid)
+    return twiml(reply)
