@@ -61,7 +61,7 @@ async function loadDay() {
 }
 
 async function loadSide() {
-  const [items, calls, stats] = await Promise.all([api("/api/desk/inbox"), api("/api/desk/calls"), api("/api/desk/stats")]);
+  const [items, calls, stats] = await Promise.all([api("/api/inbox"), api("/api/calls"), api("/api/stats")]);
   $("stats").textContent = stats.sentence;
   $("inbox").replaceChildren(...(items.length ? items.map(inboxItem) : [h("p", { class: "muted" }, "Nothing waiting.")]));
   $("calls").replaceChildren(...(calls.length ? calls.map(callRow) : [h("p", { class: "muted" }, "No calls yet.")]));
@@ -78,7 +78,7 @@ function inboxItem(it) {
         it.reason ? h("div", { class: "muted", style: "font-size:.88rem" }, REASON_LABEL[it.reason] || it.reason) : null,
         it.note ? h("div", {}, it.note) : null),
       h("button", { class: "btn small", style: "white-space:nowrap", type: "button", onclick: async () => {
-        await api(`/api/desk/inbox/${it.id}/done`, { method: "POST" }).catch(e => alert(e.message));
+        await api(`/api/inbox/${it.id}/done`, { method: "POST" }).catch(e => alert(e.message));
         loadSide();
       } }, "Mark done")));
 }
@@ -134,7 +134,6 @@ $("pick").addEventListener("change", e => e.target.value && go(e.target.value));
   const meta = await api("/api/staff/meta");
   $("clinic-name").textContent = meta.clinic;
   document.title = `Front desk · ${meta.clinic}`;
-  $("auth-warning").hidden = !meta.authOpen;
   today = current = meta.today;
   poll(async () => { await loadDay(); await loadSide(); }, 5000, busy);
 })().catch(e => { $("stats").textContent = `Could not load: ${e.message}`; });

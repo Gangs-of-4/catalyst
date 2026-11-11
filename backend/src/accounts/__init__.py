@@ -1,5 +1,6 @@
 from .service import (
     COOKIE,
+    DEMO_EMAIL,
     MIN_PASSWORD,
     SESSION_DAYS,
     BadLogin,
@@ -8,6 +9,7 @@ from .service import (
     Session,
     create_user,
     email_taken,
+    ensure_demo_login,
     ensure_session_secret,
     login,
     logout,
@@ -19,6 +21,7 @@ from .service import (
 
 __all__ = [
     "COOKIE",
+    "DEMO_EMAIL",
     "MIN_PASSWORD",
     "SESSION_DAYS",
     "BadLogin",
@@ -27,6 +30,7 @@ __all__ = [
     "Session",
     "create_user",
     "email_taken",
+    "ensure_demo_login",
     "ensure_session_secret",
     "login",
     "logout",
