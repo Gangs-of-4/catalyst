@@ -83,7 +83,7 @@ Tags: **[MVP]** applies now. **[Post-MVP]** applies once that part exists. The f
 | Voice | behind `VoiceOrchestrator`: managed platform for the pilot (Proposed, D1), or self-hosted Pipecat (ADR-0004) |
 | Telephony | behind `TelephonyProvider`; provider by spike S1 (D2) |
 | WhatsApp | Meta WhatsApp Business Platform: utility templates, paid per message (D5) |
-| Frontend | Static HTML, CSS and JS today (ADR-0035), kept for Phase 2; hosted on Vercel, deployed by GitHub Actions (ADR-0036). Next.js + TypeScript + Tailwind + shadcn/ui is the later plan |
+| Frontend | Vite + React + TypeScript + Tailwind + shadcn/ui single-page app (ADR-0042), replacing the static pages page by page in Phase 2 M8; hosted on Vercel, deployed by GitHub Actions (ADR-0036); calls `/api` through the Vercel rewrite (ADR-0041) |
 | Jobs | Celery beat or lighter (D7) |
 | Hosting | single India-region VM, Docker Compose; RAM is disputed (D3) |
 
