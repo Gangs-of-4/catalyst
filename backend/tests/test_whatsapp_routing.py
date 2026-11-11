@@ -196,10 +196,13 @@ def test_wholesale_summary_counts(two):
     assert "Aaj: 1 orders, ₹72, 1 dispatch baaki" in reply and "Is hafte: 1 orders" in reply
 
 
-def test_agent_ko_bolo_points_to_settings_until_m5(two):
-    _, _, wa = two
-    assert "Settings page" in send(wa, "agent ko bolo Sunday ko band rehta hai", SHOP_OWNER)
-    assert "Settings page" in send(wa, "agent ko bolo hindi mein baat karo", CLINIC_OWNER)
+def test_agent_ko_bolo_works_on_both_templates(two):
+    clinic, shop, wa = two
+    assert "Sahi hai? Haan/Nahi" in send(wa, "agent ko bolo Sunday ko band rehta hai", SHOP_OWNER)
+    assert "Sahi hai? Haan/Nahi" in send(wa, "agent ko bolo hindi mein baat karo", CLINIC_OWNER)
+    send(wa, "haan", SHOP_OWNER)
+    assert shop.get("/api/instructions").json()["text"] == "Sunday ko band rehta hai"
+    assert clinic.get("/api/instructions").json()["text"] == ""  # not confirmed yet
 
 
 def test_one_owner_cannot_touch_another_business(two):
