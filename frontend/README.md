@@ -18,6 +18,49 @@
 
 **Rules.** Pages hold no business rules and never touch the database. They call the backend API only, and don't keep patient data in browser storage.
 
+## React app (`app/`, ADR-0042)
+
+The new frontend: **Vite + React + TypeScript + Tailwind + shadcn/ui**. It grows one page per PR during Phase 2 M8. Until a page moves here, its old static version above keeps working.
+
+**Run it locally** (needs Node 24 LTS; 20.19+ works):
+
+```
+cd frontend/app
+npm ci
+npm run dev          # http://localhost:5173
+```
+
+Start the backend too (`uvicorn` on port 8000, see the repo README). The dev server forwards `/api`, `/vapi` and `/healthz` to it, so the login cookie works as same-origin. To use another backend, set `CATALYST_BACKEND_URL`.
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Dev server with hot reload |
+| `npm run lint` / `npm run typecheck` | ESLint / TypeScript strict (CI runs both) |
+| `npm test` | Vitest unit tests (CI) |
+| `npm run check:contrast` | WCAG AA check of the colour tokens in `src/index.css` (CI) |
+| `npm run build` | Production build into `app/dist/` |
+
+**Layout:**
+- `src/index.css`: the design tokens (CSS variables → Tailwind).
+- `src/components/ui/`: shadcn-style primitives.
+- `src/components/`: shared Catalyst pieces (Field, OfflineBanner, EmptyState, AppHeader).
+- `src/lib/api.ts`: the only way to call the backend. It uses relative `/api` paths, adds the CSRF header and turns errors into plain sentences.
+- `src/pages/`: one file per route.
+
+**Design:** `frontend/DESIGN.md` is the source of truth. `/styleguide` shows every token and component. Check new work there at 360px and desktop width.
+
+**Adding a page:**
+1. Add the route in `src/App.tsx`.
+2. Add a rewrite for its path to `/app.html` in `frontend/vercel.json`.
+3. Delete the old static page in the same PR, if there is one.
+
+**Deploy:** `build.mjs` builds the app, puts its shell at `dist/app.html` and its files in `dist/assets/`, then copies the old pages as before. `vercel.json` rewrites React routes (now: `/styleguide`) to `/app.html`.
+
+**Rules:** see `context/coding-rules.md` (Frontend).
+- Never put patient or customer data in browser storage.
+- Never call the backend by absolute URL.
+- Never log personal data (ESLint blocks `console.log`).
+
 ## Vapi Web SDK bundle
 
 `static/vapi.bundle.js` is `@vapi-ai/web` **2.7.1** (MIT; it bundles `@daily-co/daily-js`, BSD-2-Clause), built once as an IIFE that sets `window.Vapi`. It is committed so nobody needs Node to run the demo. To rebuild it (Node LTS needed), in an empty folder outside the repo:
