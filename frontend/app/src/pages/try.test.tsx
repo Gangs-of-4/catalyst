@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookingsBoard, OrdersBoard, TryInfo } from "@/features/try/api";
 import { type CallEvents, MicBlockedError } from "@/lib/voice";
 
+import { resetHealth } from "@/lib/health";
+
 import { DemoRedirect, TryPage } from "./try";
 
 const startCallMock = vi.fn();
@@ -90,6 +92,7 @@ const renderAt = (path: string) =>
 
 beforeEach(() => {
   startCallMock.mockReset();
+  resetHealth();
   micMock.mockReset();
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -134,6 +137,7 @@ describe("<TryPage>", () => {
         () => json(200, bookings()),
         () => json(200, bookings([{ time: "10:30", id: 2, name: "Sita K." }])),
       ],
+      "GET /healthz": () => json(200, { ok: true }),
       "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
     });
     renderAt("/b/abc123/try");
@@ -165,6 +169,7 @@ describe("<TryPage>", () => {
     mockApi({
       "GET /api/try/abc123": () => json(200, INFO),
       "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => json(200, { ok: true }),
       "POST /api/try/abc123/start": () =>
         json(429, { detail: "Today's free demo minutes are used up. Please try again tomorrow.", code: "MINUTES_USED_UP" }),
     });
@@ -179,6 +184,7 @@ describe("<TryPage>", () => {
     const fetchMock = mockApi({
       "GET /api/try/abc123": () => json(200, INFO),
       "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => json(200, { ok: true }),
       "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
     });
     renderAt("/b/abc123/try");
@@ -199,6 +205,7 @@ describe("<TryPage>", () => {
     mockApi({
       "GET /api/try/abc123": () => json(200, INFO),
       "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => json(200, { ok: true }),
       "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
     });
     const { unmount } = renderAt("/b/abc123/try");
@@ -221,6 +228,7 @@ describe("<TryPage>", () => {
     mockApi({
       "GET /api/try/abc123": () => json(200, INFO),
       "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => json(200, { ok: true }),
       "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
     });
     renderAt("/b/abc123/try");
@@ -228,6 +236,57 @@ describe("<TryPage>", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Cancel the call" }));
     expect(signal?.aborted).toBe(true);
     expect(await screen.findByRole("button", { name: "Talk to your front desk" })).toBeTruthy();
+  });
+
+  it("lets the owner cancel while the backend is waking up, without reaching /start", async () => {
+    const fetchMock = mockApi({
+      "GET /api/try/abc123": () => json(200, INFO),
+      "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => json(502, { detail: "waking", code: "INTERNAL" }), // still asleep
+      "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
+    });
+    renderAt("/b/abc123/try");
+    await screen.findByRole("button", { name: "Talk to your front desk" });
+    resetHealth(); // the page has been open a while and the backend has gone back to sleep
+    fireEvent.click(screen.getByRole("button", { name: "Talk to your front desk" }));
+    expect(await screen.findByText(/Waking up the desk/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel the call" }));
+    expect(await screen.findByRole("button", { name: "Talk to your front desk" })).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/try/abc123/start")).toBe(false);
+    expect(startCallMock).not.toHaveBeenCalled();
+  });
+
+  it("never reaches /start if the page closes while the backend is waking up", async () => {
+    const fetchMock = mockApi({
+      "GET /api/try/abc123": () => json(200, INFO),
+      "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => json(502, { detail: "waking", code: "INTERNAL" }),
+      "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
+    });
+    const { unmount } = renderAt("/b/abc123/try");
+    await screen.findByRole("button", { name: "Talk to your front desk" });
+    resetHealth(); // the page has been open a while and the backend has gone back to sleep
+    fireEvent.click(screen.getByRole("button", { name: "Talk to your front desk" }));
+    expect(await screen.findByText(/Waking up the desk/)).toBeTruthy();
+    unmount();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/try/abc123/start")).toBe(false);
+    expect(startCallMock).not.toHaveBeenCalled();
+  });
+
+  it("says calls can't start when nothing forwards to a backend (/healthz 404)", async () => {
+    const fetchMock = mockApi({
+      "GET /api/try/abc123": () => json(200, INFO),
+      "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => new Response("Not found", { status: 404 }),
+      "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
+    });
+    renderAt("/b/abc123/try");
+    await screen.findByRole("button", { name: "Talk to your front desk" });
+    resetHealth(); // the page has been open a while and the backend has gone back to sleep
+    fireEvent.click(screen.getByRole("button", { name: "Talk to your front desk" }));
+    expect(await screen.findByText(/isn't connected to a server yet/)).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/try/abc123/start")).toBe(false);
   });
 
   it("shows an orders board for an orders template", async () => {

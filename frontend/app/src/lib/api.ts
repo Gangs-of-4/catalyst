@@ -8,6 +8,8 @@
  * - Errors become an `ApiError` whose `detail` is one plain sentence a page can show as-is.
  */
 
+import { markHealthy } from "@/lib/health";
+
 export type ApiErrorBody = {
   detail: string;
   code: string;
@@ -58,6 +60,19 @@ const INTERNAL: ApiErrorBody = {
   detail: "Something went wrong on our side. Please try again in a moment.",
 };
 
+type Listener = () => void;
+const troubleListeners = new Set<Listener>();
+
+/** Subscribe to connection trouble (network failure, or a 5xx not sent by the backend). Returns an unsubscribe function. */
+export function onConnectionTrouble(listener: Listener): () => void {
+  troubleListeners.add(listener);
+  return () => troubleListeners.delete(listener);
+}
+
+function reportTrouble() {
+  troubleListeners.forEach((l) => l());
+}
+
 function isErrorBody(value: unknown): value is ApiErrorBody {
   return (
     typeof value === "object" &&
@@ -86,13 +101,20 @@ export async function api<T>(path: string, { method = "GET", body, signal }: Api
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") throw err;
+    reportTrouble();
     throw new ApiError(0, NETWORK_ERROR);
   }
 
+  // Any answer the backend made means it's awake, so the "waking up" gate needn't check again.
+  if (res.ok) markHealthy();
   if (res.status === 204) return undefined as T;
   const data: unknown = await res.json().catch(() => undefined);
 
   if (!res.ok) {
+    // A 5xx without our JSON error body came from the forwarding (Vercel's rewrite, Vite's dev proxy),
+    // not from the backend, so the backend isn't reachable. The backend's own errors, like the
+    // deliberate 503 VOICE_NOT_CONFIGURED or a 500 INTERNAL, always carry the body.
+    if (res.status >= 500 && !isErrorBody(data)) reportTrouble();
     if (isErrorBody(data)) throw new ApiError(res.status, data);
     throw new ApiError(res.status, GENERIC[res.status] ?? INTERNAL);
   }

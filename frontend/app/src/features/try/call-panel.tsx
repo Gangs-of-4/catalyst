@@ -43,12 +43,14 @@ export function CallPanel({
   onStop,
   onCancel,
 }: CallPanelProps) {
-  // While it's checking or connecting the button cancels, so a stuck "Connecting…" is never a dead end.
-  const starting = state === "checking" || state === "connecting";
+  // While it's waking, checking or connecting the button cancels, so a stuck start is never a dead end.
+  const starting = state === "waking" || state === "checking" || state === "connecting";
   const busy = starting || state === "ending";
   const inCall = state === "live" || state === "ending";
   const status =
-    state === "checking" || state === "connecting"
+    state === "waking"
+      ? "Waking up the desk… (up to a minute)"
+      : state === "checking" || state === "connecting"
       ? "Connecting… allow the microphone if your browser asks."
       : state === "ending"
         ? "Ending the call…"

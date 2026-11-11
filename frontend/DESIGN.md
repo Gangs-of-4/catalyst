@@ -99,6 +99,8 @@ All of these are in `app/src/components/` and shown on `/styleguide`.
 | Badge | `ui/badge.tsx` | Status pills: `neutral`, `live`, `success`, `destructive` |
 | Toast | `ui/sonner.tsx` | Short confirmations ("Saved"). Errors that need action stay on the page, not in a toast |
 | Offline banner | `offline-banner.tsx` | Shown while the browser is offline: "You're offline. Changes won't save until you're back." |
+| Connection banner | `connection-banner.tsx` | Shown when an API call can't reach the backend (a network failure, or a 5xx without our JSON error body, i.e. from Vercel's rewrite or Vite's dev proxy rather than the backend; the backend's own errors such as `VOICE_NOT_CONFIGURED` don't count). Retries `/healthz` at 2, 4, 8, 15, then every 30 s, has "Retry now", and toasts "Connected again." Hidden while the offline banner shows |
+| Waking-up gate | `wake-gate.tsx` | Wraps pages that need the backend. If `/healthz` doesn't answer within 1.5 s, it shows "Waking up your front desk…" (the free host sleeps; up to a minute) and keeps trying for 90 s, then "Try again". Skipped for 2 minutes after a good answer |
 | Empty state | `empty-state.tsx` | Icon + one line on why it's empty + the next action |
 | App header | `app-header.tsx` | Catalyst wordmark left, actions right; 64px tall, sticky, white |
 
