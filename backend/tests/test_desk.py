@@ -5,22 +5,22 @@ from src.main import app
 
 
 @pytest.fixture
-def client(isolated):
-    with TestClient(app) as c:
-        yield c
+def client(owner):
+    return owner
 
 
-def test_staff_pages_need_password_when_set(client, isolated):
-    isolated.write_text("DESK_PASSWORD=letmein\n", encoding="utf-8")
-    assert client.get("/api/desk/inbox").status_code == 401
-    assert client.get("/desk").status_code == 401
-    assert client.get("/api/desk/inbox", auth=("desk", "wrong")).status_code == 401
-    assert client.get("/api/desk/inbox", auth=("desk", "letmein")).status_code == 200
-    assert client.get("/api/register").status_code == 200  # the public page stays public
+def test_desk_apis_need_a_login(isolated):
+    with TestClient(app) as anon:
+        for path in ("/api/inbox", "/api/calls", "/api/stats", "/api/desk/day", "/api/staff/meta"):
+            r = anon.get(path)
+            assert r.status_code == 401 and r.json()["code"] == "UNAUTHENTICATED", path
+        assert anon.get("/desk").status_code == 200  # the page is static; its data needs the login
+        assert anon.get("/api/register").status_code == 200  # the public page stays public
 
 
-def test_open_without_password_reports_warning(client):
-    assert client.get("/api/staff/meta").json()["authOpen"] is True
+def test_writes_need_the_app_header(client):
+    r = client.post("/api/desk/summary/send", headers={"X-Requested-With": ""})
+    assert r.status_code == 403 and r.json()["code"] == "FORBIDDEN"
 
 
 def test_walk_in_conflict_and_status(client):
@@ -35,6 +35,7 @@ def test_walk_in_conflict_and_status(client):
     assert first.status_code == 200
     again = client.post("/api/desk/bookings", json={**body, "name": "Other"})
     assert again.status_code == 409 and "Free nearby" in again.json()["detail"]
+    assert again.json()["code"] == "SLOT_TAKEN" and again.json()["alternatives"]
     bid = first.json()["id"]
     assert (
         client.post(f"/api/desk/bookings/{bid}/status", json={"status": "arrived"}).status_code
@@ -69,16 +70,16 @@ def test_bad_phone_rejected(client):
 
 
 def test_inbox_done_and_stats(client):
-    items = client.get("/api/desk/inbox").json()
+    items = client.get("/api/inbox").json()
     assert items, "the seed has one open callback"
-    assert client.post(f"/api/desk/inbox/{items[0]['id']}/done").status_code == 200
-    assert client.post(f"/api/desk/inbox/{items[0]['id']}/done").status_code == 404
+    assert client.post(f"/api/inbox/{items[0]['id']}/done").status_code == 200
+    assert client.post(f"/api/inbox/{items[0]['id']}/done").status_code == 404
     assert (
-        client.get("/api/desk/stats").json()["sentence"]
+        client.get("/api/stats").json()["sentence"]
         == "Today: 0 calls, 0 booked, 0 urgent, 0 callbacks open."
     )
 
 
 def test_summary_without_numbers_explains(client):
     r = client.post("/api/desk/summary/send").json()
-    assert r["sent"] == 0 and "setup page" in r["note"] and "summary" in r["text"]
+    assert r["sent"] == 0 and "settings page" in r["note"] and "summary" in r["text"]

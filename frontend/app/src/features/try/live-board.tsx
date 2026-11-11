@@ -126,7 +126,7 @@ function OrdersView({ board, fresh }: { board: OrdersBoard; fresh: Set<number> }
         >
           <div className="flex min-w-0 flex-col">
             <span className="font-semibold">
-              {o.number} · {o.shop}
+              {/^\d+$/.test(o.number) ? `#${o.number}` : o.number} · {o.shop}
             </span>
             <span className="text-[13px] text-muted-foreground">
               {o.items} {o.items === 1 ? "item" : "items"} · {o.total}

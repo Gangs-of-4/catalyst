@@ -19,26 +19,45 @@ export const resetHealth = () => {
 
 function sleep(ms: number, signal?: AbortSignal) {
   return new Promise<void>((resolve) => {
-    const t = setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => {
+    const onAbort = () => {
       clearTimeout(t);
       resolve();
-    });
+    };
+    const t = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 
+/**
+ * "up": the backend answered. "down": no answer yet (asleep, waking, unreachable), so keep trying.
+ * "none": /healthz is a 404, so nothing forwards to a backend at all (no rewrite: a deploy before
+ * M10, or a misconfigured one). Waiting can't fix that, so callers stop at once (review on #26).
+ */
+export type BackendState = "up" | "down" | "none";
+
 /** One ping: true if /healthz answers 2xx within `timeoutMs`. */
 export async function pingHealth(timeoutMs = 8000, signal?: AbortSignal): Promise<boolean> {
+  return (await pingHealthState(timeoutMs, signal)) === "up";
+}
+
+/** One ping, telling "nothing to reach" (404) apart from "not answering yet". */
+export async function pingHealthState(timeoutMs = 8000, signal?: AbortSignal): Promise<BackendState> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const onAbort = () => ctrl.abort();
   signal?.addEventListener("abort", onAbort);
   try {
     const res = await fetch("/healthz", { signal: ctrl.signal, cache: "no-store" });
-    if (res.ok) markHealthy();
-    return res.ok;
+    if (res.ok) {
+      markHealthy();
+      return "up";
+    }
+    return res.status === 404 ? "none" : "down";
   } catch {
-    return false;
+    return "down";
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener("abort", onAbort);
@@ -56,15 +75,15 @@ export type WaitOptions = {
   pingTimeoutMs?: number;
 };
 
-/** Ping until the backend answers or the budget runs out. Resolves true when it's awake. */
+/** Ping until the backend answers or the budget runs out. "none" (404) returns at once. */
 export async function waitForBackend({
   signal,
   onWaking,
   budgetMs = 90_000,
   wakingAfterMs = 1500,
   pingTimeoutMs = 8000,
-}: WaitOptions = {}): Promise<boolean> {
-  if (recentlyHealthy()) return true;
+}: WaitOptions = {}): Promise<BackendState> {
+  if (recentlyHealthy()) return "up";
   const start = Date.now();
   let waking = false;
   const reportWaking = () => {
@@ -77,13 +96,14 @@ export async function waitForBackend({
   try {
     let delay = 1000;
     while (!signal?.aborted) {
-      if (await pingHealth(pingTimeoutMs, signal)) return true;
-      if (signal?.aborted || Date.now() - start + delay > budgetMs) return false;
+      const state = await pingHealthState(pingTimeoutMs, signal);
+      if (state !== "down") return state; // up, or nothing to wait for
+      if (signal?.aborted || Date.now() - start + delay > budgetMs) return "down";
       reportWaking();
       await sleep(delay, signal);
       delay = Math.min(delay * 2, 5000);
     }
-    return false;
+    return "down";
   } finally {
     clearTimeout(wakingTimer);
   }

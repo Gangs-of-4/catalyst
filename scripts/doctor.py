@@ -18,7 +18,7 @@ VALUES = [  # name, required, what it's for
     ("VAPI_PUBLIC_KEY", True, "lets the Try-it page start a web call"),
     ("VAPI_ASSISTANT_ID", True, "written by scripts/setup_vapi.py"),
     ("CATALYST_TOOL_SECRET", True, "written by scripts/setup_vapi.py; Vapi sends it on every tool call"),
-    ("DESK_PASSWORD", False, "password for /desk and /setup (open to anyone without it)"),
+    ("DEMO_LOGIN_PASSWORD", False, "the demo clinic owner's login for /desk and /setup"),
     ("TWILIO_ACCOUNT_SID", False, "WhatsApp alerts and doctor commands"),
     ("TWILIO_AUTH_TOKEN", False, "WhatsApp alerts and doctor commands"),
     ("TWILIO_WHATSAPP_FROM", False, "the Twilio sandbox number, e.g. whatsapp:+14155238886"),

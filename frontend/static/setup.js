@@ -50,7 +50,7 @@ function renderBlocks(blocks) {
   $("leave-list").replaceChildren(...(blocks.length ? blocks.map(b => h("li", {},
     h("span", {}, b.label),
     h("button", { class: "btn small", type: "button", onclick: async () => {
-      const r = await api(`/api/setup/blocks/${b.id}`, { method: "DELETE" });
+      const r = await api(`/api/settings/blocks/${b.id}`, { method: "DELETE" });
       renderBlocks(r.blocks);
       showResult($("leave-result"), true, `Removed. ${r.agent}`);
     } }, "Remove"))) : [h("li", { class: "muted" }, "No leave or holidays coming up.")]));
@@ -61,7 +61,7 @@ $("settings").addEventListener("submit", async e => {
   const out = $("save-result");
   out.className = ""; out.textContent = "Saving…";
   try {
-    const r = await api("/api/setup", { method: "PUT", body: collect() });
+    const r = await api("/api/settings", { method: "PUT", body: collect() });
     fill(r.settings);
     showResult(out, !/failed/i.test(r.agent), r.agent.startsWith("Saved") ? r.agent : `Saved. ${r.agent}`);
   } catch (err) { showResult(out, false, err.message); }
@@ -71,13 +71,13 @@ $("leave-form").addEventListener("submit", async e => {
   e.preventDefault();
   const out = $("leave-result");
   try {
-    const r = await api("/api/setup/blocks", { method: "POST", body: { date: $("leave-date").value, doctor_id: $("leave-who").value || null } });
+    const r = await api("/api/settings/blocks", { method: "POST", body: { date: $("leave-date").value, doctor_id: $("leave-who").value || null } });
     renderBlocks(r.blocks);
     showResult(out, true, [r.note, r.agent].filter(Boolean).join(" "));
   } catch (err) { showResult(out, false, err.message); }
 });
 
-api("/api/setup").then(r => {
+api("/api/settings").then(r => {
   fill(r.settings);
   renderBlocks(r.blocks);
   $("agent-warning").hidden = r.agentConfigured;

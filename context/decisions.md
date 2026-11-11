@@ -49,13 +49,13 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 | ADR-0033 | Verticals are config; generic booking model with exclusion constraint | Accepted | Free |
 | ADR-0034 | WhatsApp is its own channel module; preview-and-confirm on every write | Accepted — extends ADR-0017 | Free tier with limits (per-message pricing, D5) |
 | ADR-0035 | Demo build simplifications | Accepted — *revisit before the first real clinic pilot*; frontend hosting amended by ADR-0036; frontend stack amended by ADR-0042 | Free tier with limits (Vapi, Twilio sandbox trial credit) |
-| ADR-0036 | Vercel for frontend hosting, deployed from GitHub Actions | Accepted — **supersedes ADR-0013**; *decision 4 challenged by ADR-0041 (Proposed); hosting challenged by ADR-0043 (Proposed)* | Free tier with limits (Vercel Hobby — non-commercial terms, see Consequences) |
+| ADR-0036 | Vercel for frontend hosting, deployed from GitHub Actions | Accepted — **supersedes ADR-0013**; *decision 4 amended by ADR-0041; hosting challenged by ADR-0043 (Proposed)* | Free tier with limits (Vercel Hobby — non-commercial terms, see Consequences) |
 | ADR-0037 | Wholesale distributor template | Accepted — *amends the vertical order in ADR-0028* | Free |
 | ADR-0038 | Self-serve onboarding and owner custom instructions | Accepted | Free tier with limits (one Vapi assistant per business) |
 | ADR-0042 | React (Vite + TypeScript + Tailwind + shadcn/ui) for the frontend | Accepted — *amends the frontend row of ADR-0035; replaces the Next.js plan* | Free |
 | ADR-0039 | Render + Neon for the Phase 2 backend; residency exception; app-level tenant scoping | **Proposed** — *would supersede ADR-0003 for Phase 2; departs from ADR-0010, ADR-0016, ADR-0023* | Free tier with limits |
 | ADR-0040 | Target voice stack: self-hosted Pipecat + Sarvam in India | **Proposed** — *would change ADR-0008, ADR-0021, ADR-0029* | Deferred paid |
-| ADR-0041 | Vercel rewrites `/api` to the backend for first-party session cookies | **Proposed** — *would amend ADR-0036 decision 4* | Free tier with limits |
+| ADR-0041 | Vercel rewrites `/api` to the backend for first-party session cookies | Accepted — *amends ADR-0036 decision 4* | Free tier with limits |
 | ADR-0043 | Move the frontend from Vercel Hobby to Cloudflare Workers (static assets) | **Proposed** — *would supersede ADR-0036; would carry ADR-0041's `/api` forwarding over as a Worker script* | Free tier with limits |
 
 ---
@@ -427,7 +427,7 @@ ADR log for Catalyst. One entry per significant, actually-made decision — neve
 **Consequences:**
 - *Data residency (rule 4):* holds — patient data goes browser ↔ backend and never passes through Vercel, which is not India-hosted. Do not add Vercel rewrites, serverless functions or edge middleware that touch API data; that would route personal data through non-India infrastructure.
 - *Until D3 is decided* `NEXT_PUBLIC_API_URL` stays empty and the deployed pages call `/api` on their own origin, which does not exist on Vercel — so the Vercel site shows the pages but no live data. Set it (and `CORS_ALLOWED_ORIGINS` on the backend) once the backend has a stable public HTTPS URL; a Cloudflare quick tunnel URL changes on every restart and would need a redeploy each time.
-- *`/desk` and `/setup` auth:* they use HTTP Basic auth (`DESK_PASSWORD`). Browsers do not show a Basic-auth prompt for cross-origin `fetch`, so with a password set these pages will not work cross-origin. They need a login form or token auth before the Vercel-hosted desk is used — a follow-up, not done here.
+- *`/desk` and `/setup` auth:* they use HTTP Basic auth (`DESK_PASSWORD`). Browsers do not show a Basic-auth prompt for cross-origin `fetch`, so with a password set these pages will not work cross-origin. They need a login form or token auth before the Vercel-hosted desk is used — a follow-up, not done here. *(Resolved in Phase 2 M2b: session login replaced Basic auth; `DESK_PASSWORD` is gone.)*
 - *The repo must stay public.* On Hobby, Vercel cannot deploy a private repository in a GitHub organisation. Making it private means Vercel Pro or another host. Hiding commit authors (for example deleting `.git` before deploying) is **rejected**: it would circumvent a documented Vercel restriction, which their fair use guidelines treat as a violation. Going private would also, on GitHub Free for organisations, likely drop the required-review rule on `main` and limit Actions minutes.
 - *Licence:* Vercel Hobby is non-commercial only, and Vercel counts "advertising the sale of a product or service" as commercial. The public Try-it page shows our service to prospective clinics, so it likely counts as commercial use already. Move to Pro, or revisit hosting (Cloudflare Pages has no such limit on its free plan, VERIFY its terms), before using the Vercel site to market to clinics.
 - *Manual setup:* repo secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`; Vercel project Root Directory = `frontend`, not connected to the Git repo.
@@ -583,9 +583,9 @@ ADR-0029 and ADR-0031 were accepted on 2026-10-27 and stay here so their history
 ### ADR-0041: Vercel rewrites `/api` to the backend for first-party session cookies
 
 - **Date:** 2026-11-10
-- **Status:** **Proposed** — team lead chose this option on 2026-11-10; Proposed because it amends an Accepted ADR.
+- **Status:** Accepted — team, 2026-11-11 (team lead chose this option on 2026-11-10). Implemented in PR #18. Before `NEXT_PUBLIC_API_URL` is set on Vercel (M10), check on the live site that login keeps the session cookie (VERIFY: Vercel doesn't document `Set-Cookie` passthrough on external rewrites).
 - **Cost implication:** Free tier with limits — rewrites to an external origin count against Vercel Hobby usage (VERIFY).
-- **Would change:** ADR-0036 decision 4 ("Vercel never proxies API traffic").
+- **Changes:** ADR-0036 decision 4 ("Vercel never proxies API traffic").
 
 **Context:** Phase 2 uses HttpOnly `SameSite=Lax` session cookies. The pages are on `*.vercel.app` and the backend on `*.onrender.com`. These are different sites, so the browser won't send a Lax cookie with the pages' `fetch` calls. `SameSite=None` would fail on Safari and iOS, which block third-party cookies, and many clinic owners use iPhones. A shared custom domain would work but costs money we haven't budgeted.
 
