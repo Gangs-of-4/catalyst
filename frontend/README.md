@@ -56,7 +56,7 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 | `/login` | `src/pages/login.tsx` | Owner login (`POST /api/login`). Already logged in → straight on. Honors a same-app `?next=` path |
 | `/home` | `src/pages/home.tsx` | The owner's signed-in home (`GET /api/me`), with Log out. Logged-out visitors go to `/login?next=/home`. Later tasks add the desk, settings and test page here |
 | `/signup` | `src/pages/signup.tsx`, `src/features/signup/` | Self-serve onboarding: account + business in one step (`GET /api/templates`, `POST /api/signup`), **one step per screen** (1/3 You, 2/3 Your business, 3/3 the template section + optional + consent) with Back/Next in a bar pinned to the bottom on phones. Next checks only that step; the step is in the URL (`?step=2`) so the phone's back button goes to the previous step. The template section is picked by the template's `modules`. A success screen shows the voice agent's state. |
-| `/styleguide` | `src/pages/styleguide.tsx` | Every token and component, for review |
+| `/styleguide` | `src/pages/styleguide.tsx` | Every token and component, for review. **Local only** (`npm run dev`): it isn't part of the live site |
 
 **Failure states** (phase2-plan §5 cold starts, §6):
 - Pages that need the backend (`/signup`, `/login`, `/home`, `/b/:publicId/try`) sit behind `WakeGate`, wired in `src/App.tsx`. It pings `/healthz` and shows a "waking up" screen while the free backend host wakes.
@@ -64,14 +64,14 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 - The test page checks `/healthz` again before each call ("Waking up the desk… (up to a minute)") if it hasn't seen the backend lately.
 - Forms keep what the owner typed through all of this; nothing is cleared on a failed request.
 
-**Design:** `frontend/DESIGN.md` is the source of truth. `/styleguide` shows every token and component. Check new work there at 360px and desktop width.
+**Design:** `frontend/DESIGN.md` is the source of truth. `/styleguide` (local `npm run dev` only) shows every token and component. Check new work there at 360px and desktop width.
 
 **Adding a page:**
 1. Add the route in `src/App.tsx`.
 2. Add a rewrite for its path to `/app` in `frontend/vercel.json`. Use `/app`, not `/app.html`: with `cleanUrls` on, Vercel serves the shell at `/app`, and a rewrite to `/app.html` returns 404.
 3. Delete the old static page in the same PR, if there is one.
 
-**Deploy:** `build.mjs` builds the app, puts its shell at `dist/app.html` and its files in `dist/assets/`, then copies the old pages as before. `vercel.json` rewrites React routes (now: `/b/:publicId/try`, `/demo/:template`, `/home`, `/login`, `/signup`, `/styleguide`) to `/app`, where Vercel serves `dist/app.html` because `cleanUrls` is on.
+**Deploy:** `build.mjs` builds the app, puts its shell at `dist/app.html` and its files in `dist/assets/`, then copies the old pages as before. `vercel.json` rewrites React routes (now: `/b/:publicId/try`, `/demo/:template`, `/home`, `/login`, `/signup`) to `/app`, where Vercel serves `dist/app.html` because `cleanUrls` is on.
 
 **Rules:** see `context/coding-rules.md` (Frontend).
 - Never put patient or customer data in browser storage.

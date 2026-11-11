@@ -32,7 +32,8 @@ export function App() {
         <Route path="/home" element={awake(<HomePage />)} />
         <Route path="/login" element={awake(<LoginPage />)} />
         <Route path="/signup" element={awake(<SignupPage />)} />
-        <Route path="/styleguide" element={<StyleguidePage />} />
+        {/* The design reference page is for the team: local `npm run dev` only, never on the live site. */}
+        {import.meta.env.DEV && <Route path="/styleguide" element={<StyleguidePage />} />}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <Toaster />

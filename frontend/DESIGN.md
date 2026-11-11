@@ -1,6 +1,6 @@
 # Catalyst design system
 
-The source of truth for how every Catalyst page looks (phase2-plan §6, ADR-0042). The tokens live in `app/src/index.css`, and the components in `app/src/components/`. Open `/styleguide` in the app to see all of them on one page.
+The source of truth for how every Catalyst page looks (phase2-plan §6, ADR-0042). The tokens live in `app/src/index.css`, and the components in `app/src/components/`. Run the app locally (`npm run dev`) and open `/styleguide` to see all of them on one page; it isn't on the live site.
 
 **Origin.** Adapted from a public analysis of Cal.com's marketing site (`VoltAgent/awesome-design-md`, `design-md/cal/DESIGN.md`): a white canvas, near-black actions, neutral greys, soft 12px cards and product UI shown directly. We keep the restraint and change the rest for our users:
 

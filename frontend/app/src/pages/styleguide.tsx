@@ -1,5 +1,6 @@
 import { CalendarX2, CheckCircle2, PhoneCall } from "lucide-react";
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 import { toast } from "sonner";
 
 import { AppHeader } from "@/components/app-header";
@@ -36,10 +37,12 @@ export function StyleguidePage() {
   return (
     <>
       <AppHeader>
-        <Button variant="ghost" size="sm">
-          Log in
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/login">Log in</Link>
         </Button>
-        <Button size="sm">Start free</Button>
+        <Button asChild size="sm">
+          <Link to="/signup">Start free</Link>
+        </Button>
       </AppHeader>
 
       <main className="mx-auto flex max-w-6xl flex-col gap-12 px-4 py-10 sm:px-6 sm:py-14">
