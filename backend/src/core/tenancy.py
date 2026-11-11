@@ -75,22 +75,31 @@ def _index_numbers(conn: db.Conn, tid: str, settings: dict, owner_whatsapp: str 
 
 def reindex_whatsapp(conn: db.Conn) -> None:
     """Rebuild the number index from every business's settings (startup; older databases).
-    If two businesses list the same number, the one that has it as owner, else the older one,
-    keeps it."""
+    Two passes: every business's *own* owner number first (owner numbers are unique), then the
+    listed numbers nobody owns, older businesses first. So a number always goes to the business
+    whose owner number it is, even if an older business also lists it."""
     rows = conn.execute(
-        "SELECT id, settings, owner_whatsapp FROM tenants ORDER BY owner_whatsapp IS NULL, created_at"
+        "SELECT id, settings, owner_whatsapp FROM tenants ORDER BY created_at, id"
     ).fetchall()
     with conn:
         conn.execute("DELETE FROM tenant_whatsapp_numbers")
         taken: set[str] = set()
+
+        def claim(number: str, tid: str) -> None:
+            if number not in taken:
+                taken.add(number)
+                conn.execute(
+                    "INSERT INTO tenant_whatsapp_numbers (number, tenant_id) VALUES (?, ?)",
+                    (number, tid),
+                )
+
         for r in rows:
-            for n in whatsapp_numbers(json.loads(r["settings"]), r["owner_whatsapp"]):
-                if n not in taken:
-                    taken.add(n)
-                    conn.execute(
-                        "INSERT INTO tenant_whatsapp_numbers (number, tenant_id) VALUES (?, ?)",
-                        (n, r["id"]),
-                    )
+            owner = ph.normalize(r["owner_whatsapp"]) if r["owner_whatsapp"] else None
+            if owner:
+                claim(owner, r["id"])
+        for r in rows:
+            for n in whatsapp_numbers(json.loads(r["settings"]), None):
+                claim(n, r["id"])
 
 
 def get(conn: db.Conn, tid: str) -> db.Row | None:

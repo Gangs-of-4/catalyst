@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import accounts, seed
+from .agents import instructions as instructions_store
 from .api import (
     auth,
     desk,
@@ -31,9 +32,10 @@ async def lifespan(app: FastAPI):
     demo = seed.ensure(conn)
     tenancy.reindex_whatsapp(conn)
     conn.close()
-    conn = db.connect_unchecked()  # startup, before any request: the demo owner's login
+    conn = db.connect_unchecked()  # startup, before any request: over every business
     try:
         accounts.ensure_demo_login(conn, demo)
+        instructions_store.migrate_pending(conn)
     finally:
         conn.close()
     yield

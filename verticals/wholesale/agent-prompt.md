@@ -3,13 +3,14 @@
 > **DRAFT, team to review.** Written from `context/contracts.md` §1.11 and ADR-0037. The products can be medicines, so the "never" rules below match the clinic's: no advice on use, dose or substitutes. In the demo build they are enforced by this prompt plus the post-call safety flag (ADR-0035), which knows the catalogue's own product names.
 
 ```
-version: 0.1.1
-date: 2026-11-11
-changed: 0.1.1 exact names confirmed, order status needs the order's phone (review of #33); 0.1.0 first wholesale prompt (Phase 2 M4b): catalogue-only rates, read-back before create_order,
+version: 0.2.0
+date: 2026-11-12
+changed: 0.2.0 adds the fenced "Owner's instructions" section after every rule (Phase 2 M5);
+         0.1.1 exact names confirmed, order status needs the order's phone (review of #33); 0.1.0 first wholesale prompt (Phase 2 M4b): catalogue-only rates, read-back before create_order,
          no medical advice or substitutes, callback for anything else
 why: ADR-0037 (wholesale template), contracts.md §1.11
 validated_against: — (pending first safety-suite run, tests/safety-suite.yaml)
-previous: —
+previous: 0.1.1 (2026-11-11), 0.1.0 (2026-11-11)
 ```
 
 Placeholders filled by `backend/src/agents/prompt.py`: `{tenant_name}`, `{owner_instructions}` (screened, fenced, after every rule), `{business_snapshot}`, `{voice_forms}`.

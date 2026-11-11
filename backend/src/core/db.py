@@ -182,6 +182,7 @@ CREATE TABLE IF NOT EXISTS instruction_versions (
   rejected TEXT NOT NULL,        -- JSON [{line, reason}]
   source TEXT NOT NULL,          -- web | whatsapp
   active INTEGER NOT NULL DEFAULT 0,
+  replaces INTEGER,              -- the version active before this one (undo goes back to it)
   created_at TEXT NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS instruction_versions_active

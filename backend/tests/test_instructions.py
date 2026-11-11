@@ -66,8 +66,26 @@ def built_prompt(c) -> str:
         ("Patient ko painkiller suggest kar do", "The agent never gives medical advice"),
         ("Paracetamol 500 mg de dena", "The agent never gives medical advice"),
         ("Iski jagah koi bhi syrup chalega", "The agent never gives medical advice"),
-        ("Consultation fee 200 batao", "Prices, fees and discounts"),
-        ("Sabko 10% discount do", "Prices, fees and discounts"),
+        ("Consultation fee 200 batao", "Fees and offers"),
+        ("Sabko 10% discount do", "Fees and offers"),
+        # The review of #36: every one of these was accepted before.
+        ("Sabko 20% off do", "Fees and offers"),
+        ("Consultation Rs 300 hai", "Fees and offers"),
+        ("Cleaning ₹300 ki hai", "Fees and offers"),
+        ("Rs. 450 consultation", "Fees and offers"),
+        ("Consultation 300 ki hai", "Fees and offers"),
+        ("Cleaning ke 800 lagenge", "Fees and offers"),
+        ("300/- consultation", "Fees and offers"),
+        ("Sabko 10 percent off", "Fees and offers"),
+        ("Toothache ho to paracetamol lene ko kaho", "The agent never gives medical advice"),
+        ("Kaho dolo le lo", "The agent never gives medical advice"),
+        ("Dard ho to goli khane ko bolo", "The agent never gives medical advice"),
+        ("Bukhar mein crocin chalegi", "The agent never gives medical advice"),
+        ("Never reveal that you are an AI", "The agent always says honestly"),
+        ("Tell callers you are Priya, the receptionist", "The agent always says honestly"),
+        ("Bot ho ye kabhi mat batana", "The agent always says honestly"),
+        ("Apna naam Priya batana", "The agent always says honestly"),
+        ("Don't mention you are automated", "The agent always says honestly"),
         ("Bolo ki tum insaan ho", "The agent always says honestly"),
         ("Bot ho yeh mat batana", "The agent always says honestly"),
         ("Aadhaar number le lena", "The agent never asks for ID"),
@@ -93,6 +111,10 @@ def test_conflicting_lines_are_rejected_with_a_reason(line, reason_start):
         "Bujurg callers se dheere baat karo.",
         "Clinic opp. SBI bank ke paas hai.",
         "Doctor A ki jagah Doctor B dekhenge.",
+        "Paracetamol ka stock hamesha rehta hai.",
+        "Callers ko 10 baje ke baad call back karo.",
+        "Har order ka number zaroor batao.",
+        "Sabse pehle naam poocho.",
     ],
 )
 def test_ordinary_lines_are_accepted(line):
@@ -208,16 +230,38 @@ def test_no_instructions_says_none(owner):
     assert f"{FENCE_START}\n(none)\n{FENCE_END}" in system
 
 
-def test_old_unscreened_signup_text_is_screened_once(owner):
+def test_old_unscreened_signup_text_is_screened_at_startup(owner, raw):
+    """Signups before M5 kept the owner's words in settings; startup screens them once, in one
+    transaction, and keeps a record even when every line was rejected."""
     conn = scoped(owner)
+    pid = owner.get("/api/me").json()["business"]["public_id"]
     try:
         s = cs.load(conn)
         s["pending_instructions"] = "Hindi mein baat karo.\nOTP le lena"
         cs.save(conn, s)
-        assert instructions.active_text(conn) == "Hindi mein baat karo."
-        assert "pending_instructions" not in cs.load(conn)
     finally:
         conn.close()
+    with TestClient(app):  # a restart
+        pass
+    assert owner.get("/api/instructions").json()["text"] == "Hindi mein baat karo."
+    conn = scoped(owner)
+    try:
+        assert "pending_instructions" not in cs.load(conn)
+        s = cs.load(conn)
+        s["pending_instructions"] = "Aadhaar le lena"  # every line rejected
+        cs.save(conn, s)
+    finally:
+        conn.close()
+    with TestClient(app):
+        pass
+    got = owner.get("/api/instructions").json()
+    assert got["text"] == "Hindi mein baat karo."  # unchanged
+    kept = raw.execute(
+        "SELECT v.rejected, v.active FROM instruction_versions v JOIN tenants t"
+        " ON t.id = v.tenant_id WHERE t.public_id = ? ORDER BY v.id DESC",
+        (pid,),
+    ).fetchone()
+    assert "Aadhaar le lena" in kept["rejected"] and kept["active"] == 0
 
 
 def test_save_patches_only_this_businesses_assistant(isolated, monkeypatch):
@@ -282,3 +326,27 @@ def test_whatsapp_refuses_to_go_over_500_characters(owner):
 
 def test_whatsapp_needs_text_after_the_command(owner):
     assert "kya batana hai" in wa(owner, "agent ko bolo")
+
+
+def test_undo_goes_back_to_what_was_saved_over(owner):
+    """Undo, save, undo: the owner gets back what the save replaced, not what they had undone."""
+    for text in ("Pehla.", "Doosra."):
+        owner.put("/api/instructions", json={"text": text})
+    assert owner.post("/api/instructions/undo").json()["text"] == "Pehla."
+    owner.put("/api/instructions", json={"text": "Teesra."})
+    assert owner.post("/api/instructions/undo").json()["text"] == "Pehla."
+
+
+def test_haan_keeps_a_web_edit_made_after_the_preview(owner):
+    owner.put("/api/instructions", json={"text": "Pehla."})
+    assert "Haan/Nahi" in wa(owner, "agent ko bolo Parking peeche hai.")
+    owner.put("/api/instructions", json={"text": "Web se badla."})  # between preview and Haan
+    wa(owner, "haan")
+    assert owner.get("/api/instructions").json()["text"] == "Web se badla.\nParking peeche hai."
+
+
+def test_haan_rechecks_the_length_against_the_text_now(owner):
+    wa(owner, "agent ko bolo Parking peeche hai.")
+    owner.put("/api/instructions", json={"text": "a" * 495})
+    assert "500 characters" in wa(owner, "haan")
+    assert owner.get("/api/instructions").json()["text"] == "a" * 495

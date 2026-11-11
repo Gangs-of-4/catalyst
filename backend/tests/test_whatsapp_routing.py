@@ -326,3 +326,22 @@ def test_an_unknown_command_in_vertical_yaml_fails_validation(tmp_path):
     )
     with pytest.raises(ValueError, match="unknown whatsapp commands"):
         loader.validate(copy)
+
+
+def test_startup_gives_a_number_to_the_business_that_owns_it(two, raw):
+    """An older business listing a number never takes it from the business whose owner number it
+    is (the review of #36, point 4)."""
+    clinic, shop, wa = two
+    clinic_id = raw.execute(
+        "SELECT id FROM tenants WHERE owner_whatsapp = ?", (CLINIC_OWNER,)
+    ).fetchone()["id"]
+    settings = raw.execute("SELECT settings FROM tenants WHERE id = ?", (clinic_id,)).fetchone()
+    import json
+
+    s = json.loads(settings["settings"])
+    s["whatsapp_numbers"] = [*s["whatsapp_numbers"], SHOP_OWNER]  # data from before the 409
+    with raw:
+        raw.execute("UPDATE tenants SET settings = ? WHERE id = ?", (json.dumps(s), clinic_id))
+    with TestClient(app) as restarted:
+        reply = send(restarted, "aaj ke orders", SHOP_OWNER)
+    assert "Test Medical" in reply  # still the shop's own business

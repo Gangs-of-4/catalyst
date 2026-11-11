@@ -22,8 +22,8 @@ from ...providers.llm import groq
 from ...verticals import loader
 from . import order_commands, summary
 
-READ_INTENTS = ("help", "query_day", "callbacks", "summary", "add_instruction")
-WRITE_INTENTS = ("block_day", "late_start", "early_close", "set_fee", "walk_in")
+READ_INTENTS = ("help", "query_day", "callbacks", "summary")
+WRITE_INTENTS = ("block_day", "late_start", "early_close", "set_fee", "walk_in", "add_instruction")
 ALL_INTENTS = READ_INTENTS + WRITE_INTENTS + order_commands.READS + order_commands.WRITES
 ORDER_STATUSES = ("new", "confirmed", "dispatched", "delivered", "cancelled")
 
@@ -43,7 +43,7 @@ class Command(BaseModel):
     rate_paise: int | None = None
     order_id: int | None = None
     status: str | None = None
-    instruction: str | None = None  # add_instruction: the full new text, already screened
+    instruction: str | None = None  # add_instruction: only the new lines, already screened
     rejected: list[dict] = []
 
     @field_validator("intent")
@@ -472,16 +472,16 @@ def _rejected_lines(rejected: list[dict]) -> str:
 def _preview_instruction(conn: db.Conn, sender: str, cmd: Command) -> str:
     """Screen the new lines now; preview only if something can be added (contracts.md §4)."""
     try:
-        combined, screened = instructions.add(conn, cmd.instruction or "", "whatsapp")
+        screened = instructions.add(conn, cmd.instruction or "")
     except instructions.TooLong as e:
         return str(e)
-    if combined is None:
+    if not screened.accepted:
         head = "Yeh agent ko nahi bata sakte, kuch nahi badla:\n"
         return head + _rejected_lines(screened.rejected)
     save_pending(
         conn,
         sender,
-        Command(intent="add_instruction", instruction=combined, rejected=screened.rejected),
+        Command(intent="add_instruction", instruction=screened.text, rejected=screened.rejected),
     )
     lines = ["Agent ko yeh bhi bataya jayega:"] + [f"• {x}" for x in screened.accepted]
     if screened.rejected:
@@ -530,7 +530,10 @@ def handle(conn: db.Conn, sender: str, text: str) -> tuple[str, bool]:
         if cmd.intent in order_commands.WRITES:
             return order_commands.apply(conn, cmd), False  # rates and stock aren't in the prompt
         if cmd.intent == "add_instruction":
-            instructions.save_screened(conn, cmd.instruction or "", cmd.rejected, "whatsapp")
+            try:
+                instructions.append(conn, cmd.instruction or "", cmd.rejected, "whatsapp")
+            except instructions.TooLong as e:
+                return str(e), False
             return "Ho gaya — agent ab yeh maanega.", True
         return apply(conn, s, cmd), cmd.intent != "walk_in"
     if t in CONFIRM or t in REJECT:
