@@ -10,7 +10,7 @@ from ..core import db
 from ..core import phone as ph
 from ..core import settings as cs
 from ..core.log import log
-from .deps import get_conn, secret_ok
+from .deps import get_conn, get_webhook_conn, secret_ok
 
 router = APIRouter()
 
@@ -55,15 +55,31 @@ def tool_call_list(message: dict) -> list[_ToolCall]:
     return out
 
 
+@router.post("/vapi/webhook/{public_id}")
+async def business_webhook(
+    request: Request,
+    background: BackgroundTasks,
+    conn: db.Conn = Depends(get_webhook_conn),
+):
+    """One business's assistant: tenant from the path, auth by that business's own secret."""
+    return await _handle(request, background, conn)
+
+
 @router.post("/vapi/webhook")
-async def webhook(
+async def legacy_webhook(
     request: Request,
     background: BackgroundTasks,
     conn: db.Conn = Depends(get_conn),
     x_catalyst_secret: str | None = Header(default=None),
 ):
+    """Transitional single-tenant route for the demo clinic's original assistant (global secret from
+    .env). Removed once every assistant is re-synced to its own path (contracts.md §1.10)."""
     if not secret_ok(x_catalyst_secret, "CATALYST_TOOL_SECRET"):
         raise HTTPException(401, "Bad or missing x-catalyst-secret")
+    return await _handle(request, background, conn)
+
+
+async def _handle(request: Request, background: BackgroundTasks, conn: db.Conn):
     try:
         body = await request.json()
     except (json.JSONDecodeError, UnicodeDecodeError):

@@ -1,8 +1,9 @@
-"""Builds the system prompt and first message from verticals/clinic/agent-prompt.md plus a settings snapshot."""
+"""Builds a business's system prompt and first message from its template's agent-prompt.md plus a
+settings snapshot. The template comes from the business's `tenants` row, never from a hard-wired folder."""
 
 import re
 
-from ..core import db
+from ..core import db, tenancy
 from ..knowledge import answers
 from ..verticals import loader
 
@@ -33,9 +34,20 @@ def snapshot(conn: db.Conn, s: dict) -> str:
     return "\n".join(lines)
 
 
+class NoPrompt(Exception):
+    """The business's template has no agent-prompt.md yet, so it has no voice agent."""
+
+
+def template_name(conn: db.Conn) -> str:
+    return tenancy.get(conn, conn.tid)["template"]
+
+
 def build(conn: db.Conn, s: dict) -> tuple[str, str]:
-    """(system prompt, first message) for the clinic's current settings."""
-    raw = loader.prompt_template()
+    """(system prompt, first message) for this business's current settings."""
+    base = loader.template_dir(template_name(conn))
+    if not (base / "agent-prompt.md").exists():
+        raise NoPrompt(base.name)
+    raw = loader.prompt_template(base)
     body, _, first = raw.partition("## First message")
     voice = s.get("voice", "female") if s.get("voice") in VOICE_FORMS else "female"
     values = {

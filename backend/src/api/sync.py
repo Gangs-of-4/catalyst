@@ -6,9 +6,9 @@ from ..core.log import log
 from ..providers.voice_orchestrator import vapi
 from ..verticals import loader
 
-# A business's assistant calls POST /vapi/webhook/{public_id}, which M3 adds (phase2-plan.md).
-# Until then, signup creates no assistant, so none points at a route that doesn't exist yet.
-PER_BUSINESS_WEBHOOK_READY = False
+# A business's assistant calls POST /vapi/webhook/{public_id} (api/vapi.py, Phase 2 M3). Kept as a
+# switch so the tests can turn assistant creation on and off.
+PER_BUSINESS_WEBHOOK_READY = True
 
 
 def agent_configured() -> bool:
@@ -16,20 +16,31 @@ def agent_configured() -> bool:
 
 
 def sync_agent(tid: str) -> str:
-    """Returns a one-line result. Never raises: settings are saved either way."""
-    if not agent_configured():
-        return (
-            "Saved. The agent isn't set up yet (run scripts/setup_vapi.py), so nothing to update."
-        )
+    """Settings save: push this business's changes to *its own* assistant. Returns a one-line message
+    for the settings page. Never raises: settings are saved either way.
+
+    A business with its own assistant id is PATCHed through `sync_tenant_agent`. The demo clinic's
+    original assistant (id in .env, global secret) still uses the transitional `vapi.sync`."""
     conn = db.connect().for_tenant(tid)
     try:
-        result = vapi.sync(conn)
+        has_own = bool(tenancy.get(conn, tid)["vapi_assistant_id"])
+        if not has_own and agent_configured():
+            return _legacy_sync(conn)
+    finally:
+        conn.close()
+    state = sync_tenant_agent(tid)
+    return {
+        "updated": "Saved. The agent has been updated.",
+        "failed": "Saved, but updating the agent failed. Try saving again in a minute.",
+    }.get(state, "Saved. The agent isn't set up yet, so there is nothing to update.")
+
+
+def _legacy_sync(conn: db.Conn) -> str:
+    try:
+        return vapi.sync(conn)
     except vapi.VapiError as e:
         log.warning("vapi: sync failed")
         return f"Saved, but updating the agent failed: {e}"
-    finally:
-        conn.close()
-    return result
 
 
 def sync_tenant_agent(tid: str) -> str:
@@ -42,7 +53,7 @@ def sync_tenant_agent(tid: str) -> str:
         conn = db.connect().for_tenant(tid)
         t = tenancy.get(conn, tid)
         if not (loader.template_dir(t["template"]) / "agent-prompt.md").exists():
-            return "not_configured"
+            return "not_configured"  # this template has no voice agent yet
         vapi.sync_tenant(conn)
         return "updated"
     except Exception as e:  # any failure, not just VapiError: the business is already created

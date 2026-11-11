@@ -12,6 +12,7 @@ from ...agents.tool_schemas import TOOLS
 from ...core import db, tenancy
 from ...core import settings as cs
 from ...core.config import env, set_env
+from ...verticals import loader
 
 API = "https://api.vapi.ai"
 # Azure Hindi neural voices; they read Devanagari Hindi and Latin English words. VERIFY on Vapi.
@@ -44,6 +45,14 @@ def max_call_seconds() -> int:
     return int(raw) if raw.isdigit() and int(raw) > 0 else 180
 
 
+def template_tools(conn: db.Conn) -> list[dict]:
+    """The function schemas for the tools this business's template lists in vertical.yaml. Tools a
+    template names but that have no schema yet (wholesale, until M4) are skipped."""
+    base = loader.template_dir(prompt.template_name(conn))
+    wanted = set(loader.validate(base)["tools"])
+    return [fn for fn in TOOLS if fn["name"] in wanted]
+
+
 def payload(conn: db.Conn, secret: str, webhook_path: str = "/vapi/webhook") -> dict:
     s = cs.load(conn)
     system, first = prompt.build(conn, s)
@@ -57,7 +66,7 @@ def payload(conn: db.Conn, secret: str, webhook_path: str = "/vapi/webhook") -> 
             "model": env("VAPI_MODEL", "gpt-4.1-mini"),
             "temperature": 0.3,
             "messages": [{"role": "system", "content": system}],
-            "tools": [{"type": "function", "function": fn, "server": server} for fn in TOOLS]
+            "tools": [{"type": "function", "function": fn, "server": server} for fn in template_tools(conn)]
             + [{"type": "endCall"}],
         },
         "voice": {

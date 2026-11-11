@@ -4,7 +4,7 @@ import base64
 import hmac
 from collections.abc import Iterator
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Header, HTTPException, Request
 
 from .. import accounts
 from ..core import db, tenancy
@@ -25,6 +25,31 @@ def get_conn() -> Iterator[db.Conn]:
         if tid is None:
             raise HTTPException(503, "The demo clinic isn't set up yet. Restart the backend.")
         yield conn.for_tenant(tid)
+    finally:
+        conn.close()
+
+
+def get_webhook_conn(
+    public_id: str, x_catalyst_secret: str | None = Header(default=None)
+) -> Iterator[db.Conn]:
+    """A connection scoped to the business named in the webhook path (contracts.md §1.10).
+
+    Unknown `public_id` is 404; a missing or wrong secret is 401. The secret is the one stored on that
+    business's own row, so business A's secret never authorises business B.
+    """
+    conn = db.connect()
+    try:
+        t = tenancy.by_public_id(conn, public_id)
+        if t is None:
+            raise HTTPException(404, "Unknown business")
+        expected = t["tool_secret"] or ""
+        if not (
+            expected
+            and x_catalyst_secret
+            and hmac.compare_digest(x_catalyst_secret.encode(), expected.encode())
+        ):
+            raise HTTPException(401, "Bad or missing x-catalyst-secret")
+        yield conn.for_tenant(t["id"])
     finally:
         conn.close()
 
