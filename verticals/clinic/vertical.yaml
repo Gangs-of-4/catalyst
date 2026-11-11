@@ -13,6 +13,13 @@ labels:
   booking: "Appointment"
   tenant: "Clinic"
 
+# Shown on the public test page as "Try saying" (contracts.md section 6.1, GET /api/try/{public_id}).
+try_saying:
+  - "Consultation fee kitni hai?"
+  - "Kal shaam 5 baje appointment chahiye."
+  - "Sunday ko clinic khula hai?"
+  - "Mera kal wala appointment cancel kar dijiye."
+
 languages:
   default: hi-en
   supported: [hi-en, en, hi]

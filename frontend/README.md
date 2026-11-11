@@ -12,7 +12,7 @@
 | `/desk` | `desk.html`, `static/desk.js` | The receptionist: day grid per doctor, walk-ins, statuses, inbox, call log | C7, C10 |
 | `/setup` | `setup.html`, `static/setup.js` | Our team or the clinic: settings, leave days, agent sync | C12, C8 |
 
-`/desk` and `/setup` use HTTP Basic auth with `DESK_PASSWORD` (any username). The public page shows first names and an initial only, never phone numbers.
+`/desk` and `/setup` need the owner's session login (`/api/login`); they show only that business's data, and without a session they show a "Please log in" link. The public page shows first names and an initial only, never phone numbers.
 
 **Design.** The motif is the paper appointment register: ruled rows, one column per doctor, bookings "written in" with ink. Font: Mukta (Devanagari and Latin). Colours: cool off-white paper, deep green-teal ink, saffron for live states, sindoor red only for urgent items. All in `static/app.css`.
 
@@ -106,6 +106,6 @@ Production deploys come only from GitHub Actions (`.github/workflows/deploy-fron
   - The script refuses anything that isn't an https origin.
 - `vercel.json` runs `node build.mjs`, which builds the app and copies the old pages. The old pages' `config.js` now always says "call `/api` on this origin", because the rewrite covers them too.
 - **VERIFY on the first deploy with a backend:** Vercel's docs don't state that external rewrites pass `Set-Cookie` through, or their timeout. Check that login keeps you logged in, and how a Render cold start behaves.
-- `/desk` and `/setup` (old pages) use Basic auth. Through the same-origin rewrite the browser can prompt for it again.
+- `/desk` and `/setup` (old pages) use the session cookie, which reaches the backend first-party through the `/api` rewrite (ADR-0041). Basic auth is gone (#28).
 
 One-time setup: Vercel project with Root Directory `frontend` and no Git connection; repo secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.

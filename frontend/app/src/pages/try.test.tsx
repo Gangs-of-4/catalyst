@@ -10,10 +10,15 @@ import { resetHealth } from "@/lib/health";
 import { DemoRedirect, TryPage } from "./try";
 
 const startCallMock = vi.fn();
+const micMock = vi.fn();
 vi.mock("@/lib/voice", async () => {
   const actual = await vi.importActual<typeof import("@/lib/voice")>("@/lib/voice");
   return {
     ...actual,
+    requestMicrophone: async (...args: unknown[]) => {
+      const result = await micMock(...args);
+      if (result instanceof Error) throw result;
+    },
     // If the spy returns an Error, throw it here, outside the spy, as the real startCall would.
     startCall: async (...args: unknown[]) => {
       const result = await startCallMock(...args);
@@ -88,6 +93,7 @@ const renderAt = (path: string) =>
 beforeEach(() => {
   startCallMock.mockReset();
   resetHealth();
+  micMock.mockReset();
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -138,7 +144,9 @@ describe("<TryPage>", () => {
     await screen.findByText("Ramesh G.");
 
     fireEvent.click(screen.getByRole("button", { name: "Talk to your front desk" }));
-    await waitFor(() => expect(startCallMock).toHaveBeenCalledWith("pk_test", "asst_test", expect.any(Object)));
+    await waitFor(() =>
+      expect(startCallMock).toHaveBeenCalledWith("pk_test", "asst_test", expect.any(Object), expect.any(AbortSignal)),
+    );
     const [, init] = fetchMock.mock.calls.find(([url, i]) => url === "/api/try/abc123/start" && i?.method === "POST")!;
     expect(init?.headers).toMatchObject({ "X-Requested-With": "catalyst" });
 
@@ -171,9 +179,9 @@ describe("<TryPage>", () => {
     expect(startCallMock).not.toHaveBeenCalled();
   });
 
-  it("gives a one-line fix when the microphone is blocked", async () => {
-    startCallMock.mockReturnValue(new MicBlockedError());
-    mockApi({
+  it("asks for the microphone first, so a blocked mic never uses up a daily call", async () => {
+    micMock.mockReturnValue(new MicBlockedError());
+    const fetchMock = mockApi({
       "GET /api/try/abc123": () => json(200, INFO),
       "GET /api/try/abc123/board": () => json(200, bookings()),
       "GET /healthz": () => json(200, { ok: true }),
@@ -182,6 +190,68 @@ describe("<TryPage>", () => {
     renderAt("/b/abc123/try");
     fireEvent.click(await screen.findByRole("button", { name: "Talk to your front desk" }));
     expect(await screen.findByText(/blocked the microphone/)).toBeTruthy();
+    // /start counts the call, so it must not be reached when the mic is blocked.
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/try/abc123/start")).toBe(false);
+    expect(startCallMock).not.toHaveBeenCalled();
+  });
+
+  it("hangs up a call that connects after the page was closed (no call left running)", async () => {
+    let resolveStart: (call: { stop: () => void }) => void = () => {};
+    let signal: AbortSignal | undefined;
+    startCallMock.mockImplementation((_k: string, _a: string, _ev: CallEvents, sig?: AbortSignal) => {
+      signal = sig;
+      return new Promise((r) => (resolveStart = r));
+    });
+    mockApi({
+      "GET /api/try/abc123": () => json(200, INFO),
+      "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => json(200, { ok: true }),
+      "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
+    });
+    const { unmount } = renderAt("/b/abc123/try");
+    fireEvent.click(await screen.findByRole("button", { name: "Talk to your front desk" }));
+    await waitFor(() => expect(startCallMock).toHaveBeenCalled());
+
+    unmount(); // the owner leaves while it's still connecting
+    expect(signal?.aborted).toBe(true);
+    const stop = vi.fn();
+    await act(async () => resolveStart({ stop })); // ...and the call connects anyway
+    expect(stop).toHaveBeenCalled();
+  });
+
+  it("lets the owner cancel while it's connecting", async () => {
+    let signal: AbortSignal | undefined;
+    startCallMock.mockImplementation((_k: string, _a: string, _ev: CallEvents, sig?: AbortSignal) => {
+      signal = sig;
+      return new Promise(() => {}); // never connects
+    });
+    mockApi({
+      "GET /api/try/abc123": () => json(200, INFO),
+      "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => json(200, { ok: true }),
+      "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
+    });
+    renderAt("/b/abc123/try");
+    fireEvent.click(await screen.findByRole("button", { name: "Talk to your front desk" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel the call" }));
+    expect(signal?.aborted).toBe(true);
+    expect(await screen.findByRole("button", { name: "Talk to your front desk" })).toBeTruthy();
+  });
+
+  it("lets the owner cancel while the backend is waking up, without reaching /start", async () => {
+    const fetchMock = mockApi({
+      "GET /api/try/abc123": () => json(200, INFO),
+      "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => json(502, { detail: "waking", code: "INTERNAL" }), // still asleep
+      "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
+    });
+    renderAt("/b/abc123/try");
+    fireEvent.click(await screen.findByRole("button", { name: "Talk to your front desk" }));
+    expect(await screen.findByText(/Waking up the desk/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel the call" }));
+    expect(await screen.findByRole("button", { name: "Talk to your front desk" })).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/try/abc123/start")).toBe(false);
+    expect(startCallMock).not.toHaveBeenCalled();
   });
 
   it("shows an orders board for an orders template", async () => {
@@ -189,6 +259,7 @@ describe("<TryPage>", () => {
       kind: "orders",
       orders: [
         { id: 3, number: "A-102", shop: "Ramesh G.", items: 3, total: "₹2,400", status: "new", source: "phone", created_at: "2026-11-11T10:30:00+05:30" },
+        { id: 2, number: "42", shop: "Gupta S.", items: 1, total: "₹650", status: "confirmed", source: "whatsapp", created_at: "2026-11-11T09:30:00+05:30" },
       ],
     };
     mockApi({
@@ -199,6 +270,7 @@ describe("<TryPage>", () => {
     expect(await screen.findByText("Today's orders")).toBeTruthy();
     expect(await screen.findByText("A-102 · Ramesh G.")).toBeTruthy();
     expect(screen.getByText("3 items · ₹2,400")).toBeTruthy();
+    expect(screen.getByText("#42 · Gupta S.")).toBeTruthy(); // a bare number reads as "#42"
   });
 });
 

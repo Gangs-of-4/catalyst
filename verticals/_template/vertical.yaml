@@ -17,6 +17,8 @@ languages:
   default: hi-en           # hi-en (Hinglish) | en | hi
   supported: [hi-en, en, hi]
 
+try_saying:                # optional: 3-5 example lines for the public test page
+  - "Kal subah appointment mil sakta hai?"
 modules: [bookings]        # bookings | orders — picks the desk board and data model (ADR-0037)
 tools:                     # agent tools served for this vertical (contracts.md §1.10, §1.11)
   [get_clinic_info, find_slots, book, find_booking, reschedule, cancel, create_callback, escalate, transfer, log_call_outcome]

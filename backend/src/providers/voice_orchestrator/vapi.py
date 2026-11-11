@@ -12,6 +12,8 @@ from ...agents.tool_schemas import TOOLS
 from ...core import db, tenancy
 from ...core import settings as cs
 from ...core.config import env, set_env
+from ...core.log import log
+from ...verticals import loader
 
 API = "https://api.vapi.ai"
 # Azure Hindi neural voices; they read Devanagari Hindi and Latin English words. VERIFY on Vapi.
@@ -44,9 +46,23 @@ def max_call_seconds() -> int:
     return int(raw) if raw.isdigit() and int(raw) > 0 else 180
 
 
-def payload(conn: db.Conn, secret: str, webhook_path: str = "/vapi/webhook") -> dict:
+def template_tools(template: str) -> list[dict]:
+    """The function schemas for the tools a template lists in vertical.yaml. A listed tool with no
+    schema yet (wholesale, until M4) is left out, with a warning."""
+    wanted = loader.tool_names(template)
+    found = [fn for fn in TOOLS if fn["name"] in wanted]
+    missing = wanted - {fn["name"] for fn in found}
+    if missing:
+        log.warning("vapi: %s lists tools with no schema yet: %s", template, sorted(missing))
+    return found
+
+
+def payload(
+    conn: db.Conn, secret: str, webhook_path: str = "/vapi/webhook", template: str | None = None
+) -> dict:
+    template = template or prompt.template_name(conn)
     s = cs.load(conn)
-    system, first = prompt.build(conn, s)
+    system, first = prompt.build(conn, s, template)
     server = {"url": f"{public_url()}{webhook_path}", "headers": {"x-catalyst-secret": secret}}
     voice = s.get("voice") if s.get("voice") in VOICES else "female"
     return {
@@ -57,7 +73,10 @@ def payload(conn: db.Conn, secret: str, webhook_path: str = "/vapi/webhook") -> 
             "model": env("VAPI_MODEL", "gpt-4.1-mini"),
             "temperature": 0.3,
             "messages": [{"role": "system", "content": system}],
-            "tools": [{"type": "function", "function": fn, "server": server} for fn in TOOLS]
+            "tools": [
+                {"type": "function", "function": fn, "server": server}
+                for fn in template_tools(template)
+            ]
             + [{"type": "endCall"}],
         },
         "voice": {
@@ -114,11 +133,14 @@ def sync(conn: db.Conn) -> str:
 
 def sync_tenant(conn: db.Conn) -> str:
     """Create or update *this business's* assistant: its own webhook path and secret, its own id
-    stored on its `tenants` row. Returns "created" or "updated". Raises VapiError."""
+    stored on its `tenants` row. Returns "created" or "updated". Raises prompt.NoPrompt for a template
+    with no voice agent yet, VapiError for Vapi or config problems."""
+    t = tenancy.get(conn, conn.tid)
+    if t is None:
+        raise LookupError("this connection's business doesn't exist")
+    body = payload(conn, t["tool_secret"], f"/vapi/webhook/{t['public_id']}", t["template"])
     if not public_url().startswith("https://"):
         raise VapiError("PUBLIC_URL must be the https:// URL Vapi can reach.")
-    t = tenancy.get(conn, conn.tid)
-    body = payload(conn, t["tool_secret"], f"/vapi/webhook/{t['public_id']}")
     if t["vapi_assistant_id"]:
         _request("PATCH", f"/assistant/{t['vapi_assistant_id']}", body)
         return "updated"

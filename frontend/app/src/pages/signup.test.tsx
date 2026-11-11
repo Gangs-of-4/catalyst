@@ -125,6 +125,12 @@ describe("<SignupPage>", () => {
     mockApi({ "/api/templates": () => json(500, { detail: "Something went wrong.", code: "INTERNAL" }) });
     renderPage();
     expect(await screen.findByText("The form didn't load")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Try again/ })).toBeTruthy();
+    const retry = screen.getByRole("button", { name: /Try again/ });
+    // The submit button stays usable and explains what's wrong instead of silently doing nothing.
+    const create = screen.getByRole("button", { name: "Create my front desk" }) as HTMLButtonElement;
+    expect(create.disabled).toBe(false);
+    submit();
+    expect(await screen.findByText(/didn't finish loading/)).toBeTruthy();
+    expect(document.activeElement).toBe(retry);
   });
 });

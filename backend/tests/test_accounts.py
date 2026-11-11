@@ -265,20 +265,19 @@ def test_templates_endpoint_lists_both_with_defaults(client):
     assert by["wholesale"]["modules"] == ["orders"]
 
 
-def test_no_assistant_until_the_per_business_webhook_exists(client, isolated, monkeypatch):
-    """Until M3 adds /vapi/webhook/{public_id}, signup must not create an assistant pointing at it."""
+def test_template_without_a_prompt_gets_no_assistant(client, isolated, monkeypatch):
+    """Wholesale has no agent-prompt.md until M4, so signup must not call Vapi for it."""
     isolated.write_text(
         "PUBLIC_URL=https://api.example.com\nVAPI_PRIVATE_KEY=k\n", encoding="utf-8"
     )
     calls = []
     monkeypatch.setattr(httpx, "request", lambda *a, **k: calls.append(a))
-    r = post(client, "/api/signup", CLINIC)
+    r = post(client, "/api/signup", WHOLESALE)
     assert r.status_code == 200 and r.json()["agent"] == "not_configured" and calls == []
 
 
 def test_assistant_created_for_this_business_only(client, isolated, raw, monkeypatch):
     """Vapi is mocked: the assistant gets this business's own webhook path, secret and id."""
-    monkeypatch.setattr(sync, "PER_BUSINESS_WEBHOOK_READY", True)
     isolated.write_text(
         "PUBLIC_URL=https://api.example.com\nVAPI_PRIVATE_KEY=k\n", encoding="utf-8"
     )
@@ -310,7 +309,6 @@ def test_assistant_created_for_this_business_only(client, isolated, raw, monkeyp
 
 
 def test_vapi_failure_does_not_fail_signup(client, isolated, monkeypatch):
-    monkeypatch.setattr(sync, "PER_BUSINESS_WEBHOOK_READY", True)
     isolated.write_text(
         "PUBLIC_URL=https://api.example.com\nVAPI_PRIVATE_KEY=k\n", encoding="utf-8"
     )
@@ -344,7 +342,6 @@ def test_password_hash_roundtrip():
 
 def test_unexpected_agent_error_does_not_fail_signup(client, isolated, monkeypatch):
     """Not only VapiError: any error while building the assistant leaves a usable account."""
-    monkeypatch.setattr(sync, "PER_BUSINESS_WEBHOOK_READY", True)
     isolated.write_text(
         "PUBLIC_URL=https://api.example.com\nVAPI_PRIVATE_KEY=k\n", encoding="utf-8"
     )

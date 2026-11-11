@@ -149,6 +149,7 @@ export function TryPage() {
                   problem={call.problem}
                   onStart={() => void call.start()}
                   onStop={call.stop}
+                  onCancel={call.cancel}
                 />
               ) : (
                 <EmptyState
