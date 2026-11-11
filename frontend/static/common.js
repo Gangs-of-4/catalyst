@@ -19,17 +19,27 @@ const h = (tag, attrs = {}, ...children) => {
 const API_BASE = String(window.CATALYST_API_URL || "").replace(/\/+$/, "");
 
 async function api(path, options = {}) {
-  const opts = { headers: { "Content-Type": "application/json" }, credentials: "same-origin", ...options };
+  // X-Requested-With on every call: the backend refuses writes without it (CSRF, contracts.md section 6).
+  const opts = { headers: { "Content-Type": "application/json", "X-Requested-With": "catalyst" }, credentials: "same-origin", ...options };
   if (opts.body && typeof opts.body !== "string") opts.body = JSON.stringify(opts.body);
   const res = await fetch(API_BASE + path, opts);
   const text = await res.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = { detail: text }; }
+  if (res.status === 401) showLoginNeeded();
   if (!res.ok) {
     const detail = data && data.detail;
     throw new Error(typeof detail === "string" ? detail : `Request failed (${res.status})`);
   }
   return data;
+}
+
+// The desk and settings belong to the logged-in owner's business: without a session, say so once.
+function showLoginNeeded() {
+  if (document.getElementById("login-needed")) return;
+  const next = encodeURIComponent(location.pathname);
+  document.body.prepend(h("div", { class: "banner", id: "login-needed", role: "alert" },
+    "Please ", h("a", { href: `/login?next=${next}` }, "log in"), " to see your business's desk and settings."));
 }
 
 function time12(hhmm) {

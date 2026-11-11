@@ -22,7 +22,8 @@
 | M0: contracts v0.2, ADRs 0037–0041, wholesale `vertical.yaml` | #8 | Merged |
 | M1: tenant-scoped SQL layer (SQLite + Postgres), `tenants` table | #9 | Merged |
 | M2: accounts + onboarding API (signup, login, logout, me, templates; per-business assistant, Vapi mocked in tests) | #11 | Merged |
-| M3: per-business voice (`/vapi/webhook/{public_id}`, per-tenant secret, template-aware prompt and tools, settings save PATCHes only its own assistant) | #12 | Open |
+| M3: per-business voice (`/vapi/webhook/{public_id}`, per-tenant secret, template-aware prompt and tools, settings save PATCHes only its own assistant) | #12 | Merged |
+| M2b: desk, inbox, calls, stats and settings scoped to the session's business; session login replaces Basic auth; demo owner login from `DEMO_LOGIN_PASSWORD` | #28 | Open |
 | M4–M12 | — | Not started |
 
 ---

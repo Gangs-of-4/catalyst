@@ -413,7 +413,7 @@ Common codes: `VALIDATION` (422, with `fields`), `UNAUTHENTICATED` (401), `FORBI
 
 ### 6.1 Endpoints
 
-Auth column: **public**, **user** (session, scoped to the user's business), **admin** (admin session).
+Auth column: **public**, **user** (session, scoped to the user's business; `401 UNAUTHENTICATED` without one), **admin** (admin session). There is no Basic auth: the demo clinic is a business like any other, with an owner login whose password comes from `DEMO_LOGIN_PASSWORD` (checked at every start: unset removes the login and its sessions, a new email retires the old one) (email `demo.clinic@example.com`, or `DEMO_LOGIN_EMAIL`).
 
 | Method + path | Auth | Purpose |
 |---|---|---|
@@ -425,11 +425,11 @@ Auth column: **public**, **user** (session, scoped to the user's business), **ad
 | `GET /api/try/{public_id}` | public | Name, template, labels, Vapi public key + assistant ID (or `VOICE_NOT_CONFIGURED`), "try saying" lines |
 | `POST /api/try/{public_id}/start` | public | Call-cap check before a web call (§1.10); `429 MINUTES_USED_UP` over the cap |
 | `GET /api/try/{public_id}/board` | public | Today's register or order board with names masked ("Ramesh G."), no phones |
-| `GET /api/desk/day?date=` · `POST /api/desk/bookings` · `POST /api/desk/bookings/{id}/status` | user | Schedule (bookings template) |
+| `GET /api/desk/day?date=` · `POST /api/desk/bookings` · `POST /api/desk/bookings/{id}/status` | user | Schedule (bookings template). A business without the `bookings` module gets `404 NOT_FOUND`. A taken slot is `409 SLOT_TAKEN` with `alternatives: [{doctor_id, date, time}]`; a time that is closed, past or not a slot start is `422 VALIDATION` with the same `alternatives` when there are free times nearby. Also `GET /api/staff/meta` (business name, today, WhatsApp status for the old desk page) and `POST /api/desk/summary/send` (today's summary to the owner's WhatsApp numbers). |
 | `GET /api/orders?status=&date=` · `POST /api/orders` · `POST /api/orders/{id}/status` | user | Order board (orders template). `POST /api/orders` takes `idempotency_key` from the page so a resend after a lost connection never duplicates. |
 | `GET /api/catalog` · `POST /api/catalog` · `PUT /api/catalog/{id}` · `POST /api/catalog/import` (CSV) | user | Catalogue. Import keeps good rows and returns `{added, updated, errors: [{row, message}]}`. CSV columns: `name,pack_size,rate,in_stock`. |
 | `GET /api/inbox` · `POST /api/inbox/{id}/done` · `GET /api/calls` · `GET /api/stats` | user | Shared desk panels |
-| `GET /api/settings` · `PUT /api/settings` | user | Business settings; save rebuilds the prompt and PATCHes only this business's assistant. Returns `{saved: true, agent: "updated" \| "not_configured" \| "failed"}`. |
+| `GET /api/settings` · `PUT /api/settings` | user | Business settings. `GET` returns `{settings, blocks, agentConfigured}`. Save rebuilds the prompt and PATCHes only this business's assistant. Returns `{saved: true, agent, settings}`, where `agent` is one plain sentence for the page (updated, not set up, or failed). `PUT` is bookings-template only until M4 adds the orders template's settings (`404 NOT_FOUND`). |
 | `POST /api/settings/blocks` · `DELETE /api/settings/blocks/{id}` | user | Leave and holidays (bookings template) |
 | `GET /api/instructions` · `PUT /api/instructions` · `POST /api/instructions/undo` | user | Custom instructions: current text, history, rejected lines. `PUT` body `{text}` (≤ 500 chars) → `{accepted, rejected: [{line, reason}], version_id, agent}`. Undo reactivates the previous version. |
 | `GET /api/settings/whatsapp` | user | Sandbox number and join steps (`join <TWILIO_SANDBOX_JOIN_CODE>`) |

@@ -16,8 +16,13 @@ from .core.config import FRONTEND_DIR, env
 async def lifespan(app: FastAPI):
     accounts.ensure_session_secret()
     conn = db.connect()
-    seed.ensure(conn)
+    demo = seed.ensure(conn)
     conn.close()
+    conn = db.connect_unchecked()  # startup, before any request: the demo owner's login
+    try:
+        accounts.ensure_demo_login(conn, demo)
+    finally:
+        conn.close()
     yield
 
 
@@ -37,8 +42,10 @@ app.include_router(auth.router)
 app.include_router(onboarding.router)
 app.include_router(vapi.router)
 app.include_router(public.router)
+app.include_router(desk.pages)
 app.include_router(desk.router)
 app.include_router(whatsapp.router)
+app.include_router(setup.pages)
 app.include_router(setup.router)
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
 

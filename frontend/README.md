@@ -12,7 +12,7 @@
 | `/desk` | `desk.html`, `static/desk.js` | The receptionist: day grid per doctor, walk-ins, statuses, inbox, call log | C7, C10 |
 | `/setup` | `setup.html`, `static/setup.js` | Our team or the clinic: settings, leave days, agent sync | C12, C8 |
 
-`/desk` and `/setup` use HTTP Basic auth with `DESK_PASSWORD` (any username). The public page shows first names and an initial only, never phone numbers.
+`/desk` and `/setup` need the owner's session login (`/api/login`); they show only that business's data, and without a session they show a "Please log in" link. The public page shows first names and an initial only, never phone numbers.
 
 **Design.** The motif is the paper appointment register: ruled rows, one column per doctor, bookings "written in" with ink. Font: Mukta (Devanagari and Latin). Colours: cool off-white paper, deep green-teal ink, saffron for live states, sindoor red only for urgent items. All in `static/app.css`.
 
@@ -88,6 +88,6 @@ Production deploys come only from GitHub Actions (`.github/workflows/deploy-fron
 - `vercel.json` runs `node build.mjs`, which copies the pages and `static/` into `dist/` and writes `dist/static/config.js` from `NEXT_PUBLIC_API_URL`.
 - `NEXT_PUBLIC_API_URL` is the backend's public HTTPS URL, set in the Vercel project's **Production** environment variables. Empty = same-origin `/api` (local FastAPI behaviour). The backend must list the Vercel domain in `CORS_ALLOWED_ORIGINS`.
 - Vercel only serves files. *ADR-0041 (Proposed) would add one `/api` rewrite to the backend for first-party cookies; no functions or middleware.*
-- `/desk` and `/setup` use Basic auth, which browsers don't prompt for cross-origin. With `DESK_PASSWORD` set they won't work from Vercel until auth changes (ADR-0036).
+- `/desk` and `/setup` use the session cookie, which reaches the backend first-party through the `/api` rewrite (ADR-0041).
 
 One-time setup: Vercel project with Root Directory `frontend` and no Git connection; repo secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
