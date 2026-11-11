@@ -81,8 +81,11 @@ Each module's `README.md` states its purpose, the capabilities it serves, the co
 
 ## Frontend [MVP]
 
-- Next.js App Router, TypeScript strict, Tailwind + shadcn/ui (the stack the repo already chose).
-- Use server components by default; mark client components explicitly with `"use client"`.
+- Vite + React, TypeScript strict, Tailwind + shadcn/ui, React Router (ADR-0042). No Next.js and no server components.
+- Pages call relative `/api/...` only (contracts.md §6): the Vite dev proxy locally, the Vercel rewrite in production (ADR-0041). No hard-coded backend URLs.
+- Pages hold no business rules and never keep patient data in browser storage (`localStorage`, `sessionStorage`, IndexedDB).
+- Take components from shadcn/ui or 21st.dev, then adapt them to the `frontend/DESIGN.md` tokens. "Catalyst" brand only.
+- Every page passes the M8 checklist: 360px width, keyboard focus, AA contrast, Devanagari text.
 - The receptionist screen uses big buttons and must be learnable in 15 minutes. It talks only to the backend API.
 
 ---
