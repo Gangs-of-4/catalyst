@@ -174,6 +174,19 @@ CREATE TABLE IF NOT EXISTS order_items (
   rate_paise INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS order_items_order ON order_items (tenant_id, order_id);
+-- Owner custom instructions (Phase 2 M5): every save is a version; one is active.
+CREATE TABLE IF NOT EXISTS instruction_versions (
+  id {ID},
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  text TEXT NOT NULL,            -- accepted lines only, at most 500 characters
+  rejected TEXT NOT NULL,        -- JSON [{line, reason}]
+  source TEXT NOT NULL,          -- web | whatsapp
+  active INTEGER NOT NULL DEFAULT 0,
+  replaces INTEGER,              -- the version active before this one (undo goes back to it)
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS instruction_versions_active
+  ON instruction_versions (tenant_id) WHERE active = 1;
 -- In-app feedback (Phase 2 M7; contracts.md section 3.1). The team's feedback log.
 CREATE TABLE IF NOT EXISTS feedback (
   id {ID},
