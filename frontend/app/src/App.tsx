@@ -10,6 +10,7 @@ import { HomePage } from "@/pages/home";
 import { LandingPage } from "@/pages/landing";
 import { LoginPage } from "@/pages/login";
 import { NotFoundPage } from "@/pages/not-found";
+import { SettingsPage } from "@/pages/settings";
 import { SignupPage } from "@/pages/signup";
 import { DemoRedirect, TryPage } from "@/pages/try";
 import { StyleguidePage } from "@/pages/styleguide";
@@ -33,6 +34,7 @@ export function App() {
         <Route path="/desk" element={awake(<DeskPage />)} />
         <Route path="/home" element={awake(<HomePage />)} />
         <Route path="/login" element={awake(<LoginPage />)} />
+        <Route path="/settings" element={awake(<SettingsPage />)} />
         <Route path="/signup" element={awake(<SignupPage />)} />
         {/* The design reference page is for the team: local `npm run dev` only, never on the live site. */}
         {import.meta.env.DEV && <Route path="/styleguide" element={<StyleguidePage />} />}

@@ -1,4 +1,4 @@
-import { AlertCircle, Building2, CalendarDays, Loader2, LogOut, Phone, RotateCw, UserRound } from "lucide-react";
+import { AlertCircle, Building2, CalendarDays, Loader2, LogOut, Phone, RotateCw, Settings, UserRound } from "lucide-react";
 import * as React from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -132,9 +132,16 @@ export function HomePage() {
               Today&apos;s {(me.business.labels.booking ?? "booking").toLowerCase()}s, walk-ins, callbacks and the calls
               your front desk took.
             </p>
-            <Button asChild variant="outline" size="lg" className="w-full sm:w-fit">
-              <Link to="/desk">Open the desk</Link>
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button asChild variant="outline" size="lg" className="w-full sm:w-fit">
+                <Link to="/desk">Open the desk</Link>
+              </Button>
+              <Button asChild variant="ghost" size="lg" className="w-full sm:w-fit">
+                <Link to="/settings">
+                  <Settings aria-hidden /> Settings
+                </Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
