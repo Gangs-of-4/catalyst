@@ -43,6 +43,17 @@ export function FeedbackButton({ defaultName = "", className }: { defaultName?: 
   const [sending, setSending] = React.useState(false);
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
+  const typeRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
+
+  function onTypeKey(e: React.KeyboardEvent) {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const at = TYPES.findIndex((t) => t.id === draft.type);
+    const next = (Math.max(at, 0) + (at < 0 && step > 0 ? 0 : step) + TYPES.length) % TYPES.length;
+    set("type", TYPES[next]!.id);
+    typeRefs.current[next]?.focus();
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -84,13 +95,18 @@ export function FeedbackButton({ defaultName = "", className }: { defaultName?: 
           </DialogHeader>
           <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
             <Fieldset legend="What's it about?" error={errors.type}>
-              <div role="radiogroup" aria-label="What's it about?" className="flex flex-wrap gap-2">
-                {TYPES.map((t) => (
+              {/* Radio-group keyboard pattern: one Tab stop, arrow keys move and select. */}
+              <div role="radiogroup" aria-label="What's it about?" className="flex flex-wrap gap-2" onKeyDown={onTypeKey}>
+                {TYPES.map((t, i) => (
                   <button
                     key={t.id}
+                    ref={(el) => {
+                      typeRefs.current[i] = el;
+                    }}
                     type="button"
                     role="radio"
                     aria-checked={draft.type === t.id}
+                    tabIndex={draft.type === t.id || (!draft.type && i === 0) ? 0 : -1}
                     onClick={() => set("type", t.id)}
                     className={cn(
                       "min-h-9 rounded-full border px-3.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",

@@ -45,6 +45,23 @@ describe("<FeedbackButton>", () => {
     });
   });
 
+  it("moves between the types with the arrow keys, as one Tab stop", async () => {
+    mockApi(() => json(200, { id: 1, saved: true }));
+    render(<FeedbackButton defaultName="Test Owner" />);
+    const dialog = await openDialog();
+    const radios = within(dialog).getAllByRole("radio");
+    expect(radios.filter((r) => r.tabIndex === 0)).toHaveLength(1); // only the first, while none is picked
+    fireEvent.keyDown(radios[0]!, { key: "ArrowRight" });
+    expect(radios[0]!.getAttribute("aria-checked")).toBe("true");
+    fireEvent.keyDown(radios[0]!, { key: "ArrowRight" });
+    expect(radios[1]!.getAttribute("aria-checked")).toBe("true");
+    expect(document.activeElement).toBe(radios[1]);
+    fireEvent.keyDown(radios[1]!, { key: "ArrowLeft" });
+    fireEvent.keyDown(radios[0]!, { key: "ArrowLeft" });
+    expect(radios[radios.length - 1]!.getAttribute("aria-checked")).toBe("true"); // wraps round
+    expect(radios.filter((r) => r.tabIndex === 0)).toEqual([radios[radios.length - 1]]);
+  });
+
   it("asks for what it's about and a message before sending", async () => {
     const fetchMock = mockApi(() => json(200, { id: 1, saved: true }));
     render(<FeedbackButton defaultName="Test Owner" />);
