@@ -28,7 +28,7 @@
 | M4b: wholesale voice side (tools, prompt, escalation rules, safety suite, catalogue-aware post-call check) | #33 | Merged |
 | M6: WhatsApp per business (routing by sender, wholesale commands, no open demo mode) | #35 | Merged |
 | M5: owner custom instructions | #36 | Open |
-| M7: usage events, admin counts and weekly breakdown, counts-only usage CSV, feedback log with decisions and Sheet-matching CSV (reset-demo cut) | (this PR) | Open |
+| M7: usage events, admin counts and weekly breakdown, counts-only usage CSV, feedback log with decisions and Sheet-matching CSV (reset-demo cut) | #38 | Open |
 | M8–M12 | — | M8 in progress (frontend); M9–M12 not started |
 
 ---
