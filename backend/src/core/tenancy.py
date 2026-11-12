@@ -149,6 +149,7 @@ def delete(conn: db.Conn, tid: str) -> None:
     scoped = conn.for_tenant(tid)
     with conn:
         scoped.execute("DELETE FROM instruction_versions WHERE tenant_id = ?", (tid,))
+        scoped.execute("DELETE FROM events WHERE tenant_id = ?", (tid,))
         scoped.execute("DELETE FROM sessions WHERE tenant_id = ?", (tid,))
         conn.execute("DELETE FROM tenant_whatsapp_numbers WHERE tenant_id = ?", (tid,))
         scoped.execute("DELETE FROM users WHERE tenant_id = ?", (tid,))

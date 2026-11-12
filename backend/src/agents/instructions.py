@@ -14,6 +14,7 @@ import json
 import re
 from dataclasses import dataclass, field
 
+from .. import analytics
 from ..core import db
 
 MAX_CHARS = 500
@@ -496,6 +497,7 @@ def _activate_new(conn: db.Conn, text: str, rejected: list[dict], source: str) -
                         db.stamp(),
                     ),
                 ).fetchone()
+                analytics.record(conn, "instructions_saved", commit=False)
             return row["id"]
         except db.Conflict:
             conn.rollback()
@@ -567,6 +569,7 @@ def undo(conn: db.Conn) -> dict | None:
                 "UPDATE instruction_versions SET active = 1 WHERE tenant_id = ? AND id = ?",
                 (conn.tid, prev["id"]),
             )
+        analytics.record(conn, "instructions_saved", commit=False)
     return _row(prev) if prev is not None else {"id": None, "text": "", "rejected": []}
 
 

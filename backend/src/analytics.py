@@ -10,6 +10,7 @@ import io
 from datetime import date, timedelta
 
 from .core import config, db
+from .core.log import log
 
 TYPES = (
     "signup",
@@ -38,11 +39,14 @@ def record(conn: db.Conn, type_: str, user_id: str | None = None, commit: bool =
         raise ValueError(f"unknown event type {type_}")
     sql = "INSERT INTO events (tenant_id, user_id, type, created_at) VALUES (?, ?, ?, ?)"
     params = (conn.tid, user_id, type_, db.stamp())
-    if commit:
+    if not commit:
+        conn.execute(sql, params)
+        return
+    try:
         with conn:
             conn.execute(sql, params)
-    else:
-        conn.execute(sql, params)
+    except Exception as e:  # the thing it counts already happened: never fail it over a count
+        log.warning("analytics: could not record %s (%s)", type_, type(e).__name__)
 
 
 def week_starts(today: date | None = None, weeks: int = WEEKS) -> list[date]:
@@ -81,30 +85,64 @@ def weeks(conn: db.Conn, today: date | None = None) -> list[dict]:
     return out
 
 
-def business(conn: db.Conn, t: db.Row) -> dict:
-    """Admin view of one business (contracts.md §6.2). `conn` is scoped to it."""
-    totals = _summary(_counts(conn))
-    last_event = conn.execute(
-        "SELECT MAX(created_at) FROM events WHERE tenant_id = ?", (conn.tid,)
-    ).fetchone()[0]
-    users = conn.execute(
-        "SELECT COUNT(*), MAX(last_active_at) FROM users WHERE tenant_id = ?", (conn.tid,)
-    ).fetchone()
-    last_active = max((x for x in (last_event, users[1]) if x), default=None)
-    return {
-        "id": t["id"],
-        "name": t["name"],
-        "public_id": t["public_id"],
-        "template": t["template"],
-        "created_at": t["created_at"],
-        "is_demo": bool(t["is_demo"]),
-        "users": users[0],
-        "records": totals["records"],
-        "calls": totals["calls"],
-        "wa_commands": totals["wa_commands"],
-        "last_active": last_active,
-        "weeks": [{k: w[k] for k in WEEK_KEYS} for w in weeks(conn)],
+def businesses(conn: db.Conn, today: date | None = None) -> list[dict]:
+    """Admin view of every business (contracts.md §6.2) in four grouped queries, whatever the
+    number of businesses. `conn` is unchecked: these are cross-business admin counts."""
+    mondays = week_starts(today)
+    start = mondays[0].isoformat()
+    end = (mondays[-1] + timedelta(days=7)).isoformat()
+    totals: dict[str, dict[str, int]] = {}
+    for tid, type_, n in conn.execute(
+        "SELECT tenant_id, type, COUNT(*) FROM events GROUP BY tenant_id, type"
+    ).fetchall():
+        totals.setdefault(tid, {})[type_] = n
+    by_week: dict[tuple[str, str], dict[str, int]] = {}
+    for tid, type_, day, n in conn.execute(
+        "SELECT tenant_id, type, substr(created_at, 1, 10), COUNT(*) FROM events"
+        " WHERE created_at >= ? AND created_at < ? GROUP BY tenant_id, type, substr(created_at, 1, 10)",
+        (start, end),
+    ).fetchall():
+        d = date.fromisoformat(day)
+        monday = (d - timedelta(days=d.weekday())).isoformat()
+        bucket = by_week.setdefault((tid, monday), {})
+        bucket[type_] = bucket.get(type_, 0) + n
+    last_event = dict(
+        conn.execute("SELECT tenant_id, MAX(created_at) FROM events GROUP BY tenant_id").fetchall()
+    )
+    users = {
+        r[0]: (r[1], r[2])
+        for r in conn.execute(
+            "SELECT tenant_id, COUNT(*), MAX(last_active_at) FROM users GROUP BY tenant_id"
+        ).fetchall()
     }
+    out = []
+    for t in conn.execute("SELECT * FROM tenants ORDER BY created_at, id").fetchall():
+        tid = t["id"]
+        summary = _summary(totals.get(tid, {}))
+        count, user_active = users.get(tid, (0, None))
+        weeks_ = []
+        for monday in mondays:
+            week = _summary(by_week.get((tid, monday.isoformat()), {}))
+            weeks_.append({"week_start": monday.isoformat(), **{k: week[k] for k in WEEK_KEYS[1:]}})
+        out.append(
+            {
+                "id": tid,
+                "name": t["name"],
+                "public_id": t["public_id"],
+                "template": t["template"],
+                "created_at": t["created_at"],
+                "is_demo": bool(t["is_demo"]),
+                "users": count,
+                "records": summary["records"],
+                "calls": summary["calls"],
+                "wa_commands": summary["wa_commands"],
+                "last_active": max(
+                    (x for x in (last_event.get(tid), user_active) if x), default=None
+                ),
+                "weeks": weeks_,
+            }
+        )
+    return out
 
 
 WEEK_KEYS = ("week_start", "events", "records", "calls", "wa_commands")

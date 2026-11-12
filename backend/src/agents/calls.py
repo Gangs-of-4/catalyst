@@ -84,12 +84,20 @@ def end_of_call(conn: db.Conn, message: dict) -> str | None:
         "SELECT * FROM calls WHERE tenant_id = ? AND id = ?", (conn.tid, call_id)
     ).fetchone()
     result = outcome(row, bool(user_lines) or "user:" in transcript.lower())
+    ended = message.get("endedAt") or call.get("endedAt") or db.stamp()
     with conn:
+        first_report = (
+            conn.execute(
+                "UPDATE calls SET ended_at = ? WHERE tenant_id = ? AND id = ? AND ended_at IS NULL",
+                (ended, conn.tid, call_id),
+            ).rowcount
+            == 1
+        )
         conn.execute(
             "UPDATE calls SET ended_at = ?, outcome = ?, ended_reason = ?, summary = ?, transcript = ?,"
             " recording_url = ?, safety_review = ?, safety_hits = ? WHERE tenant_id = ? AND id = ?",
             (
-                message.get("endedAt") or call.get("endedAt") or db.stamp(),
+                ended,
                 result,
                 message.get("endedReason") or call.get("endedReason"),
                 analysis.get("summary") or message.get("summary"),
@@ -101,7 +109,7 @@ def end_of_call(conn: db.Conn, message: dict) -> str | None:
                 call_id,
             ),
         )
-        if row["ended_at"] is None:  # a repeated report counts once
+        if first_report:  # a repeated report, even a simultaneous one, counts once
             analytics.record(conn, "call_ended", commit=False)
         if message.get("startedAt"):
             conn.execute(

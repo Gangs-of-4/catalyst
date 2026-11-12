@@ -57,6 +57,13 @@ def require_admin(request: Request) -> None:
         raise ApiError(401, "UNAUTHENTICATED", "Please log in as admin to continue.")
 
 
+def _client(request: Request) -> str:
+    """The caller's address for the admin lockout: the first X-Forwarded-For hop set by the host's
+    proxy (Render, the Vercel rewrite), else the socket address."""
+    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    return forwarded or (request.client.host if request.client else "unknown")
+
+
 class AdminLoginIn(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
@@ -65,7 +72,7 @@ class AdminLoginIn(BaseModel):
 def admin_login(body: AdminLoginIn, request: Request, response: Response) -> dict:
     conn = db.connect_unchecked()
     try:
-        cookie = accounts.admin_login(conn, body.password)
+        cookie = accounts.admin_login(conn, body.password, _client(request))
     except accounts.Locked:
         raise ApiError(
             429, "LOCKED", "Too many wrong passwords. Try again in 15 minutes."
@@ -86,19 +93,11 @@ def admin_login(body: AdminLoginIn, request: Request, response: Response) -> dic
     return {"ok": True}
 
 
-def _businesses(conn: db.Conn) -> list[db.Row]:
-    return conn.execute("SELECT * FROM tenants ORDER BY created_at, id").fetchall()
-
-
 @router.get("/businesses", dependencies=[Depends(require_admin)])
 def businesses() -> dict:
     conn = db.connect_unchecked()
     try:
-        return {
-            "businesses": [
-                analytics.business(conn.for_tenant(t["id"]), t) for t in _businesses(conn)
-            ]
-        }
+        return {"businesses": analytics.businesses(conn)}
     finally:
         conn.close()
 
@@ -121,11 +120,20 @@ def usage_csv(tenant_id: str) -> Response:
     )
 
 
-def _feedback_rows(conn: db.Conn) -> list[dict]:
-    rows = conn.execute(
-        "SELECT f.*, t.name AS business FROM feedback f JOIN tenants t ON t.id = f.tenant_id"
-        " ORDER BY f.created_at DESC, f.id DESC"
-    ).fetchall()
+def _cell(value) -> str:
+    """A CSV cell that a spreadsheet won't run: text starting with = + - @ tab or CR gets a
+    leading apostrophe (owners write these fields; the CSV goes into the team's Google Sheet)."""
+    text = "" if value is None else str(value)
+    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
+
+
+def _feedback_rows(conn: db.Conn, feedback_id: int | None = None) -> list[dict]:
+    sql = "SELECT f.*, t.name AS business FROM feedback f JOIN tenants t ON t.id = f.tenant_id"
+    params: tuple = ()
+    if feedback_id is not None:
+        sql += " WHERE f.id = ?"
+        params = (feedback_id,)
+    rows = conn.execute(sql + " ORDER BY f.created_at DESC, f.id DESC", params).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -153,12 +161,15 @@ def feedback_decide(feedback_id: int, body: DecisionIn) -> dict:
         fields["decision"] = f"Decision must be one of: {', '.join(DECISIONS)}."
     if body.decision == "wont_do" and not body.decision_reason.strip():
         fields["decision_reason"] = "Say why it won't be done."
+    shipped_on = None
     if body.shipped_on:
         try:
-            date.fromisoformat(body.shipped_on)
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", body.shipped_on):
+                raise ValueError
+            shipped_on = date.fromisoformat(body.shipped_on).isoformat()
         except ValueError:
             fields["shipped_on"] = "Shipped on must look like 2026-11-15."
-    if body.evidence_url and not re.match(r"^https?://\S+$", body.evidence_url.strip()):
+    if body.evidence_url and not re.fullmatch(r"https://\S+", body.evidence_url.strip()):
         fields["evidence_url"] = "Evidence must be a link starting with https://."
     if fields:
         raise ApiError(422, "VALIDATION", " ".join(fields.values()), fields)
@@ -171,7 +182,7 @@ def feedback_decide(feedback_id: int, body: DecisionIn) -> dict:
                 (
                     body.decision,
                     body.decision_reason.strip() or None,
-                    body.shipped_on or None,
+                    shipped_on,
                     body.evidence_url.strip() or None,
                     body.partner_reaction.strip() or None,
                     feedback_id,
@@ -179,7 +190,7 @@ def feedback_decide(feedback_id: int, body: DecisionIn) -> dict:
             ).rowcount
         if n != 1:
             raise ApiError(404, "NOT_FOUND", "No such feedback.")
-        row = next(r for r in _feedback_rows(conn) if r["id"] == feedback_id)
+        row = _feedback_rows(conn, feedback_id)[0]
     finally:
         conn.close()
     return row
@@ -202,14 +213,17 @@ def feedback_csv() -> Response:
             decision += f": {r['decision_reason']}"
         out.writerow(
             [
-                r["created_at"][:10],
-                f"{r['business']} — {r['person_name']} ({r['person_role']})",
-                r["text"],
-                TYPE_WORDS.get(r["type"], r["type"]),
-                decision,
-                r["shipped_on"] or "",
-                r["evidence_url"] or "",
-                r["partner_reaction"] or "",
+                _cell(x)
+                for x in (
+                    r["created_at"][:10],
+                    f"{r['business']} — {r['person_name']} ({r['person_role']})",
+                    r["text"],
+                    TYPE_WORDS.get(r["type"], r["type"]),
+                    decision,
+                    r["shipped_on"],
+                    r["evidence_url"],
+                    r["partner_reaction"],
+                )
             ]
         )
     return Response(

@@ -302,24 +302,29 @@ def _remove_demo_logins(conn: db.Conn, tenant_id: str, keep: str | None) -> None
 # Admin (our team): one shared password from ADMIN_PASSWORD, its own cookie and session kind.
 ADMIN_COOKIE = "catalyst_admin"
 ADMIN_HOURS = 12
-_admin_failures: list[str] = []  # stamps of recent wrong admin passwords (this process)
+# Recent wrong admin passwords per client address (this process). Per client, so someone
+# guessing from one address can't lock the team out from theirs.
+_admin_failures: dict[str, list[str]] = {}
 
 
-def admin_login(conn: db.Conn, password: str) -> str:
+def admin_login(conn: db.Conn, password: str, client: str = "unknown") -> str:
     """Check ADMIN_PASSWORD and open an admin session. Returns the cookie value.
 
     Raises BadLogin (wrong, or ADMIN_PASSWORD unset: there is no admin then) or Locked after 5
-    wrong passwords within 15 minutes."""
+    wrong passwords from the same client address within 15 minutes."""
     expected = env("ADMIN_PASSWORD")
     now = config.now()
     window = (now - timedelta(minutes=LOCK_MINUTES)).isoformat(timespec="seconds")
-    _admin_failures[:] = [t for t in _admin_failures if t > window]
-    if len(_admin_failures) >= MAX_FAILED:
+    for key in list(_admin_failures):
+        _admin_failures[key] = [t for t in _admin_failures[key] if t > window]
+        if not _admin_failures[key]:
+            del _admin_failures[key]
+    if len(_admin_failures.get(client, [])) >= MAX_FAILED:
         raise Locked
     if not expected or not hmac.compare_digest(password.encode(), expected.encode()):
-        _admin_failures.append(now.isoformat(timespec="seconds"))
+        _admin_failures.setdefault(client, []).append(now.isoformat(timespec="seconds"))
         raise BadLogin
-    _admin_failures.clear()
+    _admin_failures.pop(client, None)
     token = secrets.token_urlsafe(32)
     with conn:
         conn.execute(
