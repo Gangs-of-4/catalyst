@@ -5,6 +5,7 @@ Every function takes a connection scoped to one business (`conn.tid`)."""
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
+from .. import analytics
 from ..core import config, db
 from ..core import settings as cs
 
@@ -177,6 +178,7 @@ def book(
     reason: str | None = None,
     call_id: str | None = None,
     _commit: bool = True,
+    _event: str | None = "booking_created",
 ) -> int:
     """Insert a booking. Raises BookingError('SLOT_TAKEN', alternatives=…) if the slot is gone."""
     if source not in SOURCES:
@@ -210,6 +212,8 @@ def book(
                 ts,
             ),
         ).fetchone()
+        if _event:
+            analytics.record(conn, _event, commit=False)
         if _commit:
             conn.commit()
     except db.Conflict as e:
@@ -244,10 +248,13 @@ def set_status(conn: db.Conn, booking_id: int, status: str) -> None:
         raise BookingError("NOT_FOUND", "No such booking")
     try:
         with conn:
-            conn.execute(
-                "UPDATE bookings SET status = ?, updated_at = ? WHERE tenant_id = ? AND id = ?",
-                (status, db.stamp(), conn.tid, booking_id),
-            )
+            changed = conn.execute(
+                "UPDATE bookings SET status = ?, updated_at = ? WHERE tenant_id = ? AND id = ?"
+                " AND status != ?",
+                (status, db.stamp(), conn.tid, booking_id, status),
+            ).rowcount
+            if changed == 1:
+                analytics.record(conn, "booking_status", commit=False)
     except db.Conflict as e:
         raise BookingError("SLOT_TAKEN", "Another booking now holds that slot") from e
 
@@ -285,6 +292,7 @@ def reschedule(
             old["reason"],
             old["call_id"],
             _commit=False,
+            _event="booking_status",  # a move, not a new booking
         )
         conn.execute(
             "UPDATE bookings SET status = 'cancelled', updated_at = ?"

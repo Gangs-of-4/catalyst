@@ -6,6 +6,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
+from .. import analytics
 from ..core import db
 from ..core import phone as ph
 from ..orders import catalog
@@ -71,9 +72,11 @@ def _paise(rate) -> int:
 @router.post("/api/catalog")
 def add_product(body: ProductIn, conn: db.Conn = Depends(require_orders)) -> dict:
     try:
-        return catalog.add(conn, body.name, body.pack_size, _paise(body.rate), body.in_stock)
+        product = catalog.add(conn, body.name, body.pack_size, _paise(body.rate), body.in_stock)
     except catalog.CatalogError as e:
         raise _catalog_error(e) from e
+    analytics.record(conn, "catalog_updated")
+    return product
 
 
 @router.put("/api/catalog/{product_id}")
@@ -84,9 +87,11 @@ def change_product(
     if body.rate is not None:
         changes["rate_paise"] = _paise(body.rate)
     try:
-        return catalog.update(conn, product_id, **changes)
+        product = catalog.update(conn, product_id, **changes)
     except catalog.CatalogError as e:
         raise _catalog_error(e) from e
+    analytics.record(conn, "catalog_updated")
+    return product
 
 
 async def _body_up_to(request: Request, limit: int) -> bytes:
@@ -116,6 +121,8 @@ async def import_catalog(request: Request, conn: db.Conn = Depends(require_order
     if not text.strip():
         raise ApiError(422, "VALIDATION", "The file is empty.")
     r = catalog.import_csv(conn, text)
+    if r.added or r.updated:
+        analytics.record(conn, "catalog_updated")
     return {"added": r.added, "updated": r.updated, "errors": r.errors}
 
 

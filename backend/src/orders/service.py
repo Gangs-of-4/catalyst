@@ -8,6 +8,7 @@ order that already exists (contracts.md §1.11).
 from dataclasses import dataclass
 from datetime import date, timedelta
 
+from .. import analytics
 from ..core import config, db
 from . import catalog
 
@@ -257,6 +258,7 @@ def create(
                         ts,
                     ),
                 ).fetchone()
+                analytics.record(conn, "order_created", commit=False)
                 for x in resolved:
                     p = x["product"]
                     conn.execute(
@@ -304,6 +306,8 @@ def set_status(conn: db.Conn, order_id: int, status: str) -> dict:
             " AND status = ?",
             (status, db.stamp(), conn.tid, order_id, order["status"]),
         ).rowcount
+        if n == 1:
+            analytics.record(conn, "order_status", commit=False)
     if n != 1:  # someone else moved it at the same moment
         raise OrderError("INVALID_TRANSITION", f"Order {order['number']} just changed. Reload.")
     return get(conn, order_id)

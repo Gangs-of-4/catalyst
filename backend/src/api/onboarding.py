@@ -7,7 +7,7 @@ its name, so a new template with the same modules needs no code here.
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from .. import accounts
+from .. import accounts, analytics
 from ..agents import instructions
 from ..core import db, tenancy
 from ..core import phone as ph
@@ -297,6 +297,7 @@ def signup(body: SignupIn, request: Request, response: Response) -> dict:
             screened = instructions.Screened()
             if body.instructions.strip():
                 _, screened = instructions.save(scoped, body.instructions, "web")
+            analytics.record(scoped, "signup", uid)
             public_id = tenancy.get(conn, tid)["public_id"]
         except Exception as e:
             # Undo the half-made business so a retry isn't refused with WHATSAPP_TAKEN.

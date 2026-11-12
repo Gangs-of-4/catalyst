@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS users_tenant ON users (tenant_id);
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT PRIMARY KEY,        -- SHA-256 of the cookie token; the token itself is never stored
-  user_id TEXT,                       -- NULL for admin
+  user_id TEXT,                       -- the owner; for admin, a fingerprint of the admin password
   tenant_id TEXT REFERENCES tenants(id),   -- NULL for admin
   kind TEXT NOT NULL,                 -- user | admin
   expires_at TEXT NOT NULL,
@@ -187,6 +187,21 @@ CREATE TABLE IF NOT EXISTS instruction_versions (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS instruction_versions_active
   ON instruction_versions (tenant_id) WHERE active = 1;
+-- In-app feedback (Phase 2 M7; contracts.md section 3.1). The team's feedback log.
+CREATE TABLE IF NOT EXISTS feedback (
+  id {ID},
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  person_name TEXT NOT NULL,
+  person_role TEXT NOT NULL,
+  text TEXT NOT NULL,
+  type TEXT NOT NULL,            -- bug | feature | usability | data_integration | pricing_business
+  decision TEXT,                 -- shipped | in_progress | planned | wont_do
+  decision_reason TEXT,
+  shipped_on TEXT,
+  evidence_url TEXT,
+  partner_reaction TEXT,
+  created_at TEXT NOT NULL
+);
 -- Usage evidence (contracts.md section 3.1). No payload column, so counts never carry names or numbers.
 CREATE TABLE IF NOT EXISTS events (
   id {ID},

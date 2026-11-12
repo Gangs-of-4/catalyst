@@ -1,4 +1,6 @@
 from .service import (
+    ADMIN_COOKIE,
+    ADMIN_HOURS,
     COOKIE,
     DEMO_EMAIL,
     MIN_PASSWORD,
@@ -7,10 +9,12 @@ from .service import (
     EmailTaken,
     Locked,
     Session,
+    admin_login,
     create_user,
     email_taken,
     ensure_demo_login,
     ensure_session_secret,
+    is_admin,
     login,
     logout,
     lookup,
@@ -20,6 +24,8 @@ from .service import (
 )
 
 __all__ = [
+    "ADMIN_COOKIE",
+    "ADMIN_HOURS",
     "COOKIE",
     "DEMO_EMAIL",
     "MIN_PASSWORD",
@@ -28,9 +34,11 @@ __all__ = [
     "EmailTaken",
     "Locked",
     "Session",
+    "admin_login",
     "create_user",
     "email_taken",
     "ensure_demo_login",
+    "is_admin",
     "ensure_session_secret",
     "login",
     "logout",

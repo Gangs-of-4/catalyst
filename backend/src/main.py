@@ -9,9 +9,11 @@ from fastapi.staticfiles import StaticFiles
 from . import accounts, seed
 from .agents import instructions as instructions_store
 from .api import (
+    admin,
     auth,
     desk,
     errors,
+    feedback,
     instructions,
     onboarding,
     orders,
@@ -60,6 +62,8 @@ app.include_router(public.router)
 app.include_router(try_page.router)
 app.include_router(orders.router)
 app.include_router(instructions.router)
+app.include_router(feedback.router)
+app.include_router(admin.router)
 app.include_router(desk.pages)
 app.include_router(desk.router)
 app.include_router(whatsapp.router)
