@@ -77,9 +77,9 @@ def _legacy_sync(conn: db.Conn) -> str:
 
 
 def sync_demo_agents() -> dict[str, str]:
-    """At startup, when DEMO_VOICE=1 (the deployed host): give each demo business without an
-    assistant its own one, so the public test pages can call. Does nothing without Vapi set up.
-    Returns {template: state}."""
+    """At startup, when DEMO_VOICE=1 (the deployed host): create or refresh each demo business's
+    own assistant, so the public test pages can call and every deploy's prompt and voice settings
+    reach Vapi. Does nothing without Vapi set up. Returns {template: state}."""
     if env("DEMO_VOICE").lower() not in ("1", "true", "yes"):
         return {}
     if not (env("VAPI_PRIVATE_KEY") and env("PUBLIC_URL")):
@@ -98,8 +98,7 @@ def _sync_demo_agents() -> dict[str, str]:
         for template in ("clinic", "wholesale"):
             tid = tenancy.demo_id(conn, template)
             t = tenancy.get(conn, tid) if tid else None
-            needs_one = t is not None and not t["vapi_assistant_id"]
-            if needs_one and not uses_env_assistant(conn.for_tenant(tid), t):
+            if t is not None and not uses_env_assistant(conn.for_tenant(tid), t):
                 todo[template] = tid
     finally:
         conn.close()

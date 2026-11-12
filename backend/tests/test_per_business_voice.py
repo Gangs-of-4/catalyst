@@ -350,7 +350,8 @@ def test_startup_gives_the_demos_their_own_assistants_when_asked(isolated, monke
     monkeypatch.setenv("DEMO_VOICE", "1")
     assert sync.sync_demo_agents() == {"clinic": "updated", "wholesale": "updated"}
     assert len(seen) == 2 and all(m == "POST" for m, _ in seen)
-    assert sync.sync_demo_agents() == {}  # both have one now
+    assert sync.sync_demo_agents() == {"clinic": "updated", "wholesale": "updated"}
+    assert [m for m, _ in seen[2:]] == ["PATCH", "PATCH"]  # a later start refreshes, never adds
 
 
 def test_legacy_sync_errors_are_reported_not_raised(isolated, monkeypatch):
