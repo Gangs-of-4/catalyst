@@ -142,6 +142,21 @@ describe("<AdminPage>", () => {
     expect(screen.getByText("Everything has a decision")).toBeTruthy();
   });
 
+  it("can clear a decision back to Undecided", async () => {
+    const fetchMock = mockApi({ "/api/admin/feedback/2": () => json(200, row({ id: 2, text: "The desk was slow once.", type: "bug" })) });
+    renderPage();
+    fireEvent.click(await screen.findByRole("tab", { name: /Feedback/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^All/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Change decision" }));
+    const dialog = await screen.findByRole("dialog", { name: "Decision" });
+    expect(within(dialog).getByRole("radio", { name: "Shipped" }).getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Undecided" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /Save decision/ }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const [, init] = fetchMock.mock.calls.find(([u]) => u === "/api/admin/feedback/2")!;
+    expect(JSON.parse(String(init!.body)).decision).toBeNull();
+  });
+
   it("needs a reason for won't do, and an https evidence link", async () => {
     const fetchMock = mockApi();
     renderPage();

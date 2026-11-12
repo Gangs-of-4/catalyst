@@ -140,7 +140,12 @@ export function DecisionDialog({
         </DialogHeader>
         <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
           <Fieldset legend="What we decided" error={errors.decision}>
-            <RadioGroup value={decision} onValueChange={(v) => setDecision(v as Decision)} className="grid grid-cols-2 gap-3">
+            <RadioGroup value={decision || "none"} onValueChange={(v) => setDecision(v === "none" ? "" : (v as Decision))} className="grid grid-cols-2 gap-3">
+              {/* "Undecided" clears a decision recorded by mistake (the backend takes decision: null). */}
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="none" id="decision-none" />
+                <Label htmlFor="decision-none">Undecided</Label>
+              </div>
               {(Object.keys(DECISION_WORDS) as Decision[]).map((d) => (
                 <div key={d} className="flex items-center gap-2">
                   <RadioGroupItem value={d} id={`decision-${d}`} />
