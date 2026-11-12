@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
 
+import { agentToast } from "./agent-toast";
 import { addBlock, type Block, removeBlock } from "./api";
 
 /** Today in India as YYYY-MM-DD, for the date picker's minimum (the backend refuses past dates). */
@@ -44,7 +45,7 @@ export function LeaveSection({ blocks, onBlocks, doctors, onAuthError }: Props) 
       const r = await addBlock(date, who || null);
       onBlocks(r.blocks);
       setDate("");
-      toast.success(r.note ? `Added. ${r.note}` : `Added. ${r.agent}`);
+      agentToast(r.agent, r.note ? `Added. ${r.note}` : "Added.");
     } catch (err) {
       if (!onAuthError(err)) setError(err instanceof ApiError ? err.detail : "Couldn't add it. Please try again.");
     } finally {
@@ -57,7 +58,7 @@ export function LeaveSection({ blocks, onBlocks, doctors, onAuthError }: Props) 
     try {
       const r = await removeBlock(b.id);
       onBlocks(r.blocks);
-      toast.success("Removed. Those times are open again.");
+      agentToast(r.agent, "Removed. Those times are open again.");
     } catch (err) {
       if (onAuthError(err)) return;
       if (err instanceof ApiError && err.status === 404) onBlocks(blocks.filter((x) => x.id !== b.id));

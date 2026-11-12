@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+import { agentToast } from "./agent-toast";
 import { getInstructions, type Rejected, saveInstructions, undoInstructions } from "./api";
 
 type Props = {
@@ -39,6 +40,7 @@ export function InstructionsSection({ onAuthError, onDirtyChange }: Props) {
         setText(r.text);
         setMax(r.max_chars);
         setHasVersion(r.version_id !== null);
+        setRejected(r.rejected ?? []); // also lines rejected from WhatsApp, not only this page
       })
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === "AbortError") return;
@@ -65,7 +67,7 @@ export function InstructionsSection({ onAuthError, onDirtyChange }: Props) {
       setSaved(now);
       setText(now);
       setHasVersion(r.version_id !== null);
-      toast.success(r.rejected.length ? `Saved the other lines. ${r.agent}` : `Saved. ${r.agent}`);
+      agentToast(r.agent, r.rejected.length ? "Saved the other lines." : undefined);
     } catch (err) {
       if (!onAuthError(err)) setError(err instanceof ApiError ? err.detail : "Couldn't save. Please try again.");
     } finally {
@@ -82,7 +84,7 @@ export function InstructionsSection({ onAuthError, onDirtyChange }: Props) {
       setText(r.text);
       setRejected([]);
       setHasVersion(r.version_id !== null);
-      toast.success(`Back to the earlier version. ${r.agent}`);
+      agentToast(r.agent, "Back to the earlier version.");
     } catch (err) {
       if (onAuthError(err)) return;
       if (err instanceof ApiError && err.status === 404) setHasVersion(false);

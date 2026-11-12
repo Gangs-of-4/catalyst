@@ -1,7 +1,6 @@
 import { AlertCircle, House, Loader2, RotateCw } from "lucide-react";
 import * as React from "react";
 import { Link, useNavigate } from "react-router";
-import { toast } from "sonner";
 
 import { AppHeader } from "@/components/app-header";
 import { EmptyState } from "@/components/empty-state";
@@ -12,6 +11,7 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { type Block, getSettings, saveSettings } from "@/features/settings/api";
+import { agentToast } from "@/features/settings/agent-toast";
 import { InstructionsSection } from "@/features/settings/instructions";
 import { LeaveSection } from "@/features/settings/leave";
 import { check, type Form, formErrors, isDirty, MAX_DOCTORS, SLOT_CHOICES, toBody, toForm } from "@/features/settings/model";
@@ -118,7 +118,7 @@ export function SettingsPage() {
       const f = toForm(r.settings);
       setSaved(f);
       setForm(f);
-      toast.success(`Saved. ${r.agent}`);
+      agentToast(r.agent);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         // Keep what was typed: the owner logs in again in a new tab and saves from here.
