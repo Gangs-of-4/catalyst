@@ -306,10 +306,4 @@ describe("<DeskPage>", () => {
     renderDesk();
     expect(await screen.findByText("Login page")).toBeTruthy();
   });
-
-  it("explains when the business takes orders instead of appointments", async () => {
-    mockApi({ "/api/desk/day": () => json(404, { detail: "This business doesn't keep a schedule.", code: "NOT_FOUND" }) });
-    renderDesk();
-    expect(await screen.findByText("Your order board is on its way")).toBeTruthy();
-  });
 });

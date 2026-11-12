@@ -1,4 +1,4 @@
-import { AlertCircle, CalendarX2, ChevronLeft, ChevronRight, House, PackageOpen, RotateCw, Siren } from "lucide-react";
+import { AlertCircle, CalendarX2, ChevronLeft, ChevronRight, House, RotateCw } from "lucide-react";
 import * as React from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -9,24 +9,19 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   type Booking,
-  type Call,
   type Day,
   type Doctor,
-  getCalls,
   getDay,
-  getInbox,
-  getStats,
-  type InboxItem,
-  markDone,
   setStatus,
   shiftDate,
-  type Stats,
   type Status,
   time12,
 } from "@/features/desk/api";
-import { CallsPanel, InboxPanel } from "@/features/desk/panels";
+import { DeskSide, UrgentBanner } from "@/features/desk/panels";
 import { BookingEntry, Register, type RegisterActions } from "@/features/desk/register";
+import { useDeskSide } from "@/features/desk/use-desk-side";
 import { WalkInDialog, type WalkInTarget } from "@/features/desk/walk-in-dialog";
+import { OrderBoard } from "@/features/orders/order-board";
 import { usePolling } from "@/hooks/use-polling";
 import { ApiError } from "@/lib/api";
 import { getMe, type Me } from "@/lib/session";
@@ -57,16 +52,10 @@ export function DeskPage() {
   const [firstToday, setToday] = React.useState<string | null>(null); // from the first register load
   const [day, setDay] = React.useState<Day | null>(null);
   const [doctorId, setDoctorId] = React.useState<string | null>(null);
-  const [inbox, setInbox] = React.useState<InboxItem[]>([]);
-  const [calls, setCalls] = React.useState<Call[]>([]);
-  const [stats, setStats] = React.useState<Stats | null>(null);
-  // Today as the backend sees it, refreshed with the stats every poll: a desk left open past midnight moves on.
-  const today = stats?.date ?? firstToday;
 
   const [walkIn, setWalkIn] = React.useState<WalkInTarget | null>(null);
   const [cancelling, setCancelling] = React.useState<Booking | null>(null);
   const [savingId, setSavingId] = React.useState<number | null>(null);
-  const [doneId, setDoneId] = React.useState<number | null>(null);
 
   // Latest values for the async loaders (a response for a day the receptionist has left is dropped).
   const dateRef = React.useRef(date);
@@ -121,17 +110,10 @@ export function DeskPage() {
     [onAuthError],
   );
 
-  const loadSide = React.useCallback(
-    async (signal?: AbortSignal) => {
-      const results = await Promise.allSettled([getInbox(signal), getCalls(signal), getStats(signal)]);
-      const [i, c, s] = results;
-      if (i.status === "fulfilled") setInbox(i.value);
-      if (c.status === "fulfilled") setCalls(c.value);
-      if (s.status === "fulfilled") setStats(s.value);
-      results.forEach((r) => r.status === "rejected" && onAuthError(r.reason));
-    },
-    [onAuthError],
-  );
+  const side = useDeskSide(onAuthError);
+  const { loadSide } = side;
+  // Today as the backend sees it, refreshed with the stats every poll: a desk left open past midnight moves on.
+  const today = side.stats?.date ?? firstToday;
 
   const refresh = React.useCallback(
     async (signal?: AbortSignal) => {
@@ -188,20 +170,6 @@ export function DeskPage() {
     if (await changeStatus(cancelling, "cancelled")) setCancelling(null);
   }
 
-  async function onInboxDone(it: InboxItem) {
-    setDoneId(it.id);
-    try {
-      await markDone(it.id);
-      setInbox((items) => items.filter((x) => x.id !== it.id));
-      void loadSide();
-    } catch (err) {
-      if (!onAuthError(err)) toast.error(err instanceof ApiError ? err.detail : "Couldn't mark it done. Please try again.");
-      void loadSide();
-    } finally {
-      setDoneId(null);
-    }
-  }
-
   const doctors: Doctor[] = day?.columns.map((c) => c.doctor) ?? [];
   const actions: RegisterActions = {
     onAdd: (doctor, time) => day && setWalkIn({ doctor, time, date: day.date, dayLabel: `${day.label}, ${day.short}` }),
@@ -221,25 +189,8 @@ export function DeskPage() {
     </AppHeader>
   );
 
-  if (noSchedule) {
-    return (
-      <>
-        {header}
-        <main className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
-          <EmptyState
-            icon={PackageOpen}
-            title="Your order board is on its way"
-            description="This business takes orders rather than appointments. The order board comes in the next update."
-            action={
-              <Button asChild variant="outline">
-                <Link to="/home">Back to home</Link>
-              </Button>
-            }
-          />
-        </main>
-      </>
-    );
-  }
+  // A business without the bookings module gets 404 from the register: it takes orders instead.
+  if (noSchedule && me) return <OrderBoard me={me} header={header} onAuthError={onAuthError} />;
 
   if (loadError && !day) {
     return (
@@ -281,7 +232,6 @@ export function DeskPage() {
     );
   }
 
-  const urgent = inbox.filter((it) => Boolean(it.urgent) || it.kind === "escalation").length;
   const closedWithBookings = day.columns.some((c) => c.slots.some((sl) => sl.bookings.length > 0));
   const switching = day.date !== (date ?? today);
   const target = date ?? today ?? day.date;
@@ -294,18 +244,10 @@ export function DeskPage() {
           <div className="flex flex-col gap-1">
             <p className="text-sm text-muted-foreground">Front desk</p>
             <h1 className="text-2xl font-semibold leading-tight tracking-tight">{me.business.name}</h1>
-            {stats && <p className="text-sm text-body">{stats.sentence}</p>}
+            {side.stats && <p className="text-sm text-body">{side.stats.sentence}</p>}
           </div>
 
-          {urgent > 0 && (
-            <a
-              href="#inbox"
-              className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive-soft px-3 py-2.5 text-sm font-semibold text-destructive-text lg:hidden"
-            >
-              <Siren aria-hidden className="size-4" />
-              {urgent} urgent {urgent === 1 ? "item needs" : "items need"} you. See the inbox.
-            </a>
-          )}
+          <UrgentBanner count={side.urgent} />
 
           {/* Day navigation */}
           <div className="flex items-center gap-2">
@@ -377,20 +319,7 @@ export function DeskPage() {
           </div>
         </div>
 
-        <aside className="flex flex-col gap-8 lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:self-start lg:overflow-y-auto">
-          <section id="inbox" aria-labelledby="inbox-title" className="flex scroll-mt-20 flex-col gap-3">
-            <h2 id="inbox-title" className="text-lg font-semibold">
-              Inbox {inbox.length > 0 && <span className="text-muted-foreground">({inbox.length})</span>}
-            </h2>
-            <InboxPanel items={inbox} onDone={(it) => void onInboxDone(it)} doneId={doneId} />
-          </section>
-          <section aria-labelledby="calls-title" className="flex flex-col gap-3">
-            <h2 id="calls-title" className="text-lg font-semibold">
-              Recent calls
-            </h2>
-            <CallsPanel calls={calls} />
-          </section>
-        </aside>
+        <DeskSide inbox={side.inbox} calls={side.calls} doneId={side.doneId} onDone={(it) => void side.onInboxDone(it)} />
       </main>
 
       <WalkInDialog
