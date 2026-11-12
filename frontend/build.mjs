@@ -25,12 +25,14 @@ run("npm run build");
 
 rmSync("dist", { recursive: true, force: true });
 mkdirSync("dist");
-// Everything Vite built except its index.html, which would clash with the old try page at "/".
+// Everything Vite built; its index.html becomes app.html, which every React route (including "/") rewrites to.
 cpSync("app/dist", "dist", { recursive: true, filter: (src) => !/[\\/]app[\\/]dist[\\/]index\.html$/.test(src) });
 cpSync("app/dist/index.html", "dist/app.html");
 
 // 2. The old static pages (removed page by page during M8).
-for (const page of ["index.html", "desk.html", "setup.html"]) cpSync(page, `dist/${page}`);
+// The old static try page (index.html) is no longer shipped: "/" is the React landing page and
+// /demo/clinic is the React test page. desk.html and setup.html stay until M8 replaces them.
+for (const page of ["desk.html", "setup.html"]) cpSync(page, `dist/${page}`);
 cpSync("static", "dist/static", { recursive: true });
 // The old pages call /api on their own origin too: Vercel rewrites it to the backend (ADR-0041,
 // configure-vercel.mjs), so they no longer need the backend URL or CORS.

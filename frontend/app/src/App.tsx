@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+import { BrowserRouter, Route, Routes } from "react-router";
 
 import { ConnectionBanner } from "@/components/connection-banner";
 import { OfflineBanner } from "@/components/offline-banner";
 import { Toaster } from "@/components/ui/sonner";
 import { WakeGate } from "@/components/wake-gate";
 import { HomePage } from "@/pages/home";
+import { LandingPage } from "@/pages/landing";
 import { LoginPage } from "@/pages/login";
 import { NotFoundPage } from "@/pages/not-found";
 import { SignupPage } from "@/pages/signup";
@@ -25,8 +26,7 @@ export function App() {
       <OfflineBanner />
       <ConnectionBanner />
       <Routes>
-        {/* Locally the dev server has no old pages, so "/" opens the styleguide for now. */}
-        <Route path="/" element={<Navigate to="/styleguide" replace />} />
+        <Route path="/" element={<LandingPage />} />
         <Route path="/b/:publicId/try" element={awake(<TryPage />)} />
         <Route path="/demo/:template" element={<DemoRedirect />} />
         <Route path="/home" element={awake(<HomePage />)} />

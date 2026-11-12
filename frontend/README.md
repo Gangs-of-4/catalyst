@@ -8,7 +8,6 @@
 
 | Page | File | Who | Capability |
 |---|---|---|---|
-| `/` | `index.html`, `static/try.js` | Public: prospects try the agent with a web call and watch the register | C2, C4 |
 | `/desk` | `desk.html`, `static/desk.js` | The receptionist: day grid per doctor, walk-ins, statuses, inbox, call log | C7, C10 |
 | `/setup` | `setup.html`, `static/setup.js` | Our team or the clinic: settings, leave days, agent sync | C12, C8 |
 
@@ -51,6 +50,7 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 
 | Route | File | What |
 |---|---|---|
+| `/` | `src/pages/landing.tsx`, `src/components/feature-card.tsx` | Public landing page, mobile first: what Catalyst does, how it works, who it's for, the safety rules, and links to sign up, log in and try a demo call. On phones the main action stays in a bar pinned to the bottom. Needs no backend, so no `WakeGate`. The old static `index.html` is no longer deployed |
 | `/b/:publicId/try` | `src/pages/try.tsx`, `src/features/try/` | Public test page for one business: talk to its front desk (Vapi web call, after the `POST /api/try/{id}/start` cap check) and watch its register or order board update. Covers voice-not-switched-on, minutes-used-up and microphone-blocked states. Endpoint shapes: issue #24 |
 | `/demo/:template` | `src/pages/try.tsx` | Opens the demo business's test page (`/b/demo-<template>/try`) |
 | `/login` | `src/pages/login.tsx` | Owner login (`POST /api/login`). Already logged in → straight on. Honors a same-app `?next=` path |
