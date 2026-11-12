@@ -122,13 +122,21 @@ export function OrderBoard({ me, header, onAuthError }: { me: Me; header: React.
     return () => window.removeEventListener("catalyst:reconnected", onBack);
   }, [refresh, loadCatalog]);
 
-  async function step(o: Order, to: OrderStatus) {
+  /** Returns whether it saved, so the cancel dialog only closes on success. */
+  async function step(o: Order, to: OrderStatus): Promise<boolean> {
     setSavingId(o.id);
     try {
-      await setOrderStatus(o.id, to);
+      const fresh = await setOrderStatus(o.id, to);
+      // Patch the saved order into both lists: polling refreshes only the first page, so an order
+      // loaded with "Show older orders" would otherwise keep its old status and next steps.
+      const patch = (list: Order[]) => list.map((x) => (x.id === fresh.id ? fresh : x));
+      setOrders((list) => (list ? patch(list) : list));
+      setOlder(patch);
       toast.success(`Order #${o.number} ${STEP_DONE[to] ?? "updated"}.`);
+      return true;
     } catch (err) {
       if (!onAuthError(err)) toast.error(err instanceof ApiError ? err.detail : "Couldn't save that. Please try again.");
+      return false;
     } finally {
       setSavingId(null);
       void loadOrders();
@@ -339,8 +347,7 @@ export function OrderBoard({ me, header, onAuthError }: { me: Me; header: React.
               disabled={savingId !== null}
               onClick={async () => {
                 if (!cancelling) return;
-                await step(cancelling, "cancelled");
-                setCancelling(null);
+                if (await step(cancelling, "cancelled")) setCancelling(null);
               }}
             >
               Cancel order

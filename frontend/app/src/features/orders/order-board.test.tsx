@@ -125,6 +125,35 @@ describe("order board (wholesale desk)", () => {
     await waitFor(() => expect(posts(fetchMock, "/api/orders/1/status")).toEqual([{ status: "cancelled" }]));
   });
 
+  it("updates an order loaded with 'Show older orders' after its status changes", async () => {
+    const olderOrder = order({ id: 9, number: 3, shop_name: "Older Shop", status: "confirmed", next: ["dispatched", "cancelled"] });
+    const fetchMock = mockApi({
+      "/api/orders": () => json(200, { orders: ORDERS, next_before_id: 2 }),
+      "/api/orders?limit=50&before_id=2": () => json(200, { orders: [olderOrder], next_before_id: null }),
+      "/api/orders/9/status": () => json(200, { ...olderOrder, status: "dispatched", next: ["delivered"] }),
+    });
+    renderDesk();
+    fireEvent.click(await screen.findByRole("button", { name: /Show older orders/ }));
+    const card = (await screen.findByText("Older Shop")).closest("li")!;
+    fireEvent.click(within(card).getByRole("button", { name: "Mark dispatched" }));
+
+    await waitFor(() => expect(within(card).getByText("Dispatched")).toBeTruthy());
+    expect(within(card).getByRole("button", { name: "Mark delivered" })).toBeTruthy();
+    expect(posts(fetchMock, "/api/orders/9/status")).toEqual([{ status: "dispatched" }]);
+  });
+
+  it("keeps the cancel dialog open when cancelling fails", async () => {
+    const fetchMock = mockApi({ "/api/orders/1/status": () => json(409, { detail: "That order has already moved on.", code: "INVALID_TRANSITION" }) });
+    renderDesk();
+    fireEvent.pointerDown(await screen.findByRole("button", { name: "More for order 14" }), { button: 0, ctrlKey: false, pointerType: "mouse" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Cancel order" }));
+    const dialog = await screen.findByRole("dialog", { name: "Cancel this order?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel order" }));
+    await waitFor(() => expect(posts(fetchMock, "/api/orders/1/status")).toHaveLength(1));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.getByRole("dialog", { name: "Cancel this order?" })).toBeTruthy();
+  });
+
   it("adds an order from the sheet, with a running total", async () => {
     const fetchMock = mockApi({ "/api/orders": (init) => (init?.method === "POST" ? json(200, order({ id: 3, number: 15 })) : json(200, { orders: ORDERS, next_before_id: null })) });
     renderDesk();
