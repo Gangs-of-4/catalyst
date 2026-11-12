@@ -8,6 +8,7 @@ from xml.sax.saxutils import escape
 
 from fastapi import APIRouter, BackgroundTasks, Request, Response
 
+from .. import analytics
 from ..channels.whatsapp import commands
 from ..core import db, tenancy
 from ..core import phone as ph
@@ -73,7 +74,9 @@ async def incoming(request: Request, background: BackgroundTasks):
             return twiml(unknown_number_reply())
         if not text:
             return twiml("Sirf text commands chalte hain. 'help' bhejein.")
-        reply, changed = commands.handle(conn.for_tenant(tid), sender, text)
+        scoped = conn.for_tenant(tid)
+        reply, changed = commands.handle(scoped, sender, text)
+        analytics.record(scoped, "wa_command")
     finally:
         conn.close()
     if changed:

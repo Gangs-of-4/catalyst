@@ -2,6 +2,7 @@
 
 import json
 
+from .. import analytics
 from ..core import db, tenancy
 from ..orders import catalog
 from ..safety import post_call
@@ -100,6 +101,8 @@ def end_of_call(conn: db.Conn, message: dict) -> str | None:
                 call_id,
             ),
         )
+        if row["ended_at"] is None:  # a repeated report counts once
+            analytics.record(conn, "call_ended", commit=False)
         if message.get("startedAt"):
             conn.execute(
                 "UPDATE calls SET started_at = ? WHERE tenant_id = ? AND id = ?",

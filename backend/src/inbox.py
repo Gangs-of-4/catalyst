@@ -1,5 +1,6 @@
 """Receptionist inbox: urgent escalations, callbacks and ops items (C7)."""
 
+from . import analytics
 from .core import db
 
 KINDS = ("escalation", "callback", "ops")
@@ -33,6 +34,8 @@ def create(
                 db.stamp(),
             ),
         ).fetchone()
+        if kind == "callback":
+            analytics.record(conn, "callback_created", commit=False)
     return row["id"]
 
 

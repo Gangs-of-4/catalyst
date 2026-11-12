@@ -306,7 +306,7 @@ Enums:
 - `tenants.template`: one folder name under `verticals/` that is not `_template`.
 - `orders.status`: `new` → `confirmed` → `dispatched` → `delivered`; `new` or `confirmed` → `cancelled`. Any other transition is `INVALID_TRANSITION`.
 - `orders.source`: `phone`, `whatsapp`, `walk_in` (same as bookings).
-- `events.type`: `signup`, `login`, `booking_created`, `booking_status`, `order_created`, `order_status`, `callback_created`, `call_ended`, `wa_command`, `settings_saved`, `instructions_saved`, `catalog_updated`, `feedback_sent`.
+- `events.type`: `signup`, `login`, `booking_created`, `booking_status`, `order_created`, `order_status`, `callback_created`, `call_ended`, `wa_command`, `settings_saved`, `instructions_saved`, `catalog_updated`, `feedback_sent`, `web_call_started`. An event is saved in the same transaction as the thing it counts. `records` = `booking_created` + `order_created` (a reschedule is a `booking_status`, not a new record); `calls` = `call_ended` (once per call, even if Vapi resends the report); `wa_commands` = one per message from a business's own number.
 - `feedback.type`: `bug`, `feature`, `usability`, `data_integration`, `pricing_business`.
 - `feedback.decision`: `shipped`, `in_progress`, `planned`, `wont_do` (needs `decision_reason`).
 
@@ -437,12 +437,12 @@ Auth column: **public**, **user** (session, scoped to the user's business; `401 
 | `POST /api/settings/blocks` · `DELETE /api/settings/blocks/{id}` | user | Leave and holidays (bookings template) |
 | `GET /api/instructions` · `PUT /api/instructions` · `POST /api/instructions/undo` | user | Custom instructions: current text, history, rejected lines. `PUT` body `{text}` (≤ 500 chars) → `{accepted, rejected: [{line, reason}], version_id, agent}`. Undo reactivates the previous version. |
 | `GET /api/settings/whatsapp` | user | Sandbox number and join steps (`join <TWILIO_SANDBOX_JOIN_CODE>`) |
-| `POST /api/feedback` | user | `{person_name, person_role, text, type}` |
-| `POST /api/admin/login` · `GET /api/admin/businesses` · `GET /api/admin/businesses/{id}/usage.csv` · `GET /api/admin/feedback` · `PUT /api/admin/feedback/{id}` · `GET /api/admin/feedback.csv` · `POST /api/admin/reset-demo` | admin | Usage evidence and feedback log (below) |
+| `POST /api/feedback` | user | `{person_name, person_role, text, type}` (`type` from §3.1) → `{id, saved: true}`. Counts a `feedback_sent` event. |
+| `POST /api/admin/login` · `GET /api/admin/businesses` · `GET /api/admin/businesses/{id}/usage.csv` · `GET /api/admin/feedback` · `PUT /api/admin/feedback/{id}` · `GET /api/admin/feedback.csv` | admin | Usage evidence and feedback log (below). Admin login: `{password}` checked against `ADMIN_PASSWORD` (unset = no admin, and unsetting it ends every admin session); its own `catalyst_admin` cookie (HttpOnly, SameSite=Lax, 12 h); 5 wrong passwords in 15 min → `429 LOCKED`. `PUT /api/admin/feedback/{id}` body `{decision, decision_reason, shipped_on, evidence_url, partner_reaction}`: `wont_do` needs a reason, `shipped_on` is YYYY-MM-DD, `evidence_url` an http(s) link. `POST /api/admin/reset-demo` is **cut** (phase2-plan cut order 3): the M9 seed is re-run from the CLI instead. |
 
 ### 6.2 Admin usage and CSV formats
 
-`GET /api/admin/businesses` returns, per business: `template`, `created_at`, `users`, `records` (bookings or orders created), `calls`, `wa_commands`, `last_active` (latest `events.created_at` or `users.last_active_at`), `is_demo`, and `weeks`: the last 4 ISO weeks (Monday start, IST), oldest first, each `{week_start, events, records, calls, wa_commands}`.
+`GET /api/admin/businesses` returns `{businesses: [...]}`, per business: `id`, `name`, `public_id`, `template`, `created_at`, `users`, `records` (bookings or orders created), `calls`, `wa_commands`, `last_active` (latest `events.created_at` or `users.last_active_at`), `is_demo`, and `weeks`: the last 4 ISO weeks (Monday start, IST), oldest first, each `{week_start, events, records, calls, wa_commands}`.
 
 `usage.csv` columns (counts only — never names or phone numbers): `week_start,events,records,calls,wa_commands,logins`, one row per week for the last 4 weeks, plus a `total` row.
 

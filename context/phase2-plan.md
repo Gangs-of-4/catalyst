@@ -26,8 +26,10 @@
 | M2b: desk, inbox, calls, stats and settings scoped to the session's business; session login replaces Basic auth; demo owner login from `DEMO_LOGIN_PASSWORD` | #28 | Merged |
 | M4a: wholesale data side (catalogue, CSV import, orders and lifecycle, `/api/catalog`, `/api/orders`, wholesale settings, order board on the test page) | #32 | Merged |
 | M4b: wholesale voice side (tools, prompt, escalation rules, safety suite, catalogue-aware post-call check) | #33 | Merged |
-| M6: WhatsApp per business (routing by sender, wholesale commands, no open demo mode) | #35 | Open |
-| M5, M7–M12 | — | Not started |
+| M6: WhatsApp per business (routing by sender, wholesale commands, no open demo mode) | #35 | Merged |
+| M5: owner custom instructions | #36 | Open |
+| M7: usage events, admin counts and weekly breakdown, counts-only usage CSV, feedback log with decisions and Sheet-matching CSV (reset-demo cut) | (this PR) | Open |
+| M8–M12 | — | M8 in progress (frontend); M9–M12 not started |
 
 ---
 

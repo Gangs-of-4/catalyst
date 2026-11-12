@@ -5,7 +5,7 @@ import re
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 
-from .. import accounts
+from .. import accounts, analytics
 from ..core import db, tenancy
 from ..core import settings as cs
 from .deps import cookie_secure, current_session, get_user_conn, require_csrf_header
@@ -36,7 +36,8 @@ class LoginIn(BaseModel):
 def login(body: LoginIn, request: Request, response: Response) -> dict:
     conn = db.connect_unchecked()  # the email tells us which business; nothing is scoped yet
     try:
-        cookie, _, tid = accounts.login(conn, body.email, body.password)
+        cookie, uid, tid = accounts.login(conn, body.email, body.password)
+        analytics.record(conn.for_tenant(tid), "login", uid)
         business = tenancy.get(conn, tid)
     except accounts.Locked:
         raise ApiError(

@@ -7,7 +7,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import accounts, seed
-from .api import auth, desk, errors, onboarding, orders, public, setup, try_page, vapi, whatsapp
+from .api import (
+    admin,
+    auth,
+    desk,
+    errors,
+    feedback,
+    onboarding,
+    orders,
+    public,
+    setup,
+    try_page,
+    vapi,
+    whatsapp,
+)
 from .core import db, tenancy
 from .core.config import FRONTEND_DIR, env
 
@@ -45,6 +58,8 @@ app.include_router(vapi.router)
 app.include_router(public.router)
 app.include_router(try_page.router)
 app.include_router(orders.router)
+app.include_router(feedback.router)
+app.include_router(admin.router)
 app.include_router(desk.pages)
 app.include_router(desk.router)
 app.include_router(whatsapp.router)

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from .. import analytics
 from ..booking import service as bk
 from ..booking.when import short_date, spoken_time
 from ..core import config, db
@@ -173,6 +174,7 @@ def save_settings(raw: dict = Body(...), conn: db.Conn = Depends(get_user_conn))
         s.update(body.model_dump())
         s["sessions"] = [list(x) for x in body.sessions]
         _save(conn, s)
+        analytics.record(conn, "settings_saved")
         return {"saved": True, "agent": sync_agent(conn.tid), "settings": s}
     body = _parse(SettingsIn, raw)
     s = cs.load(conn)
@@ -207,6 +209,7 @@ def save_settings(raw: dict = Body(...), conn: db.Conn = Depends(get_user_conn))
     s["sessions"] = [list(x) for x in body.sessions]
     s["red_flags"] = [r.strip() for r in body.red_flags if r.strip()]
     _save(conn, s)
+    analytics.record(conn, "settings_saved")
     return {"saved": True, "agent": sync_agent(conn.tid), "settings": s}
 
 
