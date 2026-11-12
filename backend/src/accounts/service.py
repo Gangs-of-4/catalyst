@@ -9,6 +9,7 @@ import base64
 import hashlib
 import hmac
 import secrets
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
@@ -317,12 +318,16 @@ ADMIN_MAX_CLIENTS = 500  # addresses remembered at once; the oldest is dropped p
 # cap stops guessing from many (or fake) addresses; it only slows the team down during an attack.
 _admin_failures: dict[str, list[str]] = {}
 _admin_all_failures: list[str] = []
+_admin_lock = threading.Lock()  # requests run in a thread pool: count every attempt
 
 
 def _admin_password() -> str:
     value = env("ADMIN_PASSWORD")
     if value and len(value) < ADMIN_MIN_PASSWORD:
-        log.warning("accounts: ADMIN_PASSWORD is under %s characters; admin login is off", 16)
+        log.warning(
+            "accounts: ADMIN_PASSWORD is under %s characters; admin login is off",
+            ADMIN_MIN_PASSWORD,
+        )
         return ""
     return value
 
@@ -348,20 +353,21 @@ def admin_login(conn: db.Conn, password: str, client: str = "unknown") -> str:
     """
     expected = _admin_password()
     now = config.now()
-    _forget_old_failures((now - timedelta(minutes=LOCK_MINUTES)).isoformat(timespec="seconds"))
-    if (
-        len(_admin_failures.get(client, [])) >= ADMIN_CLIENT_LIMIT
-        or len(_admin_all_failures) >= ADMIN_GLOBAL_LIMIT
-    ):
-        raise Locked
-    if not expected or not hmac.compare_digest(password.encode(), expected.encode()):
-        stamp = now.isoformat(timespec="seconds")
-        if client not in _admin_failures and len(_admin_failures) >= ADMIN_MAX_CLIENTS:
-            del _admin_failures[next(iter(_admin_failures))]  # the oldest address
-        _admin_failures.setdefault(client, []).append(stamp)
-        _admin_all_failures.append(stamp)
-        raise BadLogin
-    _admin_failures.pop(client, None)
+    with _admin_lock:
+        _forget_old_failures((now - timedelta(minutes=LOCK_MINUTES)).isoformat(timespec="seconds"))
+        if (
+            len(_admin_failures.get(client, [])) >= ADMIN_CLIENT_LIMIT
+            or len(_admin_all_failures) >= ADMIN_GLOBAL_LIMIT
+        ):
+            raise Locked
+        if not expected or not hmac.compare_digest(password.encode(), expected.encode()):
+            stamp = now.isoformat(timespec="seconds")
+            if client not in _admin_failures and len(_admin_failures) >= ADMIN_MAX_CLIENTS:
+                del _admin_failures[next(iter(_admin_failures))]  # the oldest address
+            _admin_failures.setdefault(client, []).append(stamp)
+            _admin_all_failures.append(stamp)
+            raise BadLogin
+        _admin_failures.pop(client, None)
     token = secrets.token_urlsafe(32)
     with conn:
         conn.execute(

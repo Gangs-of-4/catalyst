@@ -18,7 +18,6 @@ from .orders import service as orders
 from .verticals import loader
 
 HISTORY_DAYS = 28
-SHIFT = 1_000_000  # moves today's order numbers out of the way while the history is numbered
 # What reset_demo clears before seeding again. Settings and logins are kept.
 DEMO_DATA_TABLES = (
     "order_items",
@@ -254,9 +253,8 @@ def _wholesale_day(conn: db.Conn, d: date, products: list[dict], shops: list[str
     )
     for i, (hour, minute, status) in enumerate(plan):
         made = _at(d, hour, minute)
-        number = conn.execute(  # today's orders sit above SHIFT while the history is added
-            "SELECT COALESCE(MAX(number), 0) + 1 FROM orders WHERE tenant_id = ? AND number < ?",
-            (conn.tid, SHIFT),
+        number = conn.execute(
+            "SELECT COALESCE(MAX(number), 0) + 1 FROM orders WHERE tenant_id = ?", (conn.tid,)
         ).fetchone()[0]
         row = conn.execute(
             "INSERT INTO orders (tenant_id, number, shop_name, contact_name, phone, status,"
@@ -305,6 +303,65 @@ def has_history(conn: db.Conn) -> bool:
     )
 
 
+ORDER_COPY = (
+    "shop_name",
+    "contact_name",
+    "phone",
+    "notes",
+    "status",
+    "source",
+    "call_id",
+    "idempotency_key",
+    "created_at",
+    "updated_at",
+)
+ITEM_COPY = ("product_id", "name", "pack_size", "qty", "rate_paise")
+
+
+def _take_out_orders(conn: db.Conn, since: date) -> list[tuple[dict, list[dict]]]:
+    """Remove the orders created on or after `since`, inside the caller's transaction, and return
+    them with their lines (exactly as stored) to be put back later."""
+    rows = conn.execute(
+        "SELECT * FROM orders WHERE tenant_id = ? AND created_at >= ? ORDER BY created_at, id",
+        (conn.tid, since.isoformat()),
+    ).fetchall()
+    taken = []
+    for r in rows:
+        items = conn.execute(
+            "SELECT * FROM order_items WHERE tenant_id = ? AND order_id = ? ORDER BY id",
+            (conn.tid, r["id"]),
+        ).fetchall()
+        taken.append(({k: r[k] for k in ORDER_COPY}, [{k: i[k] for k in ITEM_COPY} for i in items]))
+        conn.execute(
+            "DELETE FROM order_items WHERE tenant_id = ? AND order_id = ?", (conn.tid, r["id"])
+        )
+        conn.execute("DELETE FROM orders WHERE tenant_id = ? AND id = ?", (conn.tid, r["id"]))
+    return taken
+
+
+def _put_back_orders(conn: db.Conn, taken: list[tuple[dict, list[dict]]]) -> None:
+    """Insert orders taken out by _take_out_orders again, after everything else: new ids and
+    numbers, every other field as it was."""
+    for order, items in taken:
+        number = conn.execute(
+            "SELECT COALESCE(MAX(number), 0) + 1 FROM orders WHERE tenant_id = ?", (conn.tid,)
+        ).fetchone()[0]
+        row = conn.execute(
+            "INSERT INTO orders (tenant_id, number, "
+            + ", ".join(ORDER_COPY)
+            + ") VALUES (?, ?, "
+            + ", ".join("?" for _ in ORDER_COPY)
+            + ") RETURNING id",
+            (conn.tid, number, *(order[k] for k in ORDER_COPY)),
+        ).fetchone()
+        for it in items:
+            conn.execute(
+                "INSERT INTO order_items (tenant_id, order_id, " + ", ".join(ITEM_COPY) + ")"
+                " VALUES (?, ?, " + ", ".join("?" for _ in ITEM_COPY) + ")",
+                (conn.tid, row["id"], *(it[k] for k in ITEM_COPY)),
+            )
+
+
 def history(conn: db.Conn, days: int = HISTORY_DAYS) -> None:
     """Add the last `days` days (not today) of fictional usage to both demo businesses, in one
     transaction each. Safe to run twice, or from two workers at once: a business that already
@@ -321,10 +378,10 @@ def history(conn: db.Conn, days: int = HISTORY_DAYS) -> None:
         products = catalog.list_products(scoped) if template == "wholesale" else []
         try:
             with scoped:
-                if template == "wholesale":
-                    scoped.execute(
-                        "UPDATE orders SET number = number + ? WHERE tenant_id = ?", (SHIFT, tid)
-                    )
+                # Today's orders (seeded, or placed on the demo already) are taken out and put
+                # back after the history, so ids and numbers both follow the dates and the order
+                # board's newest-first page starts with today's.
+                today_orders = _take_out_orders(scoped, today) if template == "wholesale" else []
                 for d in past:
                     if service.is_closed(s, d):
                         continue
@@ -332,17 +389,7 @@ def history(conn: db.Conn, days: int = HISTORY_DAYS) -> None:
                         _clinic_day(scoped, s, d, names.get("patients") or ["Demo Patient"])
                     elif products:
                         _wholesale_day(scoped, d, products, names.get("shops") or ["Demo Shop"])
-                if template == "wholesale":
-                    last = scoped.execute(
-                        "SELECT COALESCE(MAX(number), 0) FROM orders WHERE tenant_id = ?"
-                        " AND number < ?",
-                        (tid, SHIFT),
-                    ).fetchone()[0]
-                    scoped.execute(  # today's orders come after the history, in their order
-                        "UPDATE orders SET number = number - ? + ? WHERE tenant_id = ?"
-                        " AND number >= ?",
-                        (SHIFT, last, tid, SHIFT),
-                    )
+                _put_back_orders(scoped, today_orders)
         except db.Conflict:
             scoped.rollback()
             log.info("seed: another worker is adding the %s demo history", template)

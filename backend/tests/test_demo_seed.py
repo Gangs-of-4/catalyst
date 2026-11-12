@@ -292,3 +292,39 @@ def test_a_second_worker_making_the_wholesale_demo_is_harmless(isolated, monkeyp
     finally:
         conn.close()
     assert len(raw_rows("SELECT id FROM tenants WHERE public_id = 'demo-wholesale'")) == 1
+
+
+def test_todays_orders_open_the_order_board(history_env):
+    """The board pages newest-first by id: today's orders must be on its first page, first."""
+    from src.orders import service as orders
+
+    with TestClient(app):
+        pass
+    conn = db.connect().for_tenant(demo("wholesale"))
+    try:
+        first_page = orders.list_orders(conn, None, None, None, 50)
+    finally:
+        conn.close()
+    today = FIXED_NOW.date().isoformat()
+    assert [o["created_at"][:10] for o in first_page[:3]] == [today] * 3
+    assert {o["status"] for o in first_page[:3]} == {"new", "confirmed", "dispatched"}
+    assert all(o["items"] for o in first_page[:3])  # their lines came back with them
+
+
+def test_orders_placed_on_the_demo_survive_the_history_run(isolated, monkeypatch):
+    """The live demo already had today's orders (and maybe a visitor's) before DEMO_HISTORY."""
+    with TestClient(app):
+        pass
+    tid = demo("wholesale")
+    before = {
+        (r[0], r[1], r[2])
+        for r in raw_rows("SELECT shop_name, status, phone FROM orders WHERE tenant_id = ?", (tid,))
+    }
+    monkeypatch.setenv("DEMO_HISTORY", "1")
+    with TestClient(app):
+        pass
+    newest = raw_rows(
+        "SELECT shop_name, status, phone FROM orders WHERE tenant_id = ? ORDER BY id DESC LIMIT 3",
+        (tid,),
+    )
+    assert {(r[0], r[1], r[2]) for r in newest} == before
