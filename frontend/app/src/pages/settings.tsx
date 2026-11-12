@@ -1,7 +1,6 @@
 import { AlertCircle, House, Loader2, RotateCw } from "lucide-react";
 import * as React from "react";
 import { Link, useNavigate } from "react-router";
-import { toast } from "sonner";
 
 import { AppHeader } from "@/components/app-header";
 import { EmptyState } from "@/components/empty-state";
@@ -11,7 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { getSettings, saveSettings } from "@/features/settings/api";
+import { type Block, getSettings, saveSettings } from "@/features/settings/api";
+import { agentToast } from "@/features/settings/agent-toast";
+import { InstructionsSection } from "@/features/settings/instructions";
+import { LeaveSection } from "@/features/settings/leave";
 import { check, type Form, formErrors, isDirty, MAX_DOCTORS, SLOT_CHOICES, toBody, toForm } from "@/features/settings/model";
 import { PairRows, TextRows } from "@/features/settings/rows";
 import { HoursEditor } from "@/features/signup/hours-editor";
@@ -49,6 +51,8 @@ export function SettingsPage() {
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [problem, setProblem] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
+  const [blocks, setBlocks] = React.useState<Block[]>([]);
+  const [instructionsDirty, setInstructionsDirty] = React.useState(false);
   const problemRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -58,6 +62,7 @@ export function SettingsPage() {
         const f = toForm(r.settings);
         setSaved(f);
         setForm(f);
+        setBlocks(r.blocks ?? []);
         setLoadError(null);
       })
       .catch((err: unknown) => {
@@ -72,14 +77,22 @@ export function SettingsPage() {
   }, [attempt, navigate]);
 
   const dirty = form !== null && saved !== null && isDirty(form, saved);
+  const anythingUnsaved = dirty || instructionsDirty;
 
   // Closing the tab or reloading with unsaved changes asks first.
   React.useEffect(() => {
-    if (!dirty) return;
+    if (!anythingUnsaved) return;
     const onLeave = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener("beforeunload", onLeave);
     return () => window.removeEventListener("beforeunload", onLeave);
-  }, [dirty]);
+  }, [anythingUnsaved]);
+
+  // Leave days and instructions save on their own; a 401 there keeps the page and says so.
+  const onAuthError = React.useCallback((err: unknown) => {
+    if (!(err instanceof ApiError && err.status === 401)) return false;
+    setProblem("You've been logged out. Log in again in another tab, then try again; nothing here is lost.");
+    return true;
+  }, []);
 
   function set<K extends keyof Form>(k: K, v: Form[K]) {
     setForm((f) => (f ? { ...f, [k]: v } : f));
@@ -105,7 +118,7 @@ export function SettingsPage() {
       const f = toForm(r.settings);
       setSaved(f);
       setForm(f);
-      toast.success(`Saved. ${r.agent}`);
+      agentToast(r.agent);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         // Keep what was typed: the owner logs in again in a new tab and saves from here.
@@ -127,7 +140,7 @@ export function SettingsPage() {
         <Link
           to="/home"
           onClick={(e) => {
-            if (dirty && !window.confirm("Leave without saving your changes?")) e.preventDefault();
+            if (anythingUnsaved && !window.confirm("Leave without saving your changes?")) e.preventDefault();
           }}
         >
           <House aria-hidden /> Home
@@ -179,9 +192,11 @@ export function SettingsPage() {
   const sections = [
     { id: "business", label: "Business" },
     { id: "hours", label: "Hours" },
+    ...(bookings ? [{ id: "leave", label: "Leave" }] : []),
     bookings ? { id: "doctors", label: "Doctors" } : { id: "orders", label: "Orders" },
     ...(bookings ? [{ id: "safety", label: "Emergencies" }] : []),
     { id: "faqs", label: "Questions" },
+    { id: "instructions", label: "Instructions" },
     { id: "whatsapp", label: "WhatsApp" },
   ];
 
@@ -252,6 +267,17 @@ export function SettingsPage() {
             </Field>
           )}
         </Section>
+
+        {bookings && (
+          <Section id="leave" title="Leave and holidays" hint="Days a doctor is away, or the whole clinic is closed. Callers aren't offered those days.">
+            <LeaveSection
+              blocks={blocks}
+              onBlocks={setBlocks}
+              doctors={(saved?.doctors ?? []).filter((d): d is { id: string; name: string } => Boolean(d.id))}
+              onAuthError={onAuthError}
+            />
+          </Section>
+        )}
 
         {bookings ? (
           <Section id="doctors" title="Doctors and services">
@@ -331,6 +357,10 @@ export function SettingsPage() {
             multiline
             empty={{ q: "", a: "" }}
           />
+        </Section>
+
+        <Section id="instructions" title="Your own instructions" hint="Anything else your front desk should know. It saves on its own and never overrides the safety rules.">
+          <InstructionsSection onAuthError={onAuthError} onDirtyChange={setInstructionsDirty} />
         </Section>
 
         <Section id="whatsapp" title="WhatsApp and voice">

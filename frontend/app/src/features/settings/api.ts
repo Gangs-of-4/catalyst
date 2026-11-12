@@ -34,8 +34,31 @@ export type Settings = BookingsSettings | OrdersSettings;
 
 export const isBookings = (s: Settings): s is BookingsSettings => Array.isArray((s as BookingsSettings).doctors);
 
-export type SettingsResponse = { settings: Settings; agentConfigured: boolean };
+/** A leave day (one doctor) or holiday (whole business). `label` is written by the backend. */
+export type Block = { id: number; date: string; resource_id: string | null; kind: string; label: string };
+
+export type SettingsResponse = { settings: Settings; blocks: Block[]; agentConfigured: boolean };
 export type SaveResponse = { saved: true; agent: string; settings: Settings };
 
 export const getSettings = (signal?: AbortSignal) => api<SettingsResponse>("/api/settings", { signal });
 export const saveSettings = (body: Settings) => api<SaveResponse>("/api/settings", { method: "PUT", body });
+
+export const addBlock = (date: string, doctorId: string | null) =>
+  api<{ blocks: Block[]; note: string | null; agent: string }>("/api/settings/blocks", {
+    method: "POST",
+    body: { date, doctor_id: doctorId },
+  });
+
+export const removeBlock = (id: number) =>
+  api<{ blocks: Block[]; agent: string }>(`/api/settings/blocks/${id}`, { method: "DELETE" });
+
+/** Custom instructions ("Agent ko aur kya batana hai?"), screened line by line (contracts.md §6.1). */
+export type Rejected = { line: string; reason: string };
+export type InstructionsState = { text: string; version_id: number | null; rejected: Rejected[]; max_chars: number };
+export type InstructionsSave = { accepted: string[]; rejected: Rejected[]; version_id: number | null; agent: string };
+
+export const getInstructions = (signal?: AbortSignal) => api<InstructionsState>("/api/instructions", { signal });
+export const saveInstructions = (text: string) =>
+  api<InstructionsSave>("/api/instructions", { method: "PUT", body: { text } });
+export const undoInstructions = () =>
+  api<{ text: string; version_id: number | null; agent: string }>("/api/instructions/undo", { method: "POST" });
