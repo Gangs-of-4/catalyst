@@ -55,6 +55,23 @@ export class CallCancelled extends Error {
   }
 }
 
+type VapiClass = typeof import("@vapi-ai/web").default;
+
+/**
+ * The Vapi class from the SDK module, whichever shape the bundler gives it. `@vapi-ai/web` is
+ * CommonJS (`exports.default = Vapi`), and Vite's production build hands a dynamic import of it
+ * back as `{ default: { default: Vapi } }`, so `new mod.default()` failed on the live site with
+ * "i is not a constructor". The dev server and the tests give `{ default: Vapi }`.
+ */
+export function vapiClass(mod: unknown): VapiClass {
+  let found: unknown = mod;
+  for (let i = 0; i < 3 && typeof found !== "function"; i++) {
+    found = (found as { default?: unknown } | undefined)?.default;
+  }
+  if (typeof found !== "function") throw new Error("The voice library didn't load. Reload the page.");
+  return found as VapiClass;
+}
+
 /**
  * Start the web call. Call `requestMicrophone()` first. Aborting `signal` cancels a pending start
  * and hangs up a call that connects afterwards, so closing the page mid-connect never leaves a call
@@ -66,7 +83,7 @@ export async function startCall(
   events: CallEvents,
   signal?: AbortSignal,
 ): Promise<VoiceCall> {
-  const { default: Vapi } = await import("@vapi-ai/web");
+  const Vapi = vapiClass(await import("@vapi-ai/web"));
   if (signal?.aborted) throw new CallCancelled();
   const vapi = new Vapi(publicKey);
   vapi.on("call-start", events.onLive);
