@@ -12,6 +12,7 @@
     { "source": "/desk", "destination": "/app" },
     { "source": "/home", "destination": "/app" },
     { "source": "/login", "destination": "/app" },
+    { "source": "/settings", "destination": "/app" },
     { "source": "/signup", "destination": "/app" }
   ]
 }
