@@ -428,7 +428,7 @@ describe("catalogue (distributor)", () => {
     const [, init] = fetchMock.mock.calls.find(([u]) => u === "/api/catalog/import")!;
     expect(init?.method).toBe("POST");
     expect(init?.headers).toMatchObject({ "Content-Type": "text/csv", "X-Requested-With": "catalyst" });
-    expect(init?.body).toBe(csv);
+    expect(init?.body).toBe(file); // the file's own bytes, not text decoded in the browser
   });
 
   it("refuses a file over 1 MB before sending it", async () => {

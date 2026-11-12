@@ -91,6 +91,10 @@ export const updateProduct = (id: number, changes: Partial<ProductIn> & { active
 
 export type ImportResult = { added: number; updated: number; errors: { row: number; message: string }[] };
 
-/** The CSV file's text as the raw body (`text/csv`, at most 1 MB): good rows are kept, bad ones listed. */
-export const importCatalog = (csv: string) =>
-  api<ImportResult>("/api/catalog/import", { method: "POST", raw: { body: csv, contentType: "text/csv" } });
+/**
+ * The CSV file as the raw body (`text/csv`, at most 1 MB): good rows are kept, bad ones listed. The
+ * bytes go unchanged, so a file saved in another encoding (Excel's ANSI) reaches the backend's
+ * "Save the file as CSV (UTF-8)" check instead of being silently garbled in the browser.
+ */
+export const importCatalog = (file: Blob | string) =>
+  api<ImportResult>("/api/catalog/import", { method: "POST", raw: { body: file, contentType: "text/csv" } });

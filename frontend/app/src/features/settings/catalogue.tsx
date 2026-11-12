@@ -174,6 +174,8 @@ export function CatalogueSection({
     [onAuthError],
   );
 
+  // The first load is written out here rather than calling load(): the React lint rule
+  // (react-hooks/set-state-in-effect) rejects an effect that calls a state-setting callback.
   React.useEffect(() => {
     const ctrl = new AbortController();
     getAllProducts(ctrl.signal)
@@ -217,7 +219,7 @@ export function CatalogueSection({
     }
     setUploading(true);
     try {
-      const r = await importCatalog(await file.text());
+      const r = await importCatalog(file);
       setResult(r);
       await load();
     } catch (err) {

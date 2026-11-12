@@ -42,8 +42,11 @@ export type ApiOptions = {
   method?: Method;
   /** JSON-serialisable body for writes. */
   body?: unknown;
-  /** A raw body instead of JSON, e.g. a CSV file as `text/csv` (contracts.md §6, the one non-JSON write). */
-  raw?: { body: string; contentType: string };
+  /**
+   * A raw body instead of JSON, e.g. a CSV file as `text/csv` (contracts.md §6, the one non-JSON
+   * write). A file goes as its own bytes, so the backend sees exactly what was saved.
+   */
+  raw?: { body: BodyInit; contentType: string };
   signal?: AbortSignal;
 };
 
