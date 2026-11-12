@@ -347,8 +347,11 @@ def _put_back_orders(conn: db.Conn, taken: list[tuple[dict, list[dict]]]) -> Non
             "SELECT COALESCE(MAX(number), 0) + 1 FROM orders WHERE tenant_id = ?", (conn.tid,)
         ).fetchone()[0]
         row = conn.execute(
-            "INSERT INTO orders (tenant_id, number, " + ", ".join(ORDER_COPY) + ") VALUES (?, ?, "
-            + ", ".join("?" for _ in ORDER_COPY) + ") RETURNING id",
+            "INSERT INTO orders (tenant_id, number, "
+            + ", ".join(ORDER_COPY)
+            + ") VALUES (?, ?, "
+            + ", ".join("?" for _ in ORDER_COPY)
+            + ") RETURNING id",
             (conn.tid, number, *(order[k] for k in ORDER_COPY)),
         ).fetchone()
         for it in items:
