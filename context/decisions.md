@@ -583,7 +583,7 @@ ADR-0029 and ADR-0031 were accepted on 2026-10-27 and stay here so their history
 ### ADR-0041: Vercel rewrites `/api` to the backend for first-party session cookies
 
 - **Date:** 2026-11-10
-- **Status:** Accepted — team, 2026-11-11 (team lead chose this option on 2026-11-10). Implemented in PR #18. Before `NEXT_PUBLIC_API_URL` is set on Vercel (M10), check on the live site that login keeps the session cookie (VERIFY: Vercel doesn't document `Set-Cookie` passthrough on external rewrites).
+- **Status:** Accepted — team, 2026-11-11 (team lead chose this option on 2026-11-10). Implemented in PR #18. Before `NEXT_PUBLIC_API_URL` is set on Vercel (M10), check on the live site that login keeps the session cookie (VERIFY: Vercel doesn't document `Set-Cookie` passthrough on external rewrites). **Checked 2026-11-12 (M10):** on the production site, logging in as the demo clinic owner set the session cookie through the rewrite, and the owner stayed logged in after a refresh.
 - **Cost implication:** Free tier with limits — rewrites to an external origin count against Vercel Hobby usage (VERIFY).
 - **Changes:** ADR-0036 decision 4 ("Vercel never proxies API traffic").
 

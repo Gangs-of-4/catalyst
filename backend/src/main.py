@@ -1,5 +1,6 @@
 """FastAPI app: agent webhook, WhatsApp webhook, staff APIs and the static pages."""
 
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -19,6 +20,7 @@ from .api import (
     orders,
     public,
     setup,
+    sync,
     try_page,
     vapi,
     whatsapp,
@@ -43,6 +45,8 @@ async def lifespan(app: FastAPI):
         instructions_store.migrate_pending(conn)
     finally:
         conn.close()
+    # Off the startup path: Vapi can take seconds, and the health check shouldn't wait for it.
+    threading.Thread(target=sync.sync_demo_agents, daemon=True).start()
     yield
 
 

@@ -25,7 +25,9 @@ FALLBACK_VOICE_HINT = (
 
 
 class VapiError(Exception):
-    pass
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
 
 
 def public_url() -> str:
@@ -107,7 +109,7 @@ def _request(method: str, path: str, body: dict | None = None) -> dict:
     except httpx.HTTPError as e:
         raise VapiError(f"Could not reach Vapi: {type(e).__name__}") from e
     if r.status_code >= 300:
-        raise VapiError(f"Vapi said HTTP {r.status_code}: {r.text[:1500]}")
+        raise VapiError(f"Vapi said HTTP {r.status_code}: {r.text[:1500]}", r.status_code)
     return r.json() if r.content else {}
 
 
@@ -142,8 +144,14 @@ def sync_tenant(conn: db.Conn) -> str:
     if not public_url().startswith("https://"):
         raise VapiError("PUBLIC_URL must be the https:// URL Vapi can reach.")
     if t["vapi_assistant_id"]:
-        _request("PATCH", f"/assistant/{t['vapi_assistant_id']}", body)
-        return "updated"
+        try:
+            _request("PATCH", f"/assistant/{t['vapi_assistant_id']}", body)
+            return "updated"
+        except VapiError as e:
+            if e.status != 404:
+                raise
+            # Not in this Vapi account (the keys now belong to another account, or it was
+            # deleted): make a new one rather than failing on every save.
     created = _request("POST", "/assistant", body)
     tenancy.set_assistant(conn, created["id"])
     return "created"
