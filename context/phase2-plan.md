@@ -29,7 +29,7 @@
 | M6: WhatsApp per business (routing by sender, wholesale commands, no open demo mode) | #35 | Merged |
 | M5: owner custom instructions | #36 | Open |
 | M7: usage events, admin counts and weekly breakdown, counts-only usage CSV, feedback log with decisions and Sheet-matching CSV (reset-demo cut) | #38 | Open |
-| M9: demo clinic + demo wholesale with today's data and logins; optional 4-week fictional history (`DEMO_HISTORY=1`); `scripts/seed_demo.py` resets it, anchored to today | (this PR) | Open |
+| M9: demo clinic + demo wholesale with today's data and logins; optional 4-week fictional history (`DEMO_HISTORY=1`); `scripts/seed_demo.py` resets it, anchored to today | #40 | Open |
 | M8, M10–M12 | — | M8 in progress (frontend); M10–M12 not started |
 
 ---
