@@ -7,6 +7,7 @@ import re
 from ..core import db, tenancy
 from ..knowledge import answers
 from ..verticals import loader
+from . import instructions
 
 VOICE_FORMS = {
     "female": "Your voice is female: use feminine verb forms (कर रही हूँ, सकती हूँ, बताती हूँ).",
@@ -70,6 +71,7 @@ def build(conn: db.Conn, s: dict, template: str | None = None) -> tuple[str, str
         "tenant_name": s["name"],
         "clinic_snapshot": facts,
         "business_snapshot": facts,
+        "owner_instructions": instructions.for_prompt(conn),
         "emergency_instruction": s.get("emergency_instruction", ""),
         "voice_forms": VOICE_FORMS[voice],
         "example_doctor": s["doctors"][0]["name"] if s.get("doctors") else "the doctor",

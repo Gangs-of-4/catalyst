@@ -165,7 +165,7 @@ def try_saying(template: str) -> list[str]:
 
 def whatsapp_commands(template: str) -> set[str]:
     """The owner commands a template enables (vertical.yaml `whatsapp.commands`)."""
-    return set(_checked(template)["whatsapp"].get("commands") or [])
+    return set((_checked(template).get("whatsapp") or {}).get("commands") or [])
 
 
 def modules(template: str) -> list[str]:

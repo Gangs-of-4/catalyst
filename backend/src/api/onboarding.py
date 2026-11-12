@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from .. import accounts
+from ..agents import instructions
 from ..core import db, tenancy
 from ..core import phone as ph
 from ..core import settings as cs
@@ -197,10 +198,6 @@ def build_settings(t: dict, body: SignupIn) -> dict:
         s.update(min_order=d.min_order.strip(), delivery_area=d.delivery_area.strip())
     # Evidence of consent (ADR-0039): when, and which wording. The box has to be ticked to get here.
     s["consent"] = {"at": db.stamp(), "version": CONSENT_VERSION}
-    # The owner's words are kept, not dropped, but NOT screened yet: they must never reach the agent
-    # prompt. M5 screens them, writes an instruction version and removes this key.
-    if body.instructions.strip():
-        s["pending_instructions"] = body.instructions.strip()
     return s
 
 
@@ -237,6 +234,13 @@ def sample_catalog(template: str) -> Response:
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{template}-sample-catalog.csv"'},
     )
+
+
+def _instructions_state(text: str, screened: instructions.Screened) -> str:
+    """ "saved" (some lines accepted), "rejected" (every line rejected) or "none"."""
+    if not text.strip():
+        return "none"
+    return "saved" if screened.accepted else "rejected"
 
 
 def _undo_signup(conn: db.Conn, tid: str) -> None:
@@ -289,6 +293,10 @@ def signup(body: SignupIn, request: Request, response: Response) -> dict:
                 scoped, tid, body.user.name, body.user.email, body.user.password
             )
             cookie = accounts.start_session(scoped, uid, tid)
+            # Screened before the assistant is built: only accepted lines reach the prompt.
+            screened = instructions.Screened()
+            if body.instructions.strip():
+                _, screened = instructions.save(scoped, body.instructions, "web")
             public_id = tenancy.get(conn, tid)["public_id"]
         except Exception as e:
             # Undo the half-made business so a retry isn't refused with WHATSAPP_TAKEN.
@@ -310,5 +318,6 @@ def signup(body: SignupIn, request: Request, response: Response) -> dict:
         "public_id": public_id,
         "template": body.business.template,
         "agent": agent,
-        "instructions": "pending" if body.instructions.strip() else "none",
+        "instructions": _instructions_state(body.instructions, screened),
+        "rejected": screened.rejected,
     }
