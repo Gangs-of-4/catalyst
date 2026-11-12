@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS users_tenant ON users (tenant_id);
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT PRIMARY KEY,        -- SHA-256 of the cookie token; the token itself is never stored
-  user_id TEXT,                       -- NULL for admin
+  user_id TEXT,                       -- the owner; for admin, a fingerprint of the admin password
   tenant_id TEXT REFERENCES tenants(id),   -- NULL for admin
   kind TEXT NOT NULL,                 -- user | admin
   expires_at TEXT NOT NULL,
