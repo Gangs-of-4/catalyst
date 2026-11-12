@@ -74,7 +74,11 @@ function RegisterPreview() {
       </div>
       <div className="mt-2 rounded-lg bg-primary px-3 py-2.5 text-sm text-primary-foreground">
         <p className="opacity-75">Your front desk</p>
-        <p>&ldquo;Ji, 10:30 baje book kar diya. Naam bata dijiye?&rdquo;</p>
+        <p>&ldquo;Ji, 10:30 khaali hai. Aapka naam bata dijiye?&rdquo;</p>
+      </div>
+      <div className="mt-2 rounded-lg bg-muted px-3 py-2.5 text-sm">
+        <p className="text-muted-foreground">Caller</p>
+        <p>&ldquo;Sita Kumari.&rdquo;</p>
       </div>
       <ul className="mt-4 grid grid-cols-2 gap-2">
         {slots.map((s) => (
