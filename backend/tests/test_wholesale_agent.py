@@ -205,7 +205,8 @@ def test_order_status_by_number_and_phone(shop):
         "items": [{"product": "Surgical gloves", "qty": 3}],
     }
     tool(shop, "create_order", args)
-    shop[0].post("/api/orders/1/status", json={"status": "confirmed"})
+    oid = rows(shop, "SELECT id FROM orders WHERE tenant_id = ?")[0]["id"]
+    shop[0].post(f"/api/orders/{oid}/status", json={"status": "confirmed"})
     text = tool(shop, "order_status", {"order_number": 1, "phone": "90000 00041"})
     assert "order 1 placed" in text and "confirmed, being packed" in text and "₹1,350" in text
     assert "order 1" in tool(shop, "order_status", {"phone": "90000 00041"})

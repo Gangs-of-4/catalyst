@@ -45,3 +45,8 @@ seed:                # relative days: 0 = today, 1 = next open day
     - {day: 1, time: "17:00", doctor: dr-b, name: "Anil Srivastava", phone: "+919000000005", reason: "root canal sitting", source: whatsapp}
   callbacks:
     - {name: "Kavita Singh", phone: "+919000000006", reason: unanswered_question, note: "Braces ki EMI ke baare mein poocha"}
+
+# For the 4-week history (seed.history): fictional names, phones in the +91 90000 0xxxx test range.
+history:
+  patients: ["Ramesh Gupta", "Sunita Yadav", "Faisal Ahmed", "Pooja Mishra", "Anil Srivastava", "Kavita Singh",
+             "Rohit Tiwari", "Neha Pandey", "Sanjay Verma", "Meena Rastogi", "Imran Khan", "Geeta Saxena"]

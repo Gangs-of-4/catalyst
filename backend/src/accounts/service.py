@@ -232,9 +232,15 @@ def touch(conn: db.Conn, user_id: str) -> None:
 DEMO_EMAIL = "demo.clinic@example.com"
 
 
-def ensure_demo_login(conn: db.Conn, tenant_id: str) -> str | None:
-    """Give the demo clinic an owner login, so its desk and settings sit behind a session like every
-    other business. The password comes only from DEMO_LOGIN_PASSWORD (never the repo). Runs at every
+DEMO_EMAILS = {  # template -> (default email, variable that overrides it)
+    "clinic": (DEMO_EMAIL, "DEMO_LOGIN_EMAIL"),
+    "wholesale": ("demo.wholesale@example.com", "DEMO_WHOLESALE_LOGIN_EMAIL"),
+}
+
+
+def ensure_demo_login(conn: db.Conn, tenant_id: str, template: str = "clinic") -> str | None:
+    """Give a demo business (clinic or wholesale) an owner login, so its desk and settings sit behind
+    a session like every other business. Both use DEMO_LOGIN_PASSWORD. The password comes only from DEMO_LOGIN_PASSWORD (never the repo). Runs at every
     start, so the variable is the truth:
 
     - unset (or too short): no demo login; any earlier one and its sessions are removed;
@@ -245,7 +251,8 @@ def ensure_demo_login(conn: db.Conn, tenant_id: str) -> str | None:
     request.
     """
     password = env("DEMO_LOGIN_PASSWORD")
-    email = normalize_email(env("DEMO_LOGIN_EMAIL") or DEMO_EMAIL)
+    default, variable = DEMO_EMAILS[template]
+    email = normalize_email(env(variable) or default)
     usable = len(password) >= MIN_PASSWORD
     if password and not usable:
         log.warning(
