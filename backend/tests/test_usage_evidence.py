@@ -13,7 +13,7 @@ from src import analytics
 from src.core import db, tenancy
 from src.main import app
 
-ADMIN_PASSWORD = "admin-pass-123"
+ADMIN_PASSWORD = "admin-pass-1234567"
 OWNER = "+919000000401"
 
 
@@ -45,6 +45,7 @@ def env(isolated, monkeypatch):
     from src.accounts import service
 
     service._admin_failures.clear()
+    service._admin_all_failures.clear()
     return isolated
 
 
@@ -285,7 +286,8 @@ def test_admin_login_wrong_password_and_lockout(env):
 def test_no_admin_password_means_no_admin(isolated, monkeypatch):
     from src.accounts import service
 
-    service._admin_failures.clear()  # the lockout counter lives in the process
+    service._admin_failures.clear()  # the lockout counters live in the process
+    service._admin_all_failures.clear()
     monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
     with TestClient(app, headers=APP_HEADERS) as c:
         assert c.post("/api/admin/login", json={"password": ""}).status_code == 422
@@ -455,3 +457,66 @@ def test_decision_fields_are_strict(owner, admin, change, field):
     fid = send(owner).json()["id"]
     r = admin.put(f"/api/admin/feedback/{fid}", json=change)
     assert r.status_code == 422 and field in r.json()["fields"]
+
+
+def test_fake_forwarded_hops_dont_dodge_the_lockout(env):
+    """Only the last X-Forwarded-For hop (the one our proxy adds) counts; earlier ones are the
+    caller's own and change nothing."""
+    with TestClient(app, headers=APP_HEADERS) as c:
+        for i in range(5):
+            fake = {"X-Forwarded-For": f"10.0.0.{i}, 203.0.113.7"}
+            c.post("/api/admin/login", json={"password": "wrong"}, headers=fake)
+        fresh = {"X-Forwarded-For": "10.9.9.9, 203.0.113.7"}
+        r = c.post("/api/admin/login", json={"password": ADMIN_PASSWORD}, headers=fresh)
+        assert r.status_code == 429
+
+
+def test_a_global_cap_stops_guessing_from_many_addresses(env):
+    from src.accounts import service
+
+    with TestClient(app, headers=APP_HEADERS) as c:
+        for i in range(service.ADMIN_GLOBAL_LIMIT):
+            c.post(
+                "/api/admin/login",
+                json={"password": "wrong"},
+                headers={"X-Forwarded-For": f"198.51.100.{i}"},
+            )
+        r = c.post(
+            "/api/admin/login",
+            json={"password": ADMIN_PASSWORD},
+            headers={"X-Forwarded-For": "192.0.2.1"},
+        )
+        assert r.status_code == 429
+
+
+def test_remembered_addresses_are_bounded(env, monkeypatch):
+    from src.accounts import service
+
+    monkeypatch.setattr(service, "ADMIN_MAX_CLIENTS", 3)
+    monkeypatch.setattr(service, "ADMIN_GLOBAL_LIMIT", 1000)
+    with TestClient(app, headers=APP_HEADERS) as c:
+        for i in range(10):
+            c.post(
+                "/api/admin/login",
+                json={"password": "wrong"},
+                headers={"X-Forwarded-For": f"198.51.100.{i}"},
+            )
+    assert len(service._admin_failures) == 3
+
+
+def test_a_short_admin_password_means_no_admin(isolated, monkeypatch):
+    from src.accounts import service
+
+    service._admin_failures.clear()
+    service._admin_all_failures.clear()
+    monkeypatch.setenv("ADMIN_PASSWORD", "short-pass")
+    with TestClient(app, headers=APP_HEADERS) as c:
+        assert c.post("/api/admin/login", json={"password": "short-pass"}).status_code == 401
+
+
+def test_changing_the_admin_password_ends_old_sessions(admin, monkeypatch):
+    assert admin.get("/api/admin/businesses").status_code == 200
+    monkeypatch.setenv("ADMIN_PASSWORD", "a-brand-new-admin-pass")
+    assert admin.get("/api/admin/businesses").status_code == 401
+    r = admin.post("/api/admin/login", json={"password": "a-brand-new-admin-pass"})
+    assert r.status_code == 200 and admin.get("/api/admin/businesses").status_code == 200
