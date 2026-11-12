@@ -72,8 +72,25 @@ export function vapiClass(mod: unknown): VapiClass {
   return found as VapiClass;
 }
 
+let loading: Promise<VapiClass> | null = null;
+
 /**
- * Start the web call. Call `requestMicrophone()` first. Aborting `signal` cancels a pending start
+ * Load the voice library once and check it holds a usable class. The test page calls this before
+ * `POST /api/try/{id}/start`, which counts a daily call, so a library that fails to load never
+ * uses one up. A failure isn't cached: the next press tries again.
+ */
+export function loadVoice(): Promise<VapiClass> {
+  loading ??= import("@vapi-ai/web").then(vapiClass).catch((err: unknown) => {
+    loading = null;
+    throw err instanceof Error && err.message.startsWith("The voice library")
+      ? err
+      : new Error("The voice library didn't load. Check your internet and try again.");
+  });
+  return loading;
+}
+
+/**
+ * Start the web call. Call `requestMicrophone()` and `loadVoice()` first. Aborting `signal` cancels a pending start
  * and hangs up a call that connects afterwards, so closing the page mid-connect never leaves a call
  * running in the background with the microphone on (review on #25).
  */
@@ -83,7 +100,7 @@ export async function startCall(
   events: CallEvents,
   signal?: AbortSignal,
 ): Promise<VoiceCall> {
-  const Vapi = vapiClass(await import("@vapi-ai/web"));
+  const Vapi = await loadVoice(); // already loaded by the page, before the call cap was spent
   if (signal?.aborted) throw new CallCancelled();
   const vapi = new Vapi(publicKey);
   vapi.on("call-start", events.onLive);
