@@ -1,4 +1,5 @@
-import { CheckCheck, PhoneOff, ShieldAlert } from "lucide-react";
+import { CheckCheck, PhoneOff, ShieldAlert, Siren } from "lucide-react";
+import type * as React from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -103,5 +104,53 @@ export function CallsPanel({ calls }: { calls: Call[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** The inbox and recent calls, as the desk's side column (right on wide screens, below on phones). */
+export function DeskSide({
+  inbox,
+  calls,
+  doneId,
+  onDone,
+  children,
+}: {
+  inbox: InboxItem[];
+  calls: Call[];
+  doneId: number | null;
+  onDone: (it: InboxItem) => void;
+  /** Anything that sits above the inbox in this column (the order board's add-order form). */
+  children?: React.ReactNode;
+}) {
+  return (
+    <aside className="flex flex-col gap-8 lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:self-start lg:overflow-y-auto">
+      {children}
+      <section id="inbox" aria-labelledby="inbox-title" className="flex scroll-mt-20 flex-col gap-3">
+        <h2 id="inbox-title" className="text-lg font-semibold">
+          Inbox {inbox.length > 0 && <span className="text-muted-foreground">({inbox.length})</span>}
+        </h2>
+        <InboxPanel items={inbox} onDone={onDone} doneId={doneId} />
+      </section>
+      <section aria-labelledby="calls-title" className="flex flex-col gap-3">
+        <h2 id="calls-title" className="text-lg font-semibold">
+          Recent calls
+        </h2>
+        <CallsPanel calls={calls} />
+      </section>
+    </aside>
+  );
+}
+
+/** The red strip on phones that jumps down to the inbox when something urgent is waiting. */
+export function UrgentBanner({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <a
+      href="#inbox"
+      className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive-soft px-3 py-2.5 text-sm font-semibold text-destructive-text lg:hidden"
+    >
+      <Siren aria-hidden className="size-4" />
+      {count} urgent {count === 1 ? "item needs" : "items need"} you. See the inbox.
+    </a>
   );
 }
