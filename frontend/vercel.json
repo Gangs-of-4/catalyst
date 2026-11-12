@@ -7,6 +7,7 @@
   "git": { "deploymentEnabled": false },
   "rewrites": [
     { "source": "/", "destination": "/app" },
+    { "source": "/admin", "destination": "/app" },
     { "source": "/b/:publicId/try", "destination": "/app" },
     { "source": "/demo/:template", "destination": "/app" },
     { "source": "/desk", "destination": "/app" },

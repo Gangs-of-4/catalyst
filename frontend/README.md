@@ -50,6 +50,7 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 | Route | File | What |
 |---|---|---|
 | `/` | `src/pages/landing.tsx`, `src/components/feature-card.tsx` | Public landing page, mobile first: what Catalyst does, how it works, who it's for, the safety rules, and links to sign up, log in and try a demo call. On phones the main action stays in a bar pinned to the bottom. Needs no backend, so no `WakeGate`. The old static `index.html` is no longer deployed |
+| `/admin` | `src/pages/admin.tsx`, `src/features/admin/` | The team's admin page (contracts.md §6.1–6.2): its own password login (`POST /api/admin/login`, the `catalyst_admin` cookie; a 401 anywhere shows the login again; `429 LOCKED` shown as worded). **Usage**: totals across real businesses (demos left out), then each business with logins, last active, all-time bookings/orders, calls and WhatsApp commands, a 4-week table, and its counts-only usage CSV. **Feedback**: Undecided first (or All), each with type, decision and details, a Decide sheet (decision, reason required for Won't do, shipped on, https evidence link, their reaction; `PUT /api/admin/feedback/{id}`) and the Sheet-matching feedback CSV. No admin logout endpoint yet: the session ends after 12 hours or when `ADMIN_PASSWORD` changes |
 | `/b/:publicId/try` | `src/pages/try.tsx`, `src/features/try/` | Public test page for one business: talk to its front desk (Vapi web call, after the `POST /api/try/{id}/start` cap check) and watch its register or order board update. Covers voice-not-switched-on, minutes-used-up and microphone-blocked states. Endpoint shapes: issue #24 |
 | `/demo/:template` | `src/pages/try.tsx` | Opens the demo business's test page (`/b/demo-<template>/try`) |
 | `/login` | `src/pages/login.tsx` | Owner login (`POST /api/login`). Already logged in → straight on. Honors a same-app `?next=` path |
@@ -72,7 +73,7 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 2. Add a rewrite for its path to `/app` in `frontend/vercel.json`. Use `/app`, not `/app.html`: with `cleanUrls` on, Vercel serves the shell at `/app`, and a rewrite to `/app.html` returns 404.
 3. Delete the old static page in the same PR, if there is one. (Exception: the old try page, `index.html` with `static/try.js` and `static/vapi.bundle.js`, is no longer deployed but stays for now because the backend still serves it at `localhost:8000/` for local backend-only use. It goes in a follow-up together with that backend route.)
 
-**Deploy:** `build.mjs` builds the app, puts its shell at `dist/app.html` and its files in `dist/assets/`, then copies the old pages as before. `vercel.json` rewrites React routes (now: `/`, `/b/:publicId/try`, `/demo/:template`, `/desk`, `/home`, `/login`, `/settings`, `/signup`) to `/app`, where Vercel serves `dist/app.html` because `cleanUrls` is on.
+**Deploy:** `build.mjs` builds the app, puts its shell at `dist/app.html` and its files in `dist/assets/`, then copies the old pages as before. `vercel.json` rewrites React routes (now: `/`, `/admin`, `/b/:publicId/try`, `/demo/:template`, `/desk`, `/home`, `/login`, `/settings`, `/signup`) to `/app`, where Vercel serves `dist/app.html` because `cleanUrls` is on.
 
 **Rules:** see `context/coding-rules.md` (Frontend).
 - Never put patient or customer data in browser storage.
