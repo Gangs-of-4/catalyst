@@ -12,11 +12,13 @@ from datetime import date, datetime, time, timedelta
 
 from .booking import service
 from .core import config, db, tenancy
+from .core.log import log
 from .orders import catalog
 from .orders import service as orders
 from .verticals import loader
 
 HISTORY_DAYS = 28
+SHIFT = 1_000_000  # moves today's order numbers out of the way while the history is numbered
 # What reset_demo clears before seeding again. Settings and logins are kept.
 DEMO_DATA_TABLES = (
     "order_items",
@@ -49,15 +51,18 @@ def ensure(conn: db.Conn, with_demo_data: bool = True) -> str:
         if with_demo_data:
             _clinic_today(conn.for_tenant(clinic), s)
     if tenancy.demo_id(conn, "wholesale") is None:
-        s = wholesale_settings()
-        shop = tenancy.create(
-            conn,
-            "wholesale",
-            s,
-            public_id=tenancy.DEMO_PUBLIC_ID.format(template="wholesale"),
-            is_demo=True,
-        )
-        if with_demo_data:
+        try:
+            shop = tenancy.create(
+                conn,
+                "wholesale",
+                wholesale_settings(),
+                public_id=tenancy.DEMO_PUBLIC_ID.format(template="wholesale"),
+                is_demo=True,
+            )
+        except db.Conflict:  # another worker starting at the same moment made it first
+            conn.rollback()
+            shop = None
+        if shop and with_demo_data:
             _wholesale_today(conn.for_tenant(shop))
     return clinic
 
@@ -177,13 +182,14 @@ def _call(conn: db.Conn, rng: random.Random, d: date, n: int, outcomes: list[str
     outcome = rng.choice(outcomes)
     started, ended = _at(d, hour, minute), _at(d, hour, min(minute + rng.randint(1, 4), 59))
     flags = {k: int(outcome == k) for k in ("booked", "escalated", "callback")}
-    conn.execute(
+    written = conn.execute(
         "INSERT INTO calls (tenant_id, id, started_at, ended_at, booked, escalated, callback,"
         " outcome, ended_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'customer-ended-call')"
         " ON CONFLICT DO NOTHING",
         (conn.tid, f"demo-{d.isoformat()}-{n}", started, ended, *flags.values(), outcome),
-    )
-    _event(conn, "call_ended", ended)
+    ).rowcount
+    if written == 1:  # the evidence counts only rows that exist
+        _event(conn, "call_ended", ended)
 
 
 def _owner_activity(conn: db.Conn, rng: random.Random, d: date) -> None:
@@ -200,7 +206,7 @@ def _clinic_day(conn: db.Conn, s: dict, d: date, names: list[str]) -> None:
         status = rng.choice(["done"] * 6 + ["no_show", "cancelled"])
         source = rng.choice(["phone", "phone", "phone", "walk_in", "whatsapp"])
         made = _at(d - timedelta(days=rng.randint(0, 3)), 10, i)
-        conn.execute(
+        written = conn.execute(
             "INSERT INTO bookings (tenant_id, resource_id, date, time, status, source, name,"
             " phone, reason, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             " ON CONFLICT DO NOTHING",
@@ -217,9 +223,10 @@ def _clinic_day(conn: db.Conn, s: dict, d: date, names: list[str]) -> None:
                 made,
                 made,
             ),
-        )
-        _event(conn, "booking_created", made)
-        _event(conn, "booking_status", _at(d, 20, i))
+        ).rowcount
+        if written == 1:
+            _event(conn, "booking_created", made)
+            _event(conn, "booking_status", _at(d, 20, i))
     for n in range(rng.randint(2, 5)):
         _call(
             conn, rng, d, n, ["booked", "booked", "answered", "answered", "callback", "escalated"]
@@ -237,11 +244,19 @@ def _clinic_day(conn: db.Conn, s: dict, d: date, names: list[str]) -> None:
 
 def _wholesale_day(conn: db.Conn, d: date, products: list[dict], shops: list[str]) -> None:
     rng = random.Random(f"wholesale:{d.isoformat()}")
-    for i in range(rng.randint(2, 5)):
-        status = rng.choice(["delivered"] * 5 + ["dispatched", "cancelled"])
-        made = _at(d, rng.randint(9, 17), rng.randint(0, 59))
-        number = conn.execute(
-            "SELECT COALESCE(MAX(number), 0) + 1 FROM orders WHERE tenant_id = ?", (conn.tid,)
+    plan = sorted(  # by time, so order numbers follow the clock within the day too
+        (
+            rng.randint(9, 17),
+            rng.randint(0, 59),
+            rng.choice(["delivered"] * 5 + ["dispatched", "cancelled"]),
+        )
+        for _ in range(rng.randint(2, 5))
+    )
+    for i, (hour, minute, status) in enumerate(plan):
+        made = _at(d, hour, minute)
+        number = conn.execute(  # today's orders sit above SHIFT while the history is added
+            "SELECT COALESCE(MAX(number), 0) + 1 FROM orders WHERE tenant_id = ? AND number < ?",
+            (conn.tid, SHIFT),
         ).fetchone()[0]
         row = conn.execute(
             "INSERT INTO orders (tenant_id, number, shop_name, contact_name, phone, status,"
@@ -279,39 +294,79 @@ def _wholesale_day(conn: db.Conn, d: date, products: list[dict], shops: list[str
     _owner_activity(conn, rng, d)
 
 
+def has_history(conn: db.Conn) -> bool:
+    """Seeded history is marked by its calls (ids "demo-<date>-<n>"), not by "any old event": a
+    demo used before DEMO_HISTORY was set still gets its history."""
+    return (
+        conn.execute(
+            "SELECT 1 FROM calls WHERE tenant_id = ? AND id LIKE 'demo-%' LIMIT 1", (conn.tid,)
+        ).fetchone()
+        is not None
+    )
+
+
 def history(conn: db.Conn, days: int = HISTORY_DAYS) -> None:
     """Add the last `days` days (not today) of fictional usage to both demo businesses, in one
-    transaction each. Safe to run twice: a business that already has history is skipped."""
+    transaction each. Safe to run twice, or from two workers at once: a business that already
+    has seeded history is skipped, and a clash with another worker is rolled back."""
     today = config.now().date()
     past = [today - timedelta(days=i) for i in range(days, 0, -1)]
     for template, tid in demo_ids(conn).items():
         scoped = conn.for_tenant(tid)
-        start = today.isoformat()
-        already = scoped.execute(
-            "SELECT 1 FROM events WHERE tenant_id = ? AND created_at < ? LIMIT 1", (tid, start)
-        ).fetchone()
-        if already:
+        if has_history(scoped):
             continue
         s = tenancy.load_settings(scoped)
         demo = loader.load_yaml("demo-tenant.yaml", loader.template_dir(template))
         names = demo.get("history", {})
-        with scoped:
-            for d in past:
-                if service.is_closed(s, d):
-                    continue
-                if template == "clinic":
-                    _clinic_day(scoped, s, d, names.get("patients") or ["Demo Patient"])
-                else:
-                    products = catalog.list_products(scoped)
-                    if products:
+        products = catalog.list_products(scoped) if template == "wholesale" else []
+        try:
+            with scoped:
+                if template == "wholesale":
+                    scoped.execute(
+                        "UPDATE orders SET number = number + ? WHERE tenant_id = ?", (SHIFT, tid)
+                    )
+                for d in past:
+                    if service.is_closed(s, d):
+                        continue
+                    if template == "clinic":
+                        _clinic_day(scoped, s, d, names.get("patients") or ["Demo Patient"])
+                    elif products:
                         _wholesale_day(scoped, d, products, names.get("shops") or ["Demo Shop"])
+                if template == "wholesale":
+                    last = scoped.execute(
+                        "SELECT COALESCE(MAX(number), 0) FROM orders WHERE tenant_id = ?"
+                        " AND number < ?",
+                        (tid, SHIFT),
+                    ).fetchone()[0]
+                    scoped.execute(  # today's orders come after the history, in their order
+                        "UPDATE orders SET number = number - ? + ? WHERE tenant_id = ?"
+                        " AND number >= ?",
+                        (SHIFT, last, tid, SHIFT),
+                    )
+        except db.Conflict:
+            scoped.rollback()
+            log.info("seed: another worker is adding the %s demo history", template)
+
+
+def _preflight(template: str) -> None:
+    """Everything reset_demo reads, read before it deletes anything: a broken YAML or CSV fails
+    here, leaving the demo as it was."""
+    base = loader.template_dir(template)
+    loader.load_yaml("demo-tenant.yaml", base)
+    if template == "wholesale":
+        text = (base / "sample-catalog.csv").read_text(encoding="utf-8")
+        if not text.lower().startswith("name,"):
+            raise ValueError("sample-catalog.csv has no header row")
 
 
 def reset_demo(conn: db.Conn, days: int = HISTORY_DAYS) -> list[str]:
     """Clear both demo businesses' data (settings and logins stay), then seed today and the
     history again, anchored to today. Returns the templates reset. `conn` is unchecked."""
     done = []
-    for template, tid in demo_ids(conn).items():
+    ids = demo_ids(conn)
+    for template in ids:
+        _preflight(template)
+    for template, tid in ids.items():
         scoped = conn.for_tenant(tid)
         with scoped:
             for table in DEMO_DATA_TABLES:

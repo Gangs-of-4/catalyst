@@ -58,10 +58,12 @@ def require_admin(request: Request) -> None:
 
 
 def _client(request: Request) -> str:
-    """The caller's address for the admin lockout: the first X-Forwarded-For hop set by the host's
-    proxy (Render, the Vercel rewrite), else the socket address."""
-    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    return forwarded or (request.client.host if request.client else "unknown")
+    """The caller's address for the admin lockout: the **last** X-Forwarded-For hop, the one our
+    host's proxy appended (a caller can put anything in the earlier hops), else the socket
+    address. Everyone who comes through the Vercel rewrite shares Vercel's address here; the
+    global cap and the 16-character minimum are what stop guessing."""
+    hops = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
+    return hops[-1] if hops else (request.client.host if request.client else "unknown")
 
 
 class AdminLoginIn(BaseModel):

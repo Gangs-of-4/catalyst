@@ -13,7 +13,7 @@ from src.accounts import service as accounts_service
 from src.core import config, db, tenancy
 from src.main import app
 
-ADMIN = "admin-pass-123"
+ADMIN = "admin-pass-1234567"
 
 
 @pytest.fixture
@@ -22,6 +22,7 @@ def history_env(isolated, monkeypatch):
     monkeypatch.setenv("DEMO_LOGIN_PASSWORD", DEMO_PASSWORD)
     monkeypatch.setenv("ADMIN_PASSWORD", ADMIN)
     accounts_service._admin_failures.clear()
+    accounts_service._admin_all_failures.clear()
     return isolated
 
 
@@ -197,3 +198,97 @@ def test_the_reset_script_runs(history_env, capsys):
     assert module.main() == 0
     assert "Reset the demo clinic, wholesale" in capsys.readouterr().out
     assert demo("clinic") and demo("wholesale")
+
+
+# Review fixes (#40)
+
+
+def test_history_still_comes_if_the_demo_was_used_first(isolated, monkeypatch):
+    monkeypatch.setenv("DEMO_LOGIN_PASSWORD", DEMO_PASSWORD)
+    with TestClient(app, headers=APP_HEADERS) as c:  # no DEMO_HISTORY yet
+        login(c, "demo.clinic@example.com")  # writes a login event
+    conn = db.connect_unchecked()
+    try:
+        with conn:  # make that event an old one, as on a host used for a few days
+            conn.execute("UPDATE events SET created_at = '2026-10-20T10:00:00+05:30'")
+    finally:
+        conn.close()
+    monkeypatch.setenv("DEMO_HISTORY", "1")
+    with TestClient(app):
+        pass
+    for template in ("clinic", "wholesale"):
+        tid = demo(template)
+        assert raw_rows("SELECT 1 FROM calls WHERE tenant_id = ? AND id LIKE 'demo-%'", (tid,))
+
+
+def test_order_numbers_run_with_the_dates(history_env):
+    with TestClient(app):
+        pass
+    rows = raw_rows(
+        "SELECT number, created_at FROM orders WHERE tenant_id = ? ORDER BY number",
+        (demo("wholesale"),),
+    )
+    dates = [r[1] for r in rows]
+    assert dates == sorted(dates)  # older orders have smaller numbers
+    assert [r[0] for r in rows] == list(range(1, len(rows) + 1))  # 1, 2, 3 … with no gaps
+    today = FIXED_NOW.date().isoformat()
+    assert all(r[1].startswith(today) for r in rows[-3:])  # today's three come last
+
+
+def test_every_history_event_has_its_row(history_env):
+    with TestClient(app):
+        pass
+    for template in ("clinic", "wholesale"):
+        tid = demo(template)
+        calls = raw_rows("SELECT COUNT(*) FROM calls WHERE tenant_id = ?", (tid,))[0][0]
+        ended = raw_rows(
+            "SELECT COUNT(*) FROM events WHERE tenant_id = ? AND type = 'call_ended'", (tid,)
+        )[0][0]
+        assert calls == ended > 0
+    tid = demo("clinic")
+    past = raw_rows(
+        "SELECT COUNT(*) FROM bookings WHERE tenant_id = ? AND date < ?",
+        (tid, FIXED_NOW.date().isoformat()),
+    )[0][0]
+    made = raw_rows(
+        "SELECT COUNT(*) FROM events WHERE tenant_id = ? AND type = 'booking_created'", (tid,)
+    )[0][0]
+    assert past == made > 0
+
+
+def test_a_broken_config_stops_the_reset_before_it_deletes(history_env, monkeypatch):
+    with TestClient(app):
+        pass
+    before = raw_rows("SELECT COUNT(*) FROM orders")[0][0]
+    from src.verticals import loader
+
+    real = loader.load_yaml
+
+    def broken(name, base=None, *a):
+        if base is not None and base.name == "wholesale" and name == "demo-tenant.yaml":
+            raise ValueError("bad yaml")
+        return real(name, base) if base is not None else real(name)
+
+    monkeypatch.setattr(loader, "load_yaml", broken)
+    conn = db.connect_unchecked()
+    try:
+        with pytest.raises(ValueError):
+            seed.reset_demo(conn)
+    finally:
+        conn.close()
+    assert raw_rows("SELECT COUNT(*) FROM orders")[0][0] == before > 0
+
+
+def test_a_second_worker_making_the_wholesale_demo_is_harmless(isolated, monkeypatch):
+    with TestClient(app):
+        pass
+    real = tenancy.demo_id
+    monkeypatch.setattr(  # this worker looked before the other one's insert
+        seed.tenancy, "demo_id", lambda c, t="clinic": None if t == "wholesale" else real(c, t)
+    )
+    conn = db.connect()
+    try:
+        seed.ensure(conn)  # no crash
+    finally:
+        conn.close()
+    assert len(raw_rows("SELECT id FROM tenants WHERE public_id = 'demo-wholesale'")) == 1
