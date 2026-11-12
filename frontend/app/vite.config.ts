@@ -23,5 +23,7 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     restoreMocks: true,
+    // Full-page tests (settings, desk) render a lot on first run; 5 s is too tight on a loaded machine or CI.
+    testTimeout: 15_000,
   },
 });

@@ -7,6 +7,7 @@ import { AppHeader } from "@/components/app-header";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FeedbackButton } from "@/features/feedback/feedback-button";
 import { ApiError } from "@/lib/api";
 import { getMe, logout, type Me } from "@/lib/session";
 
@@ -52,6 +53,7 @@ export function HomePage() {
 
   const header = (
     <AppHeader>
+      {me && <FeedbackButton defaultName={me.user.name} />}
       {me && (
         <Button variant="ghost" size="sm" onClick={onLogout} disabled={leaving}>
           {leaving ? <Loader2 aria-hidden className="animate-spin" /> : <LogOut aria-hidden />} Log out

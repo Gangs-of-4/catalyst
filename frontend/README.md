@@ -60,6 +60,8 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 | `/signup` | `src/pages/signup.tsx`, `src/features/signup/` | Self-serve onboarding: account + business in one step (`GET /api/templates`, `POST /api/signup`), **one step per screen** (1/3 You, 2/3 Your business, 3/3 the template section + optional + consent) with Back/Next in a bar pinned to the bottom on phones. Next checks only that step; the step is in the URL (`?step=2`) so the phone's back button goes to the previous step. The template section is picked by the template's `modules`. A success screen shows the voice agent's state. |
 | `/styleguide` | `src/pages/styleguide.tsx` | Every token and component, for review. **Local only** (`npm run dev`): it isn't part of the live site |
 
+**Send feedback** (`src/features/feedback/feedback-button.tsx`): a "Feedback" button in the header of `/home` and `/desk` opens a sheet: what it's about (the five §3.1 types in plain words), the message (3 to 2,000 characters, with a count), name (prefilled) and role. `POST /api/feedback`; it lands in the team's log on `/admin`. What was typed survives closing the sheet until it's sent.
+
 **Failure states** (phase2-plan §5 cold starts, §6):
 - Pages that need the backend (`/signup`, `/login`, `/home`, `/desk`, `/settings`, `/b/:publicId/try`) sit behind `WakeGate`, wired in `src/App.tsx`. It pings `/healthz` and shows a "waking up" screen while the free backend host wakes.
 - `ConnectionBanner` appears when an API call can't reach the backend mid-session, and retries with backoff. When it reconnects it fires a `catalyst:reconnected` window event that pages can listen for.

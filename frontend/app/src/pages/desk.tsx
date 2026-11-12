@@ -20,6 +20,7 @@ import {
 import { DeskSide, UrgentBanner } from "@/features/desk/panels";
 import { BookingEntry, Register, type RegisterActions } from "@/features/desk/register";
 import { useDeskSide } from "@/features/desk/use-desk-side";
+import { FeedbackButton } from "@/features/feedback/feedback-button";
 import { WalkInDialog, type WalkInTarget } from "@/features/desk/walk-in-dialog";
 import { OrderBoard } from "@/features/orders/order-board";
 import { usePolling } from "@/hooks/use-polling";
@@ -181,6 +182,7 @@ export function DeskPage() {
   const resourceLabel = me?.business.labels.resource_plural ?? "Doctors";
   const header = (
     <AppHeader>
+      {me && <FeedbackButton defaultName={me.user.name} />}
       <Button asChild variant="ghost" size="sm">
         <Link to="/home">
           <House aria-hidden /> Home
