@@ -37,6 +37,16 @@ describe("api()", () => {
     expect(init?.body).toBe(JSON.stringify({ email: "owner@example.com", password: "x" }));
   });
 
+  it("sends a raw body (a CSV file) with its own content type and the CSRF header", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ added: 1 }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const csv = "name,rate\nA,1\n";
+    await api("/api/catalog/import", { method: "POST", raw: { body: csv, contentType: "text/csv" } });
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(init?.headers).toMatchObject({ "Content-Type": "text/csv", "X-Requested-With": "catalyst" });
+    expect(init?.body).toBe(csv);
+  });
+
   it("turns the contracts §6 error shape into an ApiError with field messages", async () => {
     mockFetch(
       json(422, {

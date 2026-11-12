@@ -46,6 +46,12 @@ const SHOP: OrdersSettings = {
 
 type Handler = (init?: RequestInit) => Response;
 
+const PRODUCTS = [
+  { id: 1, name: "ORS powder orange", pack_size: "21 g sachet", rate_paise: 2200, rate: "₹22", in_stock: true, active: true },
+  { id: 2, name: "Cotton roll", pack_size: "100 g", rate_paise: 5850, rate: "₹58.50", in_stock: false, active: true },
+  { id: 3, name: "Old bandage", pack_size: "", rate_paise: 1000, rate: "₹10", in_stock: true, active: false },
+];
+
 const BLOCK = { id: 7, date: "2026-11-20", resource_id: "doctor-b", kind: "leave", label: "Fri 20 Nov · Doctor B · Leave" };
 
 function mockApi(settings: BookingsSettings | OrdersSettings, put?: Handler, extra: Record<string, Handler> = {}) {
@@ -53,6 +59,12 @@ function mockApi(settings: BookingsSettings | OrdersSettings, put?: Handler, ext
     const url = String(input);
     if (extra[url]) return extra[url](init);
     if (url === "/api/instructions") return json(200, { text: "", version_id: null, rejected: [], max_chars: 500, history: [] });
+    if (url === "/api/me")
+      return json(200, {
+        user: { name: "Test Owner", email: "owner@example.com" },
+        business: { name: settings.name, template: "doctors" in settings ? "clinic" : "wholesale", public_id: "abc123", labels: {} },
+      });
+    if (url === "/api/catalog?all=true") return json(200, { products: PRODUCTS });
     if (url !== "/api/settings") throw new Error(`unexpected fetch ${url}`);
     if (init?.method === "PUT") {
       return put ? put(init) : json(200, { saved: true, agent: "Your front desk is updated.", settings: JSON.parse(String(init.body)) });
@@ -315,5 +327,127 @@ describe("custom instructions", () => {
     expect(box.value).toBe("Line two.");
     fireEvent.click(screen.getByRole("button", { name: /Undo last change/ }));
     await waitFor(() => expect(box.value).toBe("Line one."));
+  });
+});
+
+describe("catalogue (distributor)", () => {
+  it("lists active products, with hidden ones behind a checkbox", async () => {
+    mockApi(SHOP);
+    renderPage();
+    const list = await screen.findByRole("list", { name: "Products" });
+    expect(within(list).getByText("ORS powder orange")).toBeTruthy();
+    expect(within(list).getByText("Out of stock")).toBeTruthy();
+    expect(within(list).queryByText("Old bandage")).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Show hidden products" }));
+    expect(within(screen.getByRole("list", { name: "Products" })).getByText("Old bandage")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Download sample/ }).getAttribute("href")).toBe("/api/templates/wholesale/sample-catalog.csv");
+  });
+
+  it("isn't shown for a clinic", async () => {
+    mockApi(CLINIC);
+    renderPage();
+    await screen.findByLabelText("Business name");
+    expect(screen.queryByRole("link", { name: "Catalogue" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Upload CSV/ })).toBeNull();
+  });
+
+  it("marks a product out of stock straight away", async () => {
+    const fetchMock = mockApi(SHOP, undefined, {
+      "/api/catalog/1": () => json(200, { ...PRODUCTS[0], in_stock: false }),
+    });
+    renderPage();
+    const list = await screen.findByRole("list", { name: "Products" });
+    const row = within(list).getByText("ORS powder orange").closest("li")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Mark out of stock" }));
+    await waitFor(() => expect(within(row).getByText("Out of stock")).toBeTruthy());
+    const [, init] = fetchMock.mock.calls.find(([u]) => u === "/api/catalog/1")!;
+    expect(init?.method).toBe("PUT");
+    expect(JSON.parse(String(init!.body))).toEqual({ in_stock: false });
+  });
+
+  it("adds a product with its rate in rupees", async () => {
+    const fetchMock = mockApi(SHOP, undefined, {
+      "/api/catalog": () =>
+        json(200, { id: 9, name: "Glucose powder", pack_size: "500 g", rate_paise: 12050, rate: "₹120.50", in_stock: true, active: true }),
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Add product/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Add a product" });
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Glucose powder" } });
+    fireEvent.change(within(dialog).getByLabelText("Pack size", { exact: false }), { target: { value: "500 g" } });
+    fireEvent.change(within(dialog).getByLabelText("Rate (₹)"), { target: { value: "120.50" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add product/ }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(within(screen.getByRole("list", { name: "Products" })).getByText("Glucose powder")).toBeTruthy();
+    const [, init] = fetchMock.mock.calls.find(([u, i]) => u === "/api/catalog" && i?.method === "POST")!;
+    expect(JSON.parse(String(init!.body))).toEqual({ name: "Glucose powder", pack_size: "500 g", rate: "120.50", in_stock: true });
+  });
+
+  it("shows a duplicate name and a bad rate where they belong", async () => {
+    mockApi(SHOP, undefined, {
+      "/api/catalog": () =>
+        json(422, { detail: "Rate must be a number of rupees, like 120 or 120.50.", code: "VALIDATION", fields: { rate: "Rate must be a number of rupees, like 120 or 120.50." } }),
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Add product/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Add a product" });
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Glucose powder" } });
+    fireEvent.change(within(dialog).getByLabelText("Rate (₹)"), { target: { value: "abc" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add product/ }));
+    expect(await within(dialog).findByText("Rate must be a number of rupees, like 120 or 120.50.")).toBeTruthy();
+    expect(within(dialog).getByLabelText("Rate (₹)").getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("hides a product from the change dialog", async () => {
+    const fetchMock = mockApi(SHOP, undefined, {
+      "/api/catalog/1": () => json(200, { ...PRODUCTS[0], active: false }),
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Change ORS powder orange" }));
+    const dialog = await screen.findByRole("dialog", { name: "Change product" });
+    expect((within(dialog).getByLabelText("Rate (₹)") as HTMLInputElement).value).toBe("22");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hide from catalogue" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const [, init] = fetchMock.mock.calls.find(([u]) => u === "/api/catalog/1")!;
+    expect(JSON.parse(String(init!.body))).toEqual({ active: false });
+    expect(within(screen.getByRole("list", { name: "Products" })).queryByText("ORS powder orange")).toBeNull();
+  });
+
+  it("uploads a CSV as text/csv and lists the rows it skipped", async () => {
+    const fetchMock = mockApi(SHOP, undefined, {
+      "/api/catalog/import": () => json(200, { added: 2, updated: 1, errors: [{ row: 4, message: "Rate must be a number of rupees, like 120 or 120.50." }] }),
+    });
+    renderPage();
+    await screen.findByRole("list", { name: "Products" });
+    const csv = "name,pack_size,rate,in_stock\nGlucose powder,500 g,120.50,yes\n";
+    const file = new File([csv], "price-list.csv", { type: "text/csv" });
+    fireEvent.change(screen.getByLabelText("CSV file"), { target: { files: [file] } });
+
+    expect(await screen.findByText(/Added 2, updated 1\. 1 row was skipped:/)).toBeTruthy();
+    expect(screen.getByText("Row 4:")).toBeTruthy();
+    const [, init] = fetchMock.mock.calls.find(([u]) => u === "/api/catalog/import")!;
+    expect(init?.method).toBe("POST");
+    expect(init?.headers).toMatchObject({ "Content-Type": "text/csv", "X-Requested-With": "catalyst" });
+    expect(init?.body).toBe(file); // the file's own bytes, not text decoded in the browser
+  });
+
+  it("refuses a file over 1 MB before sending it", async () => {
+    const fetchMock = mockApi(SHOP);
+    renderPage();
+    await screen.findByRole("list", { name: "Products" });
+    const big = new File(["x".repeat(1_000_001)], "huge.csv", { type: "text/csv" });
+    fireEvent.change(screen.getByLabelText("CSV file"), { target: { files: [big] } });
+    expect(await screen.findByText("That file is too big. Keep it under 1 MB.")).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([u]) => u === "/api/catalog/import")).toBe(false);
+  });
+
+  it("filters by search", async () => {
+    mockApi(SHOP);
+    renderPage();
+    await screen.findByRole("list", { name: "Products" });
+    fireEvent.change(screen.getByLabelText("Search products"), { target: { value: "cotton" } });
+    const list = screen.getByRole("list", { name: "Products" });
+    expect(within(list).getByText("Cotton roll")).toBeTruthy();
+    expect(within(list).queryByText("ORS powder orange")).toBeNull();
   });
 });

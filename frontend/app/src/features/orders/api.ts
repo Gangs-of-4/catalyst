@@ -77,3 +77,24 @@ export function formatInr(paise: number): string {
     maximumFractionDigits: whole ? 0 : 2,
   }).format(paise / 100);
 }
+
+/** Every product, hidden ones too, for the settings page. */
+export const getAllProducts = (signal?: AbortSignal) => api<{ products: Product[] }>("/api/catalog?all=true", { signal });
+
+/** `rate` in rupees as typed ("120" or "120.50"); the backend parses and checks it. */
+export type ProductIn = { name: string; pack_size: string; rate: string; in_stock: boolean };
+
+export const addProduct = (p: ProductIn) => api<Product>("/api/catalog", { method: "POST", body: p });
+
+export const updateProduct = (id: number, changes: Partial<ProductIn> & { active?: boolean }) =>
+  api<Product>(`/api/catalog/${id}`, { method: "PUT", body: changes });
+
+export type ImportResult = { added: number; updated: number; errors: { row: number; message: string }[] };
+
+/**
+ * The CSV file as the raw body (`text/csv`, at most 1 MB): good rows are kept, bad ones listed. The
+ * bytes go unchanged, so a file saved in another encoding (Excel's ANSI) reaches the backend's
+ * "Save the file as CSV (UTF-8)" check instead of being silently garbled in the browser.
+ */
+export const importCatalog = (file: Blob | string) =>
+  api<ImportResult>("/api/catalog/import", { method: "POST", raw: { body: file, contentType: "text/csv" } });

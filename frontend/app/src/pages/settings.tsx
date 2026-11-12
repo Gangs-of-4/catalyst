@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { type Block, getSettings, saveSettings } from "@/features/settings/api";
 import { agentToast } from "@/features/settings/agent-toast";
+import { CatalogueSection } from "@/features/settings/catalogue";
 import { InstructionsSection } from "@/features/settings/instructions";
 import { LeaveSection } from "@/features/settings/leave";
 import { check, type Form, formErrors, isDirty, MAX_DOCTORS, SLOT_CHOICES, toBody, toForm } from "@/features/settings/model";
@@ -19,6 +20,7 @@ import { PairRows, TextRows } from "@/features/settings/rows";
 import { HoursEditor } from "@/features/signup/hours-editor";
 import { WeekdayPicker } from "@/features/signup/weekday-picker";
 import { ApiError } from "@/lib/api";
+import { getMe } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
 const isAbort = (e: unknown) => e instanceof DOMException && e.name === "AbortError";
@@ -53,10 +55,14 @@ export function SettingsPage() {
   const [saving, setSaving] = React.useState(false);
   const [blocks, setBlocks] = React.useState<Block[]>([]);
   const [instructionsDirty, setInstructionsDirty] = React.useState(false);
+  const [template, setTemplate] = React.useState<string | null>(null);
   const problemRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     const ctrl = new AbortController();
+    getMe(ctrl.signal)
+      .then((m) => setTemplate(m.business.template))
+      .catch(() => {}); // only names the sample CSV; the settings load reports any real trouble
     getSettings(ctrl.signal)
       .then((r) => {
         const f = toForm(r.settings);
@@ -194,6 +200,7 @@ export function SettingsPage() {
     { id: "hours", label: "Hours" },
     ...(bookings ? [{ id: "leave", label: "Leave" }] : []),
     bookings ? { id: "doctors", label: "Doctors" } : { id: "orders", label: "Orders" },
+    ...(bookings ? [] : [{ id: "catalogue", label: "Catalogue" }]),
     ...(bookings ? [{ id: "safety", label: "Emergencies" }] : []),
     { id: "faqs", label: "Questions" },
     { id: "instructions", label: "Instructions" },
@@ -308,7 +315,7 @@ export function SettingsPage() {
             </Fieldset>
           </Section>
         ) : (
-          <Section id="orders" title="Orders" hint="Your products and rates are in the catalogue.">
+          <Section id="orders" title="Orders" hint="Your products and rates are in the catalogue below.">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Minimum order" optional error={errors.min_order} hint="For example: ₹2,000">
                 <Input value={form.min_order} onChange={(e) => set("min_order", e.target.value)} maxLength={60} />
@@ -317,6 +324,12 @@ export function SettingsPage() {
                 <Input value={form.delivery_area} onChange={(e) => set("delivery_area", e.target.value)} maxLength={120} />
               </Field>
             </div>
+          </Section>
+        )}
+
+        {!bookings && (
+          <Section id="catalogue" title="Catalogue" hint="Your front desk quotes only these products and rates. Changes here save straight away.">
+            <CatalogueSection template={template} onAuthError={onAuthError} />
           </Section>
         )}
 

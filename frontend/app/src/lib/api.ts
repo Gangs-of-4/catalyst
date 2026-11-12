@@ -42,6 +42,11 @@ export type ApiOptions = {
   method?: Method;
   /** JSON-serialisable body for writes. */
   body?: unknown;
+  /**
+   * A raw body instead of JSON, e.g. a CSV file as `text/csv` (contracts.md §6, the one non-JSON
+   * write). A file goes as its own bytes, so the backend sees exactly what was saved.
+   */
+  raw?: { body: BodyInit; contentType: string };
   signal?: AbortSignal;
 };
 
@@ -82,20 +87,21 @@ function isErrorBody(value: unknown): value is ApiErrorBody {
   );
 }
 
-export async function api<T>(path: string, { method = "GET", body, signal }: ApiOptions = {}): Promise<T> {
+export async function api<T>(path: string, { method = "GET", body, raw, signal }: ApiOptions = {}): Promise<T> {
   if (!path.startsWith("/api/")) {
     throw new Error(`api() takes a relative /api/ path, got "${path}"`);
   }
   const headers: Record<string, string> = { Accept: "application/json" };
   if (method !== "GET") headers["X-Requested-With"] = "catalyst";
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (raw !== undefined) headers["Content-Type"] = raw.contentType;
+  else if (body !== undefined) headers["Content-Type"] = "application/json";
 
   let res: Response;
   try {
     res = await fetch(path, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: raw !== undefined ? raw.body : body === undefined ? undefined : JSON.stringify(body),
       credentials: "same-origin",
       signal,
     });
