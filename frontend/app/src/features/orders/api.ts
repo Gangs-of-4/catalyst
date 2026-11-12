@@ -77,3 +77,20 @@ export function formatInr(paise: number): string {
     maximumFractionDigits: whole ? 0 : 2,
   }).format(paise / 100);
 }
+
+/** Every product, hidden ones too, for the settings page. */
+export const getAllProducts = (signal?: AbortSignal) => api<{ products: Product[] }>("/api/catalog?all=true", { signal });
+
+/** `rate` in rupees as typed ("120" or "120.50"); the backend parses and checks it. */
+export type ProductIn = { name: string; pack_size: string; rate: string; in_stock: boolean };
+
+export const addProduct = (p: ProductIn) => api<Product>("/api/catalog", { method: "POST", body: p });
+
+export const updateProduct = (id: number, changes: Partial<ProductIn> & { active?: boolean }) =>
+  api<Product>(`/api/catalog/${id}`, { method: "PUT", body: changes });
+
+export type ImportResult = { added: number; updated: number; errors: { row: number; message: string }[] };
+
+/** The CSV file's text as the raw body (`text/csv`, at most 1 MB): good rows are kept, bad ones listed. */
+export const importCatalog = (csv: string) =>
+  api<ImportResult>("/api/catalog/import", { method: "POST", raw: { body: csv, contentType: "text/csv" } });
