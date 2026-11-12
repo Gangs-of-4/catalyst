@@ -27,7 +27,7 @@
 | M4a: wholesale data side (catalogue, CSV import, orders and lifecycle, `/api/catalog`, `/api/orders`, wholesale settings, order board on the test page) | #32 | Merged |
 | M4b: wholesale voice side (tools, prompt, escalation rules, safety suite, catalogue-aware post-call check) | #33 | Merged |
 | M6: WhatsApp per business (routing by sender, wholesale commands, no open demo mode) | #35 | Merged |
-| M5: owner custom instructions | #36 | Open |
+| M5: owner custom instructions (rule screen, versions and undo, fenced prompt section, `/api/instructions`, "agent ko bolo" on WhatsApp; LLM screen cut) | #36 | Merged |
 | M7: usage events, admin counts and weekly breakdown, counts-only usage CSV, feedback log with decisions and Sheet-matching CSV (reset-demo cut) | #38 | Open |
 | M9: demo clinic + demo wholesale with today's data and logins; optional 4-week fictional history (`DEMO_HISTORY=1`); `scripts/seed_demo.py` resets it, anchored to today | #40 | Open |
 | M8, M10–M12 | — | M8 in progress (frontend); M10–M12 not started |

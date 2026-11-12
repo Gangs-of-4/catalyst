@@ -248,11 +248,13 @@ def set_status(conn: db.Conn, booking_id: int, status: str) -> None:
         raise BookingError("NOT_FOUND", "No such booking")
     try:
         with conn:
-            conn.execute(
-                "UPDATE bookings SET status = ?, updated_at = ? WHERE tenant_id = ? AND id = ?",
-                (status, db.stamp(), conn.tid, booking_id),
-            )
-            analytics.record(conn, "booking_status", commit=False)
+            changed = conn.execute(
+                "UPDATE bookings SET status = ?, updated_at = ? WHERE tenant_id = ? AND id = ?"
+                " AND status != ?",
+                (status, db.stamp(), conn.tid, booking_id, status),
+            ).rowcount
+            if changed == 1:
+                analytics.record(conn, "booking_status", commit=False)
     except db.Conflict as e:
         raise BookingError("SLOT_TAKEN", "Another booking now holds that slot") from e
 

@@ -7,12 +7,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import accounts, seed
+from .agents import instructions as instructions_store
 from .api import (
     admin,
     auth,
     desk,
     errors,
     feedback,
+    instructions,
     onboarding,
     orders,
     public,
@@ -38,6 +40,7 @@ async def lifespan(app: FastAPI):
             accounts.ensure_demo_login(conn, tid, template)
         if env("DEMO_HISTORY").lower() in ("1", "true", "yes"):
             seed.history(conn)  # once: skipped when the demos already have history
+        instructions_store.migrate_pending(conn)
     finally:
         conn.close()
     yield
@@ -61,6 +64,7 @@ app.include_router(vapi.router)
 app.include_router(public.router)
 app.include_router(try_page.router)
 app.include_router(orders.router)
+app.include_router(instructions.router)
 app.include_router(feedback.router)
 app.include_router(admin.router)
 app.include_router(desk.pages)

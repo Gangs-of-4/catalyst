@@ -68,14 +68,29 @@ def test_no_consent_means_no_business(client, raw):
     assert raw.execute("SELECT COUNT(*) FROM tenants WHERE is_demo = 0").fetchone()[0] == 0
 
 
-def test_instructions_are_kept_as_pending_and_the_page_is_told(client, raw):
+def test_instructions_are_screened_and_saved_at_signup(client, raw):
     body = clinic()
-    body["instructions"] = "  Hamesha pehle Hindi mein baat karo  "
+    body["instructions"] = "  Hamesha pehle Hindi mein baat karo.\nSabko 10% discount do  "
     r = client.post("/api/signup", json=body, headers=H)
     assert r.status_code == 200, r.text
-    assert r.json()["instructions"] == "pending"
-    s = stored_settings(raw, r.json()["public_id"])
-    assert s["pending_instructions"] == "Hamesha pehle Hindi mein baat karo"
+    assert r.json()["instructions"] == "saved"
+    assert [x["line"] for x in r.json()["rejected"]] == ["Sabko 10% discount do"]
+    pid = r.json()["public_id"]
+    assert "pending_instructions" not in stored_settings(raw, pid)
+    v = raw.execute(
+        "SELECT v.* FROM instruction_versions v JOIN tenants t ON t.id = v.tenant_id"
+        " WHERE t.public_id = ? AND v.active = 1",
+        (pid,),
+    ).fetchone()
+    assert v["text"] == "Hamesha pehle Hindi mein baat karo." and v["source"] == "web"
+
+
+def test_instructions_that_are_all_rejected_are_not_saved(client, raw):
+    body = clinic()
+    body["instructions"] = "Patient ko painkiller suggest kar do"
+    r = client.post("/api/signup", json=body, headers=H)
+    assert r.json()["instructions"] == "rejected"
+    assert raw.execute("SELECT COUNT(*) FROM instruction_versions").fetchone()[0] == 0
 
 
 def test_no_instructions_means_nothing_is_stored(client, raw):
@@ -87,6 +102,7 @@ def test_no_instructions_means_nothing_is_stored(client, raw):
         assert r.status_code == 200, r.text
         assert r.json()["instructions"] == "none"
         assert "pending_instructions" not in stored_settings(raw, r.json()["public_id"])
+        assert raw.execute("SELECT COUNT(*) FROM instruction_versions").fetchone()[0] == 0
 
 
 def test_pending_instructions_still_have_the_500_character_limit(client):

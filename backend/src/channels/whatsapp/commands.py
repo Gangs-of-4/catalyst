@@ -12,6 +12,7 @@ from datetime import date, datetime, timedelta
 from pydantic import BaseModel, ValidationError, field_validator
 
 from ... import inbox
+from ...agents import instructions
 from ...booking import service as bk
 from ...booking.when import parse_date, parse_time, short_date, spoken_time
 from ...core import config, db, tenancy
@@ -21,8 +22,8 @@ from ...providers.llm import groq
 from ...verticals import loader
 from . import order_commands, summary
 
-READ_INTENTS = ("help", "query_day", "callbacks", "summary", "add_instruction")
-WRITE_INTENTS = ("block_day", "late_start", "early_close", "set_fee", "walk_in")
+READ_INTENTS = ("help", "query_day", "callbacks", "summary")
+WRITE_INTENTS = ("block_day", "late_start", "early_close", "set_fee", "walk_in", "add_instruction")
 ALL_INTENTS = READ_INTENTS + WRITE_INTENTS + order_commands.READS + order_commands.WRITES
 ORDER_STATUSES = ("new", "confirmed", "dispatched", "delivered", "cancelled")
 
@@ -42,6 +43,8 @@ class Command(BaseModel):
     rate_paise: int | None = None
     order_id: int | None = None
     status: str | None = None
+    instruction: str | None = None  # add_instruction: only the new lines, already screened
+    rejected: list[dict] = []
 
     @field_validator("intent")
     @classmethod
@@ -459,18 +462,43 @@ def has_pending(conn: db.Conn, sender: str) -> bool:
 
 
 INSTRUCTION = re.compile(r"^(?:agent|assistant)\s+(?:ko\s+)?(?:bolo|batao|bata do|bol do)\b", re.I)
-INSTRUCTION_REPLY = (
-    "Agent ke liye nayi baatein jaldi WhatsApp se bhi de payenge. Abhi Settings page par "
-    "'Agent ko aur kya batana hai' mein likhiye."
-)
 NOT_ENABLED = "Yeh command is business ke liye nahi hai. 'help' bhejein."
+
+
+def _rejected_lines(rejected: list[dict]) -> str:
+    return "\n".join(f"• {r['line']} — {r['reason']}" for r in rejected)
+
+
+def _preview_instruction(conn: db.Conn, sender: str, cmd: Command) -> str:
+    """Screen the new lines now; preview only if something can be added (contracts.md §4)."""
+    try:
+        screened = instructions.add(conn, cmd.instruction or "")
+    except instructions.TooLong as e:
+        return str(e)
+    if not screened.accepted:
+        head = "Yeh agent ko nahi bata sakte, kuch nahi badla:\n"
+        return head + _rejected_lines(screened.rejected)
+    save_pending(
+        conn,
+        sender,
+        Command(intent="add_instruction", instruction=screened.text, rejected=screened.rejected),
+    )
+    lines = ["Agent ko yeh bhi bataya jayega:"] + [f"• {x}" for x in screened.accepted]
+    if screened.rejected:
+        lines += ["Yeh nahi jodenge:", _rejected_lines(screened.rejected)]
+    return "\n".join([*lines, "Sahi hai? Haan/Nahi"])
 
 
 def _parse(conn: db.Conn, s: dict, text: str, today: date, selling: bool) -> Command | str | None:
     """The module's parser: orders (wholesale) or bookings (clinic). A str is a reply asking again."""
     t = " ".join(text.lower().strip(" .!?।").split())
-    if INSTRUCTION.match(t):
-        return Command(intent="add_instruction")
+    said = " ".join(text.strip().split())
+    m = INSTRUCTION.match(said)
+    if m:
+        rest = said[m.end() :].strip(" :,-")
+        if not rest:
+            return "'agent ko bolo' ke baad likhiye agent ko kya batana hai."
+        return Command(intent="add_instruction", instruction=rest)
     if selling:
         if _words(t, "help", "madad", "commands", "menu") or t in ("?", "hi", "hello", "namaste"):
             return Command(intent="help")
@@ -501,6 +529,12 @@ def handle(conn: db.Conn, sender: str, text: str) -> tuple[str, bool]:
             return NOT_ENABLED, False
         if cmd.intent in order_commands.WRITES:
             return order_commands.apply(conn, cmd), False  # rates and stock aren't in the prompt
+        if cmd.intent == "add_instruction":
+            try:
+                instructions.append(conn, cmd.instruction or "", cmd.rejected, "whatsapp")
+            except instructions.TooLong as e:
+                return str(e), False
+            return "Ho gaya — agent ab yeh maanega.", True
         return apply(conn, s, cmd), cmd.intent != "walk_in"
     if t in CONFIRM or t in REJECT:
         return "Abhi koi badlav pending nahi hai. 'help' bhejein.", False
@@ -517,7 +551,7 @@ def handle(conn: db.Conn, sender: str, text: str) -> tuple[str, bool]:
         )
         return "Samajh nahi aaya — team dekh legi.", False
     if cmd.intent == "add_instruction":
-        return INSTRUCTION_REPLY, False
+        return _preview_instruction(conn, sender, cmd), False
     if selling and cmd.intent == "help":
         return order_commands.HELP, False
     if selling and cmd.intent == "summary":
