@@ -1,4 +1,4 @@
-import { AlertCircle, Building2, Loader2, LogOut, Phone, RotateCw, UserRound } from "lucide-react";
+import { AlertCircle, Building2, CalendarDays, Loader2, LogOut, Phone, RotateCw, UserRound } from "lucide-react";
 import * as React from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -116,6 +116,24 @@ export function HomePage() {
             </p>
             <Button asChild size="lg" className="w-full sm:w-fit">
               <Link to={`/b/${encodeURIComponent(me.business.public_id)}/try`}>Open your test page</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="gap-4">
+          <CardHeader className="flex-row items-center gap-3">
+            <span className="flex size-9 items-center justify-center rounded-md bg-muted">
+              <CalendarDays aria-hidden className="size-[18px]" />
+            </span>
+            <CardTitle className="text-base">Your front desk</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <p className="text-sm text-body">
+              Today&apos;s {(me.business.labels.booking ?? "booking").toLowerCase()}s, walk-ins, callbacks and the calls
+              your front desk took.
+            </p>
+            <Button asChild variant="outline" size="lg" className="w-full sm:w-fit">
+              <Link to="/desk">Open the desk</Link>
             </Button>
           </CardContent>
         </Card>

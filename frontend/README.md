@@ -8,7 +8,6 @@
 
 | Page | File | Who | Capability |
 |---|---|---|---|
-| `/desk` | `desk.html`, `static/desk.js` | The receptionist: day grid per doctor, walk-ins, statuses, inbox, call log | C7, C10 |
 | `/setup` | `setup.html`, `static/setup.js` | Our team or the clinic: settings, leave days, agent sync | C12, C8 |
 
 `/desk` and `/setup` need the owner's session login (`/api/login`); they show only that business's data, and without a session they show a "Please log in" link. The public page shows first names and an initial only, never phone numbers.
@@ -54,12 +53,13 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 | `/b/:publicId/try` | `src/pages/try.tsx`, `src/features/try/` | Public test page for one business: talk to its front desk (Vapi web call, after the `POST /api/try/{id}/start` cap check) and watch its register or order board update. Covers voice-not-switched-on, minutes-used-up and microphone-blocked states. Endpoint shapes: issue #24 |
 | `/demo/:template` | `src/pages/try.tsx` | Opens the demo business's test page (`/b/demo-<template>/try`) |
 | `/login` | `src/pages/login.tsx` | Owner login (`POST /api/login`). Already logged in → straight on. Honors a same-app `?next=` path |
-| `/home` | `src/pages/home.tsx` | The owner's signed-in home (`GET /api/me`), with Log out. Logged-out visitors go to `/login?next=/home`. Later tasks add the desk, settings and test page here |
+| `/desk` | `src/pages/desk.tsx`, `src/features/desk/` | The receptionist's desk for a business that keeps a schedule (`GET /api/desk/day`, `POST /api/desk/bookings`, `POST /api/desk/bookings/{id}/status`, `/api/inbox`, `/api/calls`, `/api/stats`). **Phones:** one doctor per tab, earlier empty times folded away, an urgent-inbox banner, inbox and calls below. **Wide screens:** doctors side by side, inbox and calls on the right. Walk-ins open a bottom sheet; a taken slot offers the free times nearby as one-tap choices and keeps what was typed. Cancel asks first. Refreshes every 5 s, paused while a form is open. A business without the bookings module (wholesale) sees that its order board comes next. The old `desk.html` is no longer deployed; it stays only because the backend still serves it at `localhost:8000/desk` |
+| `/home` | `src/pages/home.tsx` | The owner's signed-in home (`GET /api/me`), with Log out. Logged-out visitors go to `/login?next=/home`. Links to the test page and the desk; settings come later |
 | `/signup` | `src/pages/signup.tsx`, `src/features/signup/` | Self-serve onboarding: account + business in one step (`GET /api/templates`, `POST /api/signup`), **one step per screen** (1/3 You, 2/3 Your business, 3/3 the template section + optional + consent) with Back/Next in a bar pinned to the bottom on phones. Next checks only that step; the step is in the URL (`?step=2`) so the phone's back button goes to the previous step. The template section is picked by the template's `modules`. A success screen shows the voice agent's state. |
 | `/styleguide` | `src/pages/styleguide.tsx` | Every token and component, for review. **Local only** (`npm run dev`): it isn't part of the live site |
 
 **Failure states** (phase2-plan §5 cold starts, §6):
-- Pages that need the backend (`/signup`, `/login`, `/home`, `/b/:publicId/try`) sit behind `WakeGate`, wired in `src/App.tsx`. It pings `/healthz` and shows a "waking up" screen while the free backend host wakes.
+- Pages that need the backend (`/signup`, `/login`, `/home`, `/desk`, `/b/:publicId/try`) sit behind `WakeGate`, wired in `src/App.tsx`. It pings `/healthz` and shows a "waking up" screen while the free backend host wakes.
 - `ConnectionBanner` appears when an API call can't reach the backend mid-session, and retries with backoff. When it reconnects it fires a `catalyst:reconnected` window event that pages can listen for.
 - The test page checks `/healthz` again before each call ("Waking up the desk… (up to a minute)") if it hasn't seen the backend lately.
 - Forms keep what the owner typed through all of this; nothing is cleared on a failed request.
@@ -71,7 +71,7 @@ Start the backend too (`uvicorn` on port 8000, see the repo README). The dev ser
 2. Add a rewrite for its path to `/app` in `frontend/vercel.json`. Use `/app`, not `/app.html`: with `cleanUrls` on, Vercel serves the shell at `/app`, and a rewrite to `/app.html` returns 404.
 3. Delete the old static page in the same PR, if there is one. (Exception: the old try page, `index.html` with `static/try.js` and `static/vapi.bundle.js`, is no longer deployed but stays for now because the backend still serves it at `localhost:8000/` for local backend-only use. It goes in a follow-up together with that backend route.)
 
-**Deploy:** `build.mjs` builds the app, puts its shell at `dist/app.html` and its files in `dist/assets/`, then copies the old pages as before. `vercel.json` rewrites React routes (now: `/`, `/b/:publicId/try`, `/demo/:template`, `/home`, `/login`, `/signup`) to `/app`, where Vercel serves `dist/app.html` because `cleanUrls` is on.
+**Deploy:** `build.mjs` builds the app, puts its shell at `dist/app.html` and its files in `dist/assets/`, then copies the old pages as before. `vercel.json` rewrites React routes (now: `/`, `/b/:publicId/try`, `/demo/:template`, `/desk`, `/home`, `/login`, `/signup`) to `/app`, where Vercel serves `dist/app.html` because `cleanUrls` is on.
 
 **Rules:** see `context/coding-rules.md` (Frontend).
 - Never put patient or customer data in browser storage.

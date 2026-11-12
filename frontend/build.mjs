@@ -30,9 +30,9 @@ cpSync("app/dist", "dist", { recursive: true, filter: (src) => !/[\\/]app[\\/]di
 cpSync("app/dist/index.html", "dist/app.html");
 
 // 2. The old static pages (removed page by page during M8).
-// The old static try page (index.html) is no longer shipped: "/" is the React landing page and
-// /demo/clinic is the React test page. desk.html and setup.html stay until M8 replaces them.
-for (const page of ["desk.html", "setup.html"]) cpSync(page, `dist/${page}`);
+// The old static try page (index.html) and desk (desk.html) are no longer shipped: "/", /demo/clinic
+// and /desk are React pages. setup.html stays until M8 replaces it.
+for (const page of ["setup.html"]) cpSync(page, `dist/${page}`);
 cpSync("static", "dist/static", { recursive: true });
 // The old pages call /api on their own origin too: Vercel rewrites it to the backend (ADR-0041,
 // configure-vercel.mjs), so they no longer need the backend URL or CORS.
