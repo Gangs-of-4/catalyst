@@ -105,7 +105,9 @@ def test_wholesale_signup_uses_orders_section(client, raw):
     )  # no wholesale prompt until M4: honest, not a clinic prompt
     me = client.get("/api/me").json()
     assert me["business"]["labels"]["booking"] == "Order"
-    t = raw.execute("SELECT settings FROM tenants WHERE template = 'wholesale'").fetchone()
+    t = raw.execute(
+        "SELECT settings FROM tenants WHERE template = 'wholesale' AND is_demo = 0"
+    ).fetchone()
     import json
 
     s = json.loads(t[0])

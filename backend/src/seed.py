@@ -1,29 +1,103 @@
-"""First-run setup: schema, the public demo clinic and a few fictional bookings so screens aren't empty."""
+"""Demo data (Phase 2 M9): the schema, the two public demo businesses (a clinic and a wholesale
+distributor), today's fictional data so screens aren't empty, and an optional 4-week history so
+the desk, the order board and the admin page show real-looking usage.
 
-from datetime import timedelta
+Everything here is fictional: names from `verticals/*/demo-tenant.yaml`, phones in the
++91 9000x xxxxx test range. The history is deterministic for a given day and always relative to
+today, so `reset_demo` (scripts/seed_demo.py) keeps the demos fresh until the program ends.
+"""
+
+import random
+from datetime import date, datetime, time, timedelta
 
 from .booking import service
 from .core import config, db, tenancy
+from .orders import catalog
+from .orders import service as orders
 from .verticals import loader
+
+HISTORY_DAYS = 28
+# What reset_demo clears before seeding again. Settings and logins are kept.
+DEMO_DATA_TABLES = (
+    "order_items",
+    "orders",
+    "products",
+    "bookings",
+    "blocks",
+    "inbox",
+    "calls",
+    "tool_calls",
+    "pending_actions",
+    "events",
+)
 
 
 def ensure(conn: db.Conn, with_demo_data: bool = True) -> str:
-    """Create the schema and the demo clinic if missing. Returns the demo clinic's id."""
+    """Create the schema and both demo businesses if missing. Returns the demo clinic's id."""
     db.init(conn)
-    existing = tenancy.demo_id(conn, "clinic")
-    if existing:
-        return existing
-    # Keep what an old single-clinic demo had set up on /setup, if its database was just moved.
-    s = {**loader.default_settings(), **(db.take_carried_settings() or {})}
-    tid = tenancy.create(
-        conn, "clinic", s, public_id=tenancy.DEMO_PUBLIC_ID.format(template="clinic"), is_demo=True
-    )
-    if with_demo_data:
-        _demo_data(conn.for_tenant(tid), s)
-    return tid
+    clinic = tenancy.demo_id(conn, "clinic")
+    if clinic is None:
+        # Keep what an old single-clinic demo had set up on /setup, if its database was just moved.
+        s = {**loader.default_settings(), **(db.take_carried_settings() or {})}
+        clinic = tenancy.create(
+            conn,
+            "clinic",
+            s,
+            public_id=tenancy.DEMO_PUBLIC_ID.format(template="clinic"),
+            is_demo=True,
+        )
+        if with_demo_data:
+            _clinic_today(conn.for_tenant(clinic), s)
+    if tenancy.demo_id(conn, "wholesale") is None:
+        s = wholesale_settings()
+        shop = tenancy.create(
+            conn,
+            "wholesale",
+            s,
+            public_id=tenancy.DEMO_PUBLIC_ID.format(template="wholesale"),
+            is_demo=True,
+        )
+        if with_demo_data:
+            _wholesale_today(conn.for_tenant(shop))
+    return clinic
 
 
-def _demo_data(conn: db.Conn, s: dict) -> None:
+def demo_ids(conn: db.Conn) -> dict[str, str]:
+    """{template: tenant id} for the demo businesses that exist."""
+    out = {}
+    for template in ("clinic", "wholesale"):
+        tid = tenancy.demo_id(conn, template)
+        if tid:
+            out[template] = tid
+    return out
+
+
+def wholesale_settings() -> dict:
+    t = loader.template_defaults("wholesale")
+    demo = loader.load_yaml("demo-tenant.yaml", loader.template_dir("wholesale"))
+    return {
+        "name": demo["name"],
+        "city": demo.get("city", ""),
+        "address": demo["address"],
+        "landmark": demo.get("landmark", ""),
+        "sessions": demo["sessions"],
+        "closed_weekdays": demo.get("closed_weekdays", []),
+        "faqs": demo.get("faqs", []),
+        "whatsapp_numbers": demo.get("whatsapp_numbers", []),
+        "voice": demo.get("voice", "female"),
+        "labels": t["labels"],
+        "confirm_words": t["confirm_words"],
+        "reject_words": t["reject_words"],
+        "preview_expiry_min": t["preview_expiry_min"],
+        "min_order": demo.get("min_order", ""),
+        "delivery_area": demo.get("delivery_area", ""),
+    }
+
+
+# ---------- today ----------
+
+
+def _clinic_today(conn: db.Conn, s: dict) -> None:
     seed = loader.load_yaml("demo-tenant.yaml").get("seed", {})
     today = config.now().date()
     open_days = [today]
@@ -59,3 +133,193 @@ def _demo_data(conn: db.Conn, s: dict) -> None:
                 " VALUES (?, 'callback', 0, ?, ?, ?, ?, ?)",
                 (conn.tid, c["name"], c["phone"], c["reason"], c.get("note"), ts),
             )
+
+
+def _wholesale_today(conn: db.Conn) -> None:
+    base = loader.template_dir("wholesale")
+    catalog.import_csv(conn, (base / "sample-catalog.csv").read_text(encoding="utf-8"))
+    demo = loader.load_yaml("demo-tenant.yaml", base)
+    steps = {"new": [], "confirmed": ["confirmed"], "dispatched": ["confirmed", "dispatched"]}
+    for o in demo.get("seed", {}).get("orders", []):
+        made = orders.create(
+            conn,
+            o["shop"],
+            [orders.Line(qty=qty, product=name) for name, qty in o["items"]],
+            o.get("source", "phone"),
+            contact_name=o.get("contact"),
+            phone=o.get("phone"),
+            allow_duplicate=True,
+        )
+        for status in steps[o.get("status", "new")]:
+            orders.set_status(conn, made["id"], status)
+
+
+# ---------- the 4-week history ----------
+
+
+def _at(d: date, hour: int, minute: int = 0) -> str:
+    return datetime.combine(d, time(hour, minute), tzinfo=config.IST).isoformat(timespec="seconds")
+
+
+def _phone(rng: random.Random) -> str:
+    return f"+919000{rng.randint(100000, 999999)}"  # the fictional test range
+
+
+def _event(conn: db.Conn, type_: str, at: str) -> None:
+    conn.execute(
+        "INSERT INTO events (tenant_id, user_id, type, created_at) VALUES (?, NULL, ?, ?)",
+        (conn.tid, type_, at),
+    )
+
+
+def _call(conn: db.Conn, rng: random.Random, d: date, n: int, outcomes: list[str]) -> None:
+    hour, minute = rng.randint(10, 18), rng.randint(0, 59)
+    outcome = rng.choice(outcomes)
+    started, ended = _at(d, hour, minute), _at(d, hour, min(minute + rng.randint(1, 4), 59))
+    flags = {k: int(outcome == k) for k in ("booked", "escalated", "callback")}
+    conn.execute(
+        "INSERT INTO calls (tenant_id, id, started_at, ended_at, booked, escalated, callback,"
+        " outcome, ended_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'customer-ended-call')"
+        " ON CONFLICT DO NOTHING",
+        (conn.tid, f"demo-{d.isoformat()}-{n}", started, ended, *flags.values(), outcome),
+    )
+    _event(conn, "call_ended", ended)
+
+
+def _owner_activity(conn: db.Conn, rng: random.Random, d: date) -> None:
+    if rng.random() < 0.8:
+        _event(conn, "login", _at(d, 9, rng.randint(0, 59)))
+    for _ in range(rng.randint(0, 2)):
+        _event(conn, "wa_command", _at(d, rng.randint(8, 21), rng.randint(0, 59)))
+
+
+def _clinic_day(conn: db.Conn, s: dict, d: date, names: list[str]) -> None:
+    rng = random.Random(f"clinic:{d.isoformat()}")
+    slots = [(doc["id"], t) for doc in s["doctors"] for t in service.session_times(s)]
+    for i, (doctor, t) in enumerate(rng.sample(slots, min(len(slots), rng.randint(3, 6)))):
+        status = rng.choice(["done"] * 6 + ["no_show", "cancelled"])
+        source = rng.choice(["phone", "phone", "phone", "walk_in", "whatsapp"])
+        made = _at(d - timedelta(days=rng.randint(0, 3)), 10, i)
+        conn.execute(
+            "INSERT INTO bookings (tenant_id, resource_id, date, time, status, source, name,"
+            " phone, reason, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            " ON CONFLICT DO NOTHING",
+            (
+                conn.tid,
+                doctor,
+                d.isoformat(),
+                t,
+                status,
+                source,
+                rng.choice(names),
+                _phone(rng),
+                rng.choice(["checkup", "cleaning", "filling", "daant dard", None]),
+                made,
+                made,
+            ),
+        )
+        _event(conn, "booking_created", made)
+        _event(conn, "booking_status", _at(d, 20, i))
+    for n in range(rng.randint(2, 5)):
+        _call(
+            conn, rng, d, n, ["booked", "booked", "answered", "answered", "callback", "escalated"]
+        )
+    if rng.random() < 0.4:
+        at = _at(d, 13, rng.randint(0, 59))
+        conn.execute(
+            "INSERT INTO inbox (tenant_id, kind, urgent, name, phone, reason, note, created_at,"
+            " done_at) VALUES (?, 'callback', 0, ?, ?, 'unanswered_question', ?, ?, ?)",
+            (conn.tid, rng.choice(names), _phone(rng), "Fees ke baare mein poocha", at, _at(d, 17)),
+        )
+        _event(conn, "callback_created", at)
+    _owner_activity(conn, rng, d)
+
+
+def _wholesale_day(conn: db.Conn, d: date, products: list[dict], shops: list[str]) -> None:
+    rng = random.Random(f"wholesale:{d.isoformat()}")
+    for i in range(rng.randint(2, 5)):
+        status = rng.choice(["delivered"] * 5 + ["dispatched", "cancelled"])
+        made = _at(d, rng.randint(9, 17), rng.randint(0, 59))
+        number = conn.execute(
+            "SELECT COALESCE(MAX(number), 0) + 1 FROM orders WHERE tenant_id = ?", (conn.tid,)
+        ).fetchone()[0]
+        row = conn.execute(
+            "INSERT INTO orders (tenant_id, number, shop_name, contact_name, phone, status,"
+            " source, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?) RETURNING id",
+            (
+                conn.tid,
+                number,
+                rng.choice(shops),
+                _phone(rng),
+                status,
+                rng.choice(["phone", "phone", "whatsapp", "walk_in"]),
+                made,
+                made,
+            ),
+        ).fetchone()
+        for p in rng.sample(products, rng.randint(1, min(3, len(products)))):
+            conn.execute(
+                "INSERT INTO order_items (tenant_id, order_id, product_id, name, pack_size, qty,"
+                " rate_paise) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    conn.tid,
+                    row["id"],
+                    p["id"],
+                    p["name"],
+                    p["pack_size"],
+                    rng.randint(2, 40),
+                    p["rate_paise"],
+                ),
+            )
+        _event(conn, "order_created", made)
+        for step in range({"delivered": 3, "dispatched": 2, "cancelled": 1}[status]):
+            _event(conn, "order_status", _at(d, 18, i * 3 + step))
+    for n in range(rng.randint(1, 4)):
+        _call(conn, rng, d, n, ["booked", "booked", "answered", "callback"])
+    _owner_activity(conn, rng, d)
+
+
+def history(conn: db.Conn, days: int = HISTORY_DAYS) -> None:
+    """Add the last `days` days (not today) of fictional usage to both demo businesses, in one
+    transaction each. Safe to run twice: a business that already has history is skipped."""
+    today = config.now().date()
+    past = [today - timedelta(days=i) for i in range(days, 0, -1)]
+    for template, tid in demo_ids(conn).items():
+        scoped = conn.for_tenant(tid)
+        start = today.isoformat()
+        already = scoped.execute(
+            "SELECT 1 FROM events WHERE tenant_id = ? AND created_at < ? LIMIT 1", (tid, start)
+        ).fetchone()
+        if already:
+            continue
+        s = tenancy.load_settings(scoped)
+        demo = loader.load_yaml("demo-tenant.yaml", loader.template_dir(template))
+        names = demo.get("history", {})
+        with scoped:
+            for d in past:
+                if service.is_closed(s, d):
+                    continue
+                if template == "clinic":
+                    _clinic_day(scoped, s, d, names.get("patients") or ["Demo Patient"])
+                else:
+                    products = catalog.list_products(scoped)
+                    if products:
+                        _wholesale_day(scoped, d, products, names.get("shops") or ["Demo Shop"])
+
+
+def reset_demo(conn: db.Conn, days: int = HISTORY_DAYS) -> list[str]:
+    """Clear both demo businesses' data (settings and logins stay), then seed today and the
+    history again, anchored to today. Returns the templates reset. `conn` is unchecked."""
+    done = []
+    for template, tid in demo_ids(conn).items():
+        scoped = conn.for_tenant(tid)
+        with scoped:
+            for table in DEMO_DATA_TABLES:
+                scoped.execute(f"DELETE FROM {table} WHERE tenant_id = ?", (tid,))
+        if template == "clinic":
+            _clinic_today(scoped, tenancy.load_settings(scoped))
+        else:
+            _wholesale_today(scoped)
+        done.append(template)
+    history(conn, days)
+    return done

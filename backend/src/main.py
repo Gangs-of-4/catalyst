@@ -29,12 +29,15 @@ from .core.config import FRONTEND_DIR, env
 async def lifespan(app: FastAPI):
     accounts.ensure_session_secret()
     conn = db.connect()
-    demo = seed.ensure(conn)
+    seed.ensure(conn)
     tenancy.reindex_whatsapp(conn)
     conn.close()
-    conn = db.connect_unchecked()  # startup, before any request: the demo owner's login
+    conn = db.connect_unchecked()  # startup, before any request: over every business
     try:
-        accounts.ensure_demo_login(conn, demo)
+        for template, tid in seed.demo_ids(conn).items():  # the demo owners' logins
+            accounts.ensure_demo_login(conn, tid, template)
+        if env("DEMO_HISTORY").lower() in ("1", "true", "yes"):
+            seed.history(conn)  # once: skipped when the demos already have history
     finally:
         conn.close()
     yield

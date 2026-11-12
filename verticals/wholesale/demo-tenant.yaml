@@ -1,0 +1,35 @@
+# FICTIONAL demo wholesale distributor (Phase 2 M9). Not a real business, shop or person.
+# The public test page and the demo login (DEMO_LOGIN_PASSWORD) use it. A real distributor's
+# config holds phone numbers and never goes in the repo.
+
+name: Navjeevan Medical Agencies
+city: Lucknow
+address: "Shop 7, Aminabad Market, Lucknow"
+landmark: "Gadbad Jhala ke paas"
+sessions:
+  - ["09:30", "19:30"]
+closed_weekdays: [6]
+voice: female
+min_order: "₹1,500"
+delivery_area: "Lucknow shehar, 15 km tak"
+faqs:
+  - {q: "Payment kaise karein?", a: "UPI, cash ya cheque. Purane customers ke liye 15 din ka credit, owner se baat karke."}
+  - {q: "Delivery kab tak hoti hai?", a: "Dopahar 2 baje se pehle ka order usi din, uske baad agle din subah."}
+
+# The catalogue is verticals/wholesale/sample-catalog.csv (the same file owners can download).
+
+whatsapp_numbers: []  # add your own number in Settings to try WhatsApp commands
+
+seed:                # today's board on the public test page
+  orders:
+    - {shop: "Gupta Medical Store", contact: "Mr. Gupta", phone: "+919000000101", status: new, source: phone,
+       items: [["Paracetamol 500 mg tablets", 20], ["ORS powder orange", 30]]}
+    - {shop: "Shivam Chemist", contact: "Shivam", phone: "+919000000102", status: confirmed, source: whatsapp,
+       items: [["Surgical gloves", 2], ["Face masks 3 ply", 4]]}
+    - {shop: "Aarogya Pharmacy", contact: "Counter staff", phone: "+919000000103", status: dispatched, source: walk_in,
+       items: [["Antiseptic liquid", 6], ["Cotton roll", 10], ["Crepe bandage 10 cm", 5]]}
+
+# For the 4-week history (seed.history): fictional names, phones in the +91 90000 0xxxx test range.
+history:
+  shops: ["Gupta Medical Store", "Shivam Chemist", "Aarogya Pharmacy", "Sai Medicos", "Jeevan Rekha Chemist",
+          "Kalyan Medical Hall", "Ram Medical", "City Pharmacy"]

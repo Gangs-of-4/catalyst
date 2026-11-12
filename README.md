@@ -66,7 +66,8 @@ You need **Git**, **Python 3.11 or newer**, and **cloudflared** (Windows: `winge
    This writes `VAPI_ASSISTANT_ID` and `CATALYST_TOOL_SECRET` into `.env`, and prints the URLs you need next.
 7. **WhatsApp (optional).** In the Twilio console → Messaging → Try it out → WhatsApp sandbox: join the sandbox from the doctor's phone (send the `join <code>` message it shows), then set **"When a message comes in"** to `<PUBLIC_URL>/whatsapp/incoming` (method POST). On `<PUBLIC_URL>/setup`, add the doctor's number under "WhatsApp numbers".
 8. Open `<PUBLIC_URL>/` and click **Talk to the receptionist**. Allow the microphone.
-9. **Desk and settings need a login.** Log in once as `demo.clinic@example.com` (or your `DEMO_LOGIN_EMAIL`) with `DEMO_LOGIN_PASSWORD`, on the React app's `/login` (`cd frontend/app && npm run dev`, then http://localhost:5173/login). The session cookie then also works on http://localhost:8000/desk and `/setup`. Every business you sign up gets its own login and sees only its own desk.
+9. **Desk and settings need a login.** Log in once as `demo.clinic@example.com` (or your `DEMO_LOGIN_EMAIL`) with `DEMO_LOGIN_PASSWORD`, on the React app's `/login` (`cd frontend/app && npm run dev`, then http://localhost:5173/login). The session cookie then also works on http://localhost:8000/desk and `/setup`. Every business you sign up gets its own login and sees only its own desk. The demo wholesale distributor logs in as `demo.wholesale@example.com` with the same password.
+10. **Demo history (optional).** Set `DEMO_HISTORY=1` and restart to give both demo businesses 4 weeks of fictional calls, bookings, orders and usage, so the desk and the admin page aren't empty. `python scripts/seed_demo.py` clears the demo data and seeds it again, anchored to today.
 
 To check everything at once: `python scripts\doctor.py`. It says what's missing in plain words, including a stale tunnel URL.
 
