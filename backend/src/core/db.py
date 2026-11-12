@@ -211,6 +211,7 @@ CREATE TABLE IF NOT EXISTS events (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS events_type_time ON events (type, created_at);
+CREATE INDEX IF NOT EXISTS events_tenant_time ON events (tenant_id, created_at);
 CREATE TABLE IF NOT EXISTS calls (
   tenant_id TEXT NOT NULL REFERENCES tenants(id),
   id TEXT NOT NULL,
