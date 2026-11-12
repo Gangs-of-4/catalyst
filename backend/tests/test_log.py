@@ -33,6 +33,11 @@ def test_a_phone_passed_as_a_number_is_hidden():
     assert "9876543210" not in filtered("caller %s", 9876543210)
 
 
+def test_ids_with_digit_runs_stay_readable():
+    call = "01a1cfae-8d30-7000-96c9-0afdf1b3a13e"
+    assert filtered("vapi: call %s tool book", call) == f"vapi: call {call} tool book"
+
+
 def test_a_bad_log_call_never_raises():
     assert "didn't fit" in filtered("count %d", "not a number")
     assert "didn't fit" in filtered("two %s %s", "only one")

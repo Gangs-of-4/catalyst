@@ -35,7 +35,8 @@ def test_payload_shape(conn, isolated, monkeypatch):
     assert all(t["server"] == server for t in body["model"]["tools"] if t["type"] == "function")
     assert body["model"]["tools"][-1] == {"type": "endCall"}
     assert body["voice"] == {"provider": "azure", "voiceId": "hi-IN-SwaraNeural"}
-    assert body["transcriber"]["model"] == "nova-3"
+    assert body["transcriber"]["model"] == "nova-2"
+    assert body["transcriber"]["language"] == "hi"
 
 
 def test_sync_creates_then_updates_and_writes_env(conn, isolated, monkeypatch):

@@ -3,7 +3,9 @@
 import logging
 import re
 
-_PHONE = re.compile(r"\+?\d[\d\s-]{8,}\d")
+# A phone-like run of digits that isn't part of a longer token: "8d30-7000-96c9" in a call id
+# stays readable, "+91 98765 43210" is hidden.
+_PHONE = re.compile(r"(?<![\w-])\+?\d[\d\s-]{8,}\d(?![\w-])")
 
 
 _HIDDEN = "<redacted>"

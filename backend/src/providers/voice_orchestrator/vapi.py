@@ -87,8 +87,11 @@ def payload(
         },
         "transcriber": {
             "provider": env("VAPI_TRANSCRIBER_PROVIDER", "deepgram"),
-            "model": env("VAPI_TRANSCRIBER_MODEL", "nova-3"),
-            "language": env("VAPI_TRANSCRIBER_LANGUAGE", "multi"),
+            # Hindi, not "multi": on the first live call "multi" wrote spoken Hindi digits in
+            # Telugu script and the agent began answering in it. nova-2 has a Hindi model
+            # (VERIFY on Deepgram that nova-3 does before switching back).
+            "model": env("VAPI_TRANSCRIBER_MODEL", "nova-2"),
+            "language": env("VAPI_TRANSCRIBER_LANGUAGE", "hi"),
         },
         "maxDurationSeconds": max_call_seconds(),
         "server": server,
