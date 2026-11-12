@@ -59,7 +59,7 @@ export type Call = {
   safety_hits: string[];
 };
 
-export type Stats = { sentence: string; urgent_open: number; callbacks_open: number; appointments: number; calls: number };
+export type Stats = { date: string; sentence: string; urgent_open: number; callbacks_open: number; appointments: number; calls: number };
 
 /** A free time the backend offers when the one asked for is taken or closed. */
 export type Alternative = { doctor_id: string; date: string; time: string };

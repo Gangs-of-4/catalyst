@@ -54,12 +54,14 @@ export function DeskPage() {
   const [attempt, setAttempt] = React.useState(0);
 
   const [date, setDate] = React.useState<string | null>(null); // null = today, until the backend says which day that is
-  const [today, setToday] = React.useState<string | null>(null);
+  const [firstToday, setToday] = React.useState<string | null>(null); // from the first register load
   const [day, setDay] = React.useState<Day | null>(null);
   const [doctorId, setDoctorId] = React.useState<string | null>(null);
   const [inbox, setInbox] = React.useState<InboxItem[]>([]);
   const [calls, setCalls] = React.useState<Call[]>([]);
   const [stats, setStats] = React.useState<Stats | null>(null);
+  // Today as the backend sees it, refreshed with the stats every poll: a desk left open past midnight moves on.
+  const today = stats?.date ?? firstToday;
 
   const [walkIn, setWalkIn] = React.useState<WalkInTarget | null>(null);
   const [cancelling, setCancelling] = React.useState<Booking | null>(null);
@@ -165,14 +167,17 @@ export function DeskPage() {
     setDate(next === today ? null : next);
   }
 
-  async function changeStatus(b: Booking, to: Status) {
+  /** Returns whether it saved, so the cancel dialog only closes on success. */
+  async function changeStatus(b: Booking, to: Status): Promise<boolean> {
     setSavingId(b.id);
     try {
       await setStatus(b.id, to);
       toast.success(`${b.name} ${STATUS_DONE[to] ?? "updated"}.`);
-      await refresh();
+      void refresh();
+      return true;
     } catch (err) {
       if (!onAuthError(err)) toast.error(err instanceof ApiError ? err.detail : "Couldn't save that. Please try again.");
+      return false;
     } finally {
       setSavingId(null);
     }
@@ -180,9 +185,7 @@ export function DeskPage() {
 
   async function confirmCancel() {
     if (!cancelling) return;
-    const b = cancelling;
-    await changeStatus(b, "cancelled");
-    setCancelling(null);
+    if (await changeStatus(cancelling, "cancelled")) setCancelling(null);
   }
 
   async function onInboxDone(it: InboxItem) {
@@ -279,6 +282,7 @@ export function DeskPage() {
   }
 
   const urgent = inbox.filter((it) => Boolean(it.urgent) || it.kind === "escalation").length;
+  const closedWithBookings = day.columns.some((c) => c.slots.some((sl) => sl.bookings.length > 0));
   const switching = day.date !== (date ?? today);
   const target = date ?? today ?? day.date;
 
@@ -334,12 +338,25 @@ export function DeskPage() {
           </div>
 
           <div aria-busy={switching} className={switching ? "pointer-events-none flex flex-col gap-4 opacity-50" : "flex flex-col gap-4"}>
-          {day.closed ? (
+          {day.closed && closedWithBookings && (
+            <p role="note" className="rounded-lg border border-live/40 bg-live-soft px-3 py-2.5 text-sm text-live-text">
+              <span className="font-semibold">Closed on {day.short}.</span> These bookings were made before the day was
+              closed. Call them to move or cancel.
+            </p>
+          )}
+          {day.closed && !closedWithBookings ? (
             <EmptyState icon={CalendarX2} title={`Closed on ${day.short}`} description="Callers hear that you're closed and when you open next." />
           ) : day.columns.length === 0 ? (
             <EmptyState icon={CalendarX2} title={`No ${resourceLabel.toLowerCase()} yet`} description="Add them in settings to start taking bookings." />
           ) : (
-            <Register day={day} activeDoctor={doctorId} onDoctor={setDoctorId} actions={actions} resourceLabel={resourceLabel} />
+            <Register
+              day={day}
+              activeDoctor={doctorId}
+              onDoctor={setDoctorId}
+              actions={actions}
+              resourceLabel={resourceLabel}
+              onlyBooked={day.closed}
+            />
           )}
 
           {day.stray.length > 0 && (

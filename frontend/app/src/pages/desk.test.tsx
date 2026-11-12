@@ -255,6 +255,52 @@ describe("<DeskPage>", () => {
     expect(screen.getByRole("button", { name: "Today" })).toBeTruthy();
   });
 
+  it("still shows bookings on a day that was closed after they were made", async () => {
+    const closed: Day = {
+      ...makeDay(),
+      closed: true,
+      columns: [
+        {
+          doctor: { id: "doc-a", name: "Doctor A" },
+          slots: [
+            slot("10:00", { state: "blocked", block: "closed" }),
+            slot("10:15", { state: "booked", bookings: [booking({})] }),
+          ],
+        },
+      ],
+    };
+    mockApi({ "/api/desk/day": () => json(200, closed) });
+    renderDesk();
+    expect(await screen.findByText(/These bookings were made before the day was closed/)).toBeTruthy();
+    expect(screen.getByText("Ramesh G")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
+    expect(screen.queryByText("Closed on Thu 12 Nov")).toBeNull(); // not the empty state
+  });
+
+  it("shows the plain closed message when a closed day has no bookings", async () => {
+    const closed: Day = {
+      ...makeDay(),
+      closed: true,
+      columns: [{ doctor: { id: "doc-a", name: "Doctor A" }, slots: [slot("10:00", { state: "blocked", block: "closed" })] }],
+    };
+    mockApi({ "/api/desk/day": () => json(200, closed) });
+    renderDesk();
+    expect(await screen.findByText("Closed on Thu 12 Nov")).toBeTruthy();
+  });
+
+  it("keeps the cancel dialog open when cancelling fails", async () => {
+    const fetchMock = mockApi({
+      "/api/desk/bookings/1/status": () => json(500, { detail: "Something went wrong on our side.", code: "INTERNAL" }),
+    });
+    renderDesk();
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    const dialog = await screen.findByRole("dialog", { name: "Cancel this booking?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel booking" }));
+    await waitFor(() => expect(posts(fetchMock, "/api/desk/bookings/1/status")).toHaveLength(1));
+    await new Promise((r) => setTimeout(r, 30)); // let the failed save finish
+    expect(screen.getByRole("dialog", { name: "Cancel this booking?" })).toBeTruthy();
+  });
+
   it("sends a logged-out visitor to login", async () => {
     mockApi({ "/api/me": () => json(401, { detail: "Please log in to continue.", code: "UNAUTHENTICATED" }) });
     renderDesk();

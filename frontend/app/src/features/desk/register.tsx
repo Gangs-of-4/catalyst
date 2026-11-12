@@ -160,8 +160,20 @@ function AddButton({ onClick, label }: { onClick: () => void; label: string }) {
 }
 
 /** One doctor's day as rows. Earlier empty slots fold away so the next patient is near the top. */
-export function DoctorDay({ doctor, slots, actions }: { doctor: Doctor; slots: Slot[]; actions: RegisterActions }) {
+export function DoctorDay({
+  doctor,
+  slots: allSlots,
+  actions,
+  onlyBooked = false,
+}: {
+  doctor: Doctor;
+  slots: Slot[];
+  actions: RegisterActions;
+  /** A closed day: show only the bookings made before it closed, not a column of "Closed" rows. */
+  onlyBooked?: boolean;
+}) {
   const [showEarlier, setShowEarlier] = React.useState(false);
+  const slots = onlyBooked ? allSlots.filter((s) => s.bookings.length > 0) : allSlots;
   const hiddenCount = slots.filter((s) => s.past && s.bookings.length === 0).length;
   const visible = showEarlier ? slots : slots.filter((s) => !(s.past && s.bookings.length === 0));
 
@@ -179,7 +191,7 @@ export function DoctorDay({ doctor, slots, actions }: { doctor: Doctor; slots: S
         </button>
       )}
       {visible.length === 0 ? (
-        <p className="px-3 py-6 text-center text-sm text-muted-foreground">No more times today.</p>
+        <p className="px-3 py-6 text-center text-sm text-muted-foreground">{onlyBooked ? "No bookings." : "No more times today."}</p>
       ) : (
         <ul aria-label={`${doctor.name}'s times`}>
           {visible.map((s) => (
@@ -204,7 +216,9 @@ export function Register({
   onDoctor,
   actions,
   resourceLabel,
+  onlyBooked = false,
 }: {
+  onlyBooked?: boolean;
   day: Day;
   activeDoctor: string | null;
   onDoctor: (id: string) => void;
@@ -272,7 +286,7 @@ export function Register({
               className={cn("flex-col gap-2", selected ? "flex" : "hidden lg:flex")}
             >
               <h3 className={cn("text-sm font-semibold", day.columns.length > 1 && "hidden lg:block")}>{c.doctor.name}</h3>
-              <DoctorDay doctor={c.doctor} slots={c.slots} actions={actions} />
+              <DoctorDay doctor={c.doctor} slots={c.slots} actions={actions} onlyBooked={onlyBooked} />
             </section>
           );
         })}
