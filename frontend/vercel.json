@@ -9,6 +9,7 @@
     { "source": "/", "destination": "/app" },
     { "source": "/b/:publicId/try", "destination": "/app" },
     { "source": "/demo/:template", "destination": "/app" },
+    { "source": "/desk", "destination": "/app" },
     { "source": "/home", "destination": "/app" },
     { "source": "/login", "destination": "/app" },
     { "source": "/signup", "destination": "/app" }

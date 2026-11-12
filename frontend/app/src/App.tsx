@@ -5,6 +5,7 @@ import { ConnectionBanner } from "@/components/connection-banner";
 import { OfflineBanner } from "@/components/offline-banner";
 import { Toaster } from "@/components/ui/sonner";
 import { WakeGate } from "@/components/wake-gate";
+import { DeskPage } from "@/pages/desk";
 import { HomePage } from "@/pages/home";
 import { LandingPage } from "@/pages/landing";
 import { LoginPage } from "@/pages/login";
@@ -29,6 +30,7 @@ export function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/b/:publicId/try" element={awake(<TryPage />)} />
         <Route path="/demo/:template" element={<DemoRedirect />} />
+        <Route path="/desk" element={awake(<DeskPage />)} />
         <Route path="/home" element={awake(<HomePage />)} />
         <Route path="/login" element={awake(<LoginPage />)} />
         <Route path="/signup" element={awake(<SignupPage />)} />
