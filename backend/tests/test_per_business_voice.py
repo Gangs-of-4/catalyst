@@ -370,3 +370,15 @@ def test_legacy_sync_errors_are_reported_not_raised(isolated, monkeypatch):
 
 def test_sync_of_a_missing_business_reports_failed(isolated):
     assert "failed" in sync.sync_agent("no-such-business")
+
+
+def test_a_failing_demo_setup_is_logged_not_raised(isolated, monkeypatch, caplog):
+    configure(isolated)
+    monkeypatch.setenv("DEMO_VOICE", "1")
+
+    def boom():
+        raise RuntimeError("database down")
+
+    monkeypatch.setattr(db, "connect_unchecked", boom)
+    assert sync.sync_demo_agents() == {}
+    assert "demo assistant setup failed (RuntimeError)" in caplog.text

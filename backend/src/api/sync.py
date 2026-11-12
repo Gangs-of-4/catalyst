@@ -84,6 +84,14 @@ def sync_demo_agents() -> dict[str, str]:
         return {}
     if not (env("VAPI_PRIVATE_KEY") and env("PUBLIC_URL")):
         return {}
+    try:
+        return _sync_demo_agents()
+    except Exception as e:  # runs in a background thread: say so instead of dying silently
+        log.warning("vapi: demo assistant setup failed (%s)", type(e).__name__)
+        return {}
+
+
+def _sync_demo_agents() -> dict[str, str]:
     conn = db.connect_unchecked()
     try:
         todo = {}
