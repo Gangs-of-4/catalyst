@@ -51,6 +51,8 @@ def isolated(tmp_path, monkeypatch):
         "CATALYST_TOOL_SECRET",
         "DEMO_LOGIN_PASSWORD",
         "DEMO_LOGIN_EMAIL",
+        "DEMO_VOICE",
+        "DEMO_HISTORY",
         "TWILIO_ACCOUNT_SID",
         "TWILIO_AUTH_TOKEN",
         "GROQ_API_KEY",

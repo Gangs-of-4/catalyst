@@ -20,9 +20,14 @@ def agent_configured() -> bool:
 
 
 def uses_env_assistant(conn: db.Conn, t: db.Row) -> bool:
-    """The one rule for the .env assistant: only the demo clinic uses it, and only while its own row
-    has no assistant id (the old try page still reads the .env id)."""
-    return not t["vapi_assistant_id"] and conn.tid == tenancy.demo_id(conn, "clinic")
+    """The one rule for the .env assistant: only the demo clinic uses it, only while its own row
+    has no assistant id, and only when VAPI_ASSISTANT_ID is set (a local demo made with
+    scripts/setup_vapi.py). Without it, the demo clinic gets its own assistant like any business."""
+    return (
+        not t["vapi_assistant_id"]
+        and bool(env("VAPI_ASSISTANT_ID"))
+        and conn.tid == tenancy.demo_id(conn, "clinic")
+    )
 
 
 def agent_available(conn: db.Conn) -> bool:
@@ -69,6 +74,28 @@ def _legacy_sync(conn: db.Conn) -> str:
     except Exception as e:  # never a 500 after the settings are already saved
         log.warning("vapi: sync failed (%s)", type(e).__name__)
         return MESSAGES["failed"]
+
+
+def sync_demo_agents() -> dict[str, str]:
+    """At startup, when DEMO_VOICE=1 (the deployed host): give each demo business without an
+    assistant its own one, so the public test pages can call. Does nothing without Vapi set up.
+    Returns {template: state}."""
+    if env("DEMO_VOICE").lower() not in ("1", "true", "yes"):
+        return {}
+    if not (env("VAPI_PRIVATE_KEY") and env("PUBLIC_URL")):
+        return {}
+    conn = db.connect_unchecked()
+    try:
+        todo = {}
+        for template in ("clinic", "wholesale"):
+            tid = tenancy.demo_id(conn, template)
+            t = tenancy.get(conn, tid) if tid else None
+            needs_one = t is not None and not t["vapi_assistant_id"]
+            if needs_one and not uses_env_assistant(conn.for_tenant(tid), t):
+                todo[template] = tid
+    finally:
+        conn.close()
+    return {template: sync_tenant_agent(tid) for template, tid in todo.items()}
 
 
 def sync_tenant_agent(tid: str) -> str:

@@ -280,9 +280,9 @@ def test_demo_clinic_still_uses_its_original_assistant(isolated, monkeypatch):
     assert seen == [("PATCH", "https://api.vapi.ai/assistant/asst-demo")]
 
 
-def test_demo_clinic_never_gets_a_second_assistant(isolated, monkeypatch):
-    """Without VAPI_ASSISTANT_ID the try page has no assistant to call; a save must not create a
-    per-business one the page would never use."""
+def test_demo_clinic_without_an_env_assistant_gets_its_own(isolated, monkeypatch):
+    """A deployed host has no VAPI_ASSISTANT_ID: the demo clinic is then like any business and a
+    save creates its own assistant (the test page reads it from the row)."""
     configure(isolated)
     seen = record(monkeypatch)
     conn = db.connect()
@@ -290,8 +290,67 @@ def test_demo_clinic_never_gets_a_second_assistant(isolated, monkeypatch):
         demo = seed.ensure(conn, with_demo_data=False)
     finally:
         conn.close()
-    assert "isn't set up" in sync.sync_agent(demo)
+    assert "updated" in sync.sync_agent(demo)
+    assert seen == [("POST", "https://api.vapi.ai/assistant")]
+
+
+def test_a_missing_assistant_is_made_again(isolated, monkeypatch):
+    """The keys now belong to another Vapi account (or the assistant was deleted): the PATCH is a
+    404, so a new assistant is made and stored instead of failing on every save."""
+    configure(isolated)
+    a, _, _ = make("clinic", "Clinic A")
+    conn = db.connect_unchecked()
+    try:
+        tenancy.set_assistant(conn.for_tenant(a), "asst-old")
+    finally:
+        conn.close()
+    seen = []
+
+    def fake(method, url, json=None, timeout=None, headers=None):
+        seen.append((method, url))
+        status = 404 if method == "PATCH" else 201
+        return httpx.Response(status, json={"id": "asst-new"}, request=httpx.Request(method, url))
+
+    monkeypatch.setattr(httpx, "request", fake)
+    assert "updated" in sync.sync_agent(a)
+    assert seen == [
+        ("PATCH", "https://api.vapi.ai/assistant/asst-old"),
+        ("POST", "https://api.vapi.ai/assistant"),
+    ]
+    conn = db.connect_unchecked()
+    try:
+        assert tenancy.get(conn, a)["vapi_assistant_id"] == "asst-new"
+    finally:
+        conn.close()
+
+
+def test_other_vapi_errors_are_not_retried_as_new(isolated, monkeypatch):
+    configure(isolated)
+    a, _, _ = make("clinic", "Clinic A")
+    conn = db.connect_unchecked()
+    try:
+        tenancy.set_assistant(conn.for_tenant(a), "asst-old")
+    finally:
+        conn.close()
+    seen = record(monkeypatch, status=500)
+    assert "failed" in sync.sync_agent(a)
+    assert seen == [("PATCH", "https://api.vapi.ai/assistant/asst-old")]
+
+
+def test_startup_gives_the_demos_their_own_assistants_when_asked(isolated, monkeypatch):
+    configure(isolated)
+    seen = record(monkeypatch)
+    conn = db.connect()
+    try:
+        seed.ensure(conn, with_demo_data=False)
+    finally:
+        conn.close()
+    assert sync.sync_demo_agents() == {}  # DEMO_VOICE not set: nothing happens
     assert seen == []
+    monkeypatch.setenv("DEMO_VOICE", "1")
+    assert sync.sync_demo_agents() == {"clinic": "updated", "wholesale": "updated"}
+    assert len(seen) == 2 and all(m == "POST" for m, _ in seen)
+    assert sync.sync_demo_agents() == {}  # both have one now
 
 
 def test_legacy_sync_errors_are_reported_not_raised(isolated, monkeypatch):
