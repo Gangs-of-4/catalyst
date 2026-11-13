@@ -19,6 +19,7 @@ TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "").strip()
 
 
 def _reset_postgres() -> None:
+    db.clear_pool()  # pooled connections from the last test would be terminated below
     c = db.connect_unchecked()
     try:
         # A connection left open by an earlier test would hold locks and make DROP wait forever.

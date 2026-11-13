@@ -1,9 +1,10 @@
 """FastAPI app: agent webhook, WhatsApp webhook, staff APIs and the static pages."""
 
 import threading
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -27,6 +28,7 @@ from .api import (
 )
 from .core import db, tenancy
 from .core.config import FRONTEND_DIR, env
+from .core.log import log
 
 
 @asynccontextmanager
@@ -51,6 +53,27 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Catalyst clinic demo", lifespan=lifespan)
+SLOW_REQUEST_S = 2.0
+
+
+@app.middleware("http")
+async def log_slow_requests(request: Request, call_next):
+    """One log line for any request slower than SLOW_REQUEST_S, so slowness on the host shows up
+    in the logs instead of only in a judge's browser (issue #53). The path only: no query string,
+    no body."""
+    started = time.monotonic()
+    response = await call_next(request)
+    took = time.monotonic() - started
+    if took > SLOW_REQUEST_S:
+        log.warning(
+            "slow request: %s %s -> %s in %.1fs",
+            request.method,
+            request.url.path,
+            response.status_code,
+            took,
+        )
+    return response
+
 
 # Frontend on Vercel calls the API cross-origin (ADR-0036). Empty = same-origin only.
 cors_origins = [o.strip().rstrip("/") for o in env("CORS_ALLOWED_ORIGINS").split(",") if o.strip()]

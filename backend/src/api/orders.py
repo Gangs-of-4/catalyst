@@ -5,6 +5,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from .. import analytics
 from ..core import db
@@ -120,7 +121,7 @@ async def import_catalog(request: Request, conn: db.Conn = Depends(require_order
         ) from None
     if not text.strip():
         raise ApiError(422, "VALIDATION", "The file is empty.")
-    r = catalog.import_csv(conn, text)
+    r = await run_in_threadpool(catalog.import_csv, conn, text)
     if r.added or r.updated:
         analytics.record(conn, "catalog_updated")
     return {"added": r.added, "updated": r.updated, "errors": r.errors}

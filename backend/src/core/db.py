@@ -8,9 +8,12 @@ and `conn.tid` is that business's id. Every query that touches a tenant table mu
 `tenant_id`, or `execute` refuses it with `ScopeError` before it reaches the database.
 """
 
+import contextlib
 import json
 import re
 import sqlite3
+import threading
+import time
 from typing import Any
 
 from . import config
@@ -361,7 +364,10 @@ class Conn:
         self.raw.rollback()
 
     def close(self) -> None:
-        self.raw.close()
+        if self.dialect == "postgres":
+            _release(self.raw)
+        else:
+            self.raw.close()
 
     def __enter__(self) -> "Conn":
         return self
@@ -377,11 +383,74 @@ def dialect() -> str:
     return "postgres" if env("DATABASE_URL") else "sqlite"
 
 
+# Idle Postgres connections kept for the next request: opening one is a TLS handshake plus
+# authentication, which on a 0.1-CPU host is most of a small request's cost (issue #53).
+POOL_SIZE = 4
+POOL_MAX_IDLE_S = 120  # Neon's pooler and the network drop idle connections; don't trust old ones
+_pool: list[tuple[Any, str, float]] = []  # (connection, url, idle since)
+_pool_lock = threading.Lock()
+
+
+def _take(url: str) -> Any | None:
+    """An idle pooled connection to `url` that is still usable, or None."""
+    while True:
+        with _pool_lock:
+            if not _pool:
+                return None
+            raw, raw_url, since = _pool.pop()
+        if raw_url != url or raw.closed or time.monotonic() - since > POOL_MAX_IDLE_S:
+            _discard(raw)
+            continue
+        if time.monotonic() - since > 30:  # idle a while: check it before handing it out
+            try:
+                raw.execute("SELECT 1")
+                raw.rollback()
+            except Exception:
+                _discard(raw)
+                continue
+        return raw
+
+
+def _release(raw: Any) -> None:
+    """Back to the pool when it is clean and there is room; closed otherwise. A connection that is
+    already pooled (two Conn views of one connection both closed) is not added twice."""
+    try:
+        if raw.closed or raw.broken:
+            return _discard(raw)
+        raw.rollback()  # never hand on an open transaction
+    except Exception:
+        return _discard(raw)
+    with _pool_lock:
+        if any(p[0] is raw for p in _pool):
+            return None
+        if len(_pool) < POOL_SIZE:
+            _pool.append((raw, env("DATABASE_URL"), time.monotonic()))
+            return None
+    _discard(raw)
+
+
+def _discard(raw: Any) -> None:
+    with contextlib.suppress(Exception):
+        raw.close()
+
+
+def clear_pool() -> None:
+    """Close every pooled connection (tests reset the database; a deploy changes it)."""
+    with _pool_lock:
+        idle = [p[0] for p in _pool]
+        _pool.clear()
+    for raw in idle:
+        _discard(raw)
+
+
 def _connect_raw() -> tuple[Any, str]:
     url = env("DATABASE_URL")
     if url:
         import psycopg
 
+        pooled = _take(url)
+        if pooled is not None:
+            return pooled, "postgres"
         # prepare_threshold=None: no server-side prepared statements, so Neon's pooled
         # (PgBouncer transaction-mode) endpoint works too.
         raw = psycopg.connect(
