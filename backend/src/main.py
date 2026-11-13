@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import accounts, seed
 from .agents import instructions as instructions_store
 from .api import (
+    activity,
     admin,
     auth,
     desk,
@@ -94,6 +95,7 @@ app.include_router(orders.router)
 app.include_router(instructions.router)
 app.include_router(feedback.router)
 app.include_router(admin.router)
+app.include_router(activity.router)
 app.include_router(desk.router)
 app.include_router(whatsapp.router)
 app.include_router(setup.router)

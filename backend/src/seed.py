@@ -30,6 +30,7 @@ DEMO_DATA_TABLES = (
     "tool_calls",
     "pending_actions",
     "events",
+    "activity",
 )
 
 
@@ -191,9 +192,27 @@ def _call(conn: db.Conn, rng: random.Random, d: date, n: int, outcomes: list[str
         _event(conn, "call_ended", ended)
 
 
+def _app_minutes(conn: db.Conn, d: date) -> None:
+    """Fictional time in the app for the demo owner on a day they logged in (issue #56). Its own
+    random source, so the rest of the seeded history stays the same as before."""
+    row = conn.execute(
+        "SELECT id FROM users WHERE tenant_id = ? ORDER BY created_at, id LIMIT 1",
+        (conn.tid,),
+    ).fetchone()
+    if row is None:
+        return
+    minutes = random.Random(d.toordinal()).randint(5, 40)
+    conn.execute(
+        "INSERT INTO activity (tenant_id, user_id, day, minutes, last_minute) VALUES (?, ?, ?, ?, ?)"
+        " ON CONFLICT DO NOTHING",
+        (conn.tid, row[0], d.isoformat(), minutes, f"{d.isoformat()}T18:00"),
+    )
+
+
 def _owner_activity(conn: db.Conn, rng: random.Random, d: date) -> None:
     if rng.random() < 0.8:
         _event(conn, "login", _at(d, 9, rng.randint(0, 59)))
+        _app_minutes(conn, d)
     for _ in range(rng.randint(0, 2)):
         _event(conn, "wa_command", _at(d, rng.randint(8, 21), rng.randint(0, 59)))
 

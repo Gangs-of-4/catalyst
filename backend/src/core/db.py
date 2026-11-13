@@ -36,6 +36,7 @@ TENANT_TABLES = {
     "instruction_versions",
     "events",
     "feedback",
+    "activity",
 }
 _COMMENTS = re.compile(r"--[^\n]*|/\*.*?\*/", re.S)
 _LITERALS = re.compile(r"'(?:[^']|'')*'")
@@ -215,6 +216,15 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_type_time ON events (type, created_at);
 CREATE INDEX IF NOT EXISTS events_tenant_time ON events (tenant_id, created_at);
+-- Time in the app (issue 56): one row per owner per IST day; last_minute makes a ping count once a minute.
+CREATE TABLE IF NOT EXISTS activity (
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  user_id TEXT NOT NULL,
+  day TEXT NOT NULL,
+  minutes INTEGER NOT NULL DEFAULT 0,
+  last_minute TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, user_id, day)
+);
 CREATE TABLE IF NOT EXISTS calls (
   tenant_id TEXT NOT NULL REFERENCES tenants(id),
   id TEXT NOT NULL,
