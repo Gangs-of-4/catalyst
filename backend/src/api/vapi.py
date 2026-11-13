@@ -4,6 +4,7 @@ import json
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, ValidationError
+from starlette.concurrency import run_in_threadpool
 
 from ..agents import calls, prompt, tools
 from ..core import db
@@ -89,6 +90,11 @@ async def _handle(request: Request, background: BackgroundTasks, conn: db.Conn):
     message = body.get("message") if isinstance(body, dict) else None
     if not isinstance(message, dict):
         raise HTTPException(400, "Missing message")
+    # Tools read and write the database: off the event loop, so other requests keep moving.
+    return await run_in_threadpool(_process, message, background, conn)
+
+
+def _process(message: dict, background: BackgroundTasks, conn: db.Conn) -> dict:
     kind = message.get("type")
     call = message.get("call") or {}
     call_id = call.get("id")

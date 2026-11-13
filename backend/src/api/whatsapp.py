@@ -7,6 +7,7 @@ from urllib.parse import parse_qsl
 from xml.sax.saxutils import escape
 
 from fastapi import APIRouter, BackgroundTasks, Request, Response
+from starlette.concurrency import run_in_threadpool
 
 from .. import analytics
 from ..channels.whatsapp import commands
@@ -66,6 +67,11 @@ async def incoming(request: Request, background: BackgroundTasks):
     text = (params.get("Body") or "").strip()
     if not sender:
         return twiml("Number samajh nahi aaya.")
+    # Commands read and write the database (and may call the LLM): off the event loop.
+    return await run_in_threadpool(_reply, sender, text, background)
+
+
+def _reply(sender: str, text: str, background: BackgroundTasks) -> Response:
     conn = db.connect()
     try:
         tid = tenancy.for_sender(conn, sender)  # the sender tells us the business
