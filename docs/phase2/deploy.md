@@ -25,10 +25,11 @@ Names only. Values are in the Render dashboard. `.env.example` explains each one
 ## Checks after a deploy
 
 1. `GET /healthz` returns 200.
-2. Run `python scripts/doctor.py` against the live URL.
-3. Log in with the demo login, open the desk and confirm today's data is there.
-4. Make one call on `/demo/clinic` and check its transcript on the desk.
+2. Log in with the demo login, open the desk and confirm today's data is there.
+3. Make one call on `/demo/clinic` and check its transcript on the desk.
 
 ## Reset the demo data
 
 Run `python scripts/seed_demo.py` with `DATABASE_URL` set in your shell, not in a file. It re-anchors the fictional data to today.
+
+`scripts/doctor.py` checks a **local** setup: it reads the local `.env` and expects a cloudflared tunnel URL. It isn't a check for the live site.

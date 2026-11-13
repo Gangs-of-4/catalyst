@@ -56,4 +56,12 @@ The order appears on the order board.
 
 ## 6. Admin (team only)
 
-`/admin` uses `ADMIN_PASSWORD`. It shows each business's counts, a weekly breakdown, the counts-only usage CSV, and the feedback log with decisions.
+`/admin` uses `ADMIN_PASSWORD`. This is the dashboard we show the mentor (#57):
+
+- a **Real / Demo / Both** switch, so demo traffic can be shown or left out;
+- headline tiles;
+- day-by-day charts;
+- a per-business sheet with a weekly breakdown;
+- the counts-only usage CSV, and the feedback log with decisions.
+
+Call minutes, time in the app and the daily charts fill in only once the backend for them lands (issue #56). Until then, those parts stay empty or partial.

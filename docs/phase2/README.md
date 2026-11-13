@@ -17,7 +17,7 @@ In Phase 2 it went from one hard-coded clinic to **any number of businesses**, e
 | Wholesale: catalogue, CSV import, orders and their lifecycle, order board | `backend/src/orders/`, `api/orders.py` |
 | Owner custom instructions, screened by rules, versioned with undo, fenced after the safety rules | `agents/instructions.py`, `api/instructions.py` |
 | WhatsApp routed by the sender's number, with preview-and-confirm on every write | `channels/whatsapp/`, `api/whatsapp.py` |
-| Usage events (no payload), admin counts with weekly breakdown, counts-only CSV, feedback log | `analytics.py`, `api/admin.py`, `api/feedback.py` |
+| Usage events (no payload), admin dashboard, counts-only CSV, feedback log | `analytics.py`, `api/admin.py`, `api/feedback.py`, `frontend/app/src/features/admin/` |
 | Demo clinic and demo wholesaler with today's data and optional 4-week fictional history | `seed.py`, `scripts/seed_demo.py` |
 | React single-page app: landing, signup, home, desk, settings, test page, admin | `frontend/app/` (ADR-0042) |
 | Deployed: Vercel (frontend) + Render (backend) + Neon Postgres, all free tiers | [deploy.md](deploy.md) |
@@ -39,7 +39,7 @@ All are in [`context/decisions.md`](../../context/decisions.md).
 | 0038 | Self-serve onboarding and owner custom instructions | Accepted |
 | 0039 | Render + Neon (Singapore) for the backend; residency exception; app-level tenant scoping instead of RLS | Proposed |
 | 0040 | Target voice stack: self-hosted Pipecat + Sarvam in India | Proposed |
-| 0041 | Vercel rewrites `/api` to the backend, so session cookies are first-party | Proposed (cookie verified live 2026-11-12) |
+| 0041 | Vercel rewrites `/api` to the backend, so session cookies are first-party | Accepted (team, 2026-11-11; cookie checked live 2026-11-12) |
 | 0042 | React (Vite + TypeScript + Tailwind + shadcn/ui) for the frontend | Accepted |
 | 0043 | Move the frontend from Vercel Hobby to Cloudflare Workers | Proposed |
 
@@ -52,10 +52,13 @@ All are in [`context/decisions.md`](../../context/decisions.md).
 
 ## Build record
 
-Milestones M0–M10 merged through PRs #8 to #59. The progress table is in `context/phase2-plan.md`. Live fixes after deploy:
+Milestones M0–M10 merged through PRs #8 to #59. The progress table is in `context/phase2-plan.md`. Changes after deploy:
 
 - #46: the Vapi SDK class shape in the production build;
-- #51: Hindi transcriber;
+- #51: Hindi transcriber, and digit-by-digit read-back of phone numbers (clinic prompt 0.3.1, wholesale 0.2.1);
+- #52: the voice library loads before the call cap is spent;
 - #54: connection pool and latency;
+- #55: the old static pages and their backend routes are removed, so the backend serves no HTML;
+- #57: admin dashboard for the mentor showcase, and time-in-app pings;
 - #58: "microphone not heard" message;
-- #59: stale tab reloads after a deploy.
+- #59: a stale tab reloads after a deploy.
