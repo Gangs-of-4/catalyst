@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FeedbackButton } from "@/features/feedback/feedback-button";
+import { useActivityPing } from "@/hooks/use-activity-ping";
 import { ApiError } from "@/lib/api";
 import { getMe, logout, type Me } from "@/lib/session";
 
@@ -17,6 +18,7 @@ import { getMe, logout, type Me } from "@/lib/session";
  */
 export function HomePage() {
   const navigate = useNavigate();
+  useActivityPing(); // time in the app, for the team's dashboard (issue #56)
   const [me, setMe] = React.useState<Me | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [attempt, setAttempt] = React.useState(0);

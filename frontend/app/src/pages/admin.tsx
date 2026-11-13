@@ -8,12 +8,13 @@ import { PasswordInput } from "@/components/password-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { adminLogin, type Business, FEEDBACK_CSV_URL, type FeedbackRow, getBusinesses, getFeedback } from "@/features/admin/api";
+import { Dashboard } from "@/features/admin/dashboard";
 import { DecisionDialog, FeedbackCard } from "@/features/admin/feedback";
 import { BusinessCard, UsageTotals } from "@/features/admin/usage";
 import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-type Tab = "usage" | "feedback";
+type Tab = "dashboard" | "usage" | "feedback";
 type FeedbackFilter = "all" | "undecided";
 const isAbort = (e: unknown) => e instanceof DOMException && e.name === "AbortError";
 
@@ -77,7 +78,7 @@ export function AdminPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [businesses, setBusinesses] = React.useState<Business[]>([]);
   const [feedback, setFeedback] = React.useState<FeedbackRow[]>([]);
-  const [tab, setTab] = React.useState<Tab>("usage");
+  const [tab, setTab] = React.useState<Tab>("dashboard");
   const [filter, setFilter] = React.useState<FeedbackFilter>("undecided");
   const [deciding, setDeciding] = React.useState<FeedbackRow | null>(null);
   const [attempt, setAttempt] = React.useState(0);
@@ -166,6 +167,7 @@ export function AdminPage() {
         <div role="tablist" aria-label="Admin" className="flex gap-1 rounded-lg bg-muted p-1">
           {(
             [
+              { id: "dashboard", label: "Dashboard" },
               { id: "usage", label: "Usage" },
               { id: "feedback", label: `Feedback${undecided ? ` (${undecided})` : ""}` },
             ] as const
@@ -188,7 +190,11 @@ export function AdminPage() {
           ))}
         </div>
 
-        {tab === "usage" ? (
+        {tab === "dashboard" ? (
+          <section id="panel-dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
+            <Dashboard businesses={businesses} onAuthError={onAuthError} />
+          </section>
+        ) : tab === "usage" ? (
           <section id="panel-usage" role="tabpanel" aria-labelledby="tab-usage" className="flex flex-col gap-4">
             <UsageTotals businesses={businesses} />
             <p className="text-[13px] text-muted-foreground">Totals leave out the demo businesses. Counts only: no names or phone numbers.</p>

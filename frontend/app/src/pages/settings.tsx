@@ -19,6 +19,7 @@ import { check, type Form, formErrors, isDirty, MAX_DOCTORS, SLOT_CHOICES, toBod
 import { PairRows, TextRows } from "@/features/settings/rows";
 import { HoursEditor } from "@/features/signup/hours-editor";
 import { WeekdayPicker } from "@/features/signup/weekday-picker";
+import { useActivityPing } from "@/hooks/use-activity-ping";
 import { ApiError } from "@/lib/api";
 import { getMe } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,7 @@ function Section({ id, title, hint, children }: { id: string; title: string; hin
  */
 export function SettingsPage() {
   const navigate = useNavigate();
+  useActivityPing(); // time in the app, for the team's dashboard (issue #56)
   const [saved, setSaved] = React.useState<Form | null>(null);
   const [form, setForm] = React.useState<Form | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
