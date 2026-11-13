@@ -118,6 +118,18 @@ describe("<Dashboard>", () => {
     expect(screen.queryByRole("button", { name: /Example Dental/ })).toBeNull();
   });
 
+  it("adds real and demo together for Both", async () => {
+    mockApi({
+      "/api/admin/overview?scope=real": () => json(200, OVERVIEW),
+      "/api/admin/overview?scope=all": () => json(200, OVERVIEW),
+    });
+    renderDash();
+    await screen.findByText("1 h 37 min on calls");
+    fireEvent.click(screen.getByRole("button", { name: "Both" }));
+    await waitFor(() => expect(within(tile("Calls answered")).getByText("74")).toBeTruthy()); // 14 + 60
+    expect(within(tile("Businesses")).getByText("3")).toBeTruthy();
+  });
+
   it("still shows what it can when the overview endpoint isn't live yet", async () => {
     mockApi({ "/api/admin/overview?scope=real": () => json(404, { detail: "We couldn't find that.", code: "NOT_FOUND" }) });
     renderDash();

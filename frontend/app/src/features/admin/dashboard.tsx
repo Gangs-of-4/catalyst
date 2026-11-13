@@ -85,6 +85,24 @@ function tilesFor(t: Totals) {
   ];
 }
 
+/** Real + demo, for the "Both" scope. */
+function addTotals(a: Totals, b: Totals): Totals {
+  const src = (k: "phone" | "whatsapp" | "walk_in") => (a.records_by_source[k] ?? 0) + (b.records_by_source[k] ?? 0);
+  return {
+    businesses: a.businesses + b.businesses,
+    active_businesses_7d: a.active_businesses_7d + b.active_businesses_7d,
+    users: a.users + b.users,
+    active_users_7d: a.active_users_7d + b.active_users_7d,
+    calls: a.calls + b.calls,
+    call_minutes: a.call_minutes + b.call_minutes,
+    records: { bookings: a.records.bookings + b.records.bookings, orders: a.records.orders + b.records.orders },
+    records_by_source: { phone: src("phone"), whatsapp: src("whatsapp"), walk_in: src("walk_in") },
+    wa_commands: a.wa_commands + b.wa_commands,
+    feedback: a.feedback + b.feedback,
+    app_minutes: a.app_minutes + b.app_minutes,
+  };
+}
+
 const series = (daily: Day[], m: Metric) => daily.map((d) => ({ date: d.date, value: Number(d[m] ?? 0) }));
 
 /** One business: its numbers, its 28 days, what it used, and its people (no names or emails). */
@@ -235,7 +253,13 @@ export function Dashboard({ businesses, onAuthError }: { businesses: Business[];
   }, [scope, onAuthError]);
 
   const inScope = businesses.filter((b) => (scope === "all" ? true : scope === "demo" ? b.is_demo : !b.is_demo));
-  const totals = overview ? (scope === "demo" ? overview.demo : overview.real) : fallbackTotals(inScope);
+  const totals = overview
+    ? scope === "demo"
+      ? overview.demo
+      : scope === "all"
+        ? addTotals(overview.real, overview.demo)
+        : overview.real
+    : fallbackTotals(inScope);
   const daily = overview?.daily ?? [];
   const m = METRICS.find((x) => x.id === metric)!;
 
