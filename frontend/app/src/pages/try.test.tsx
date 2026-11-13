@@ -11,12 +11,17 @@ import { DemoRedirect, TryPage } from "./try";
 
 const startCallMock = vi.fn();
 const micMock = vi.fn();
+const loadMock = vi.fn();
 vi.mock("@/lib/voice", async () => {
   const actual = await vi.importActual<typeof import("@/lib/voice")>("@/lib/voice");
   return {
     ...actual,
     requestMicrophone: async (...args: unknown[]) => {
       const result = await micMock(...args);
+      if (result instanceof Error) throw result;
+    },
+    loadVoice: async (...args: unknown[]) => {
+      const result = await loadMock(...args);
       if (result instanceof Error) throw result;
     },
     // If the spy returns an Error, throw it here, outside the spy, as the real startCall would.
@@ -94,6 +99,7 @@ beforeEach(() => {
   startCallMock.mockReset();
   resetHealth();
   micMock.mockReset();
+  loadMock.mockReset();
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -177,6 +183,26 @@ describe("<TryPage>", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Talk to your front desk" }));
     expect(await screen.findByText(/demo minutes are used up/)).toBeTruthy();
     expect(startCallMock).not.toHaveBeenCalled();
+  });
+
+  it("loads the voice library before /start, so a library that won't load never uses up a daily call", async () => {
+    loadMock.mockReturnValue(new Error("The voice library didn't load. Reload the page."));
+    const fetchMock = mockApi({
+      "GET /api/try/abc123": () => json(200, INFO),
+      "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => json(200, { ok: true }),
+      "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
+    });
+    renderAt("/b/abc123/try");
+    fireEvent.click(await screen.findByRole("button", { name: "Talk to your front desk" }));
+    expect(await screen.findByText("The voice library didn't load. Reload the page.")).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/try/abc123/start")).toBe(false);
+    expect(startCallMock).not.toHaveBeenCalled();
+    // A second press tries again (a failed load isn't remembered).
+    loadMock.mockReturnValue(undefined);
+    startCallMock.mockResolvedValue({ stop: vi.fn() });
+    fireEvent.click(screen.getByRole("button", { name: "Talk to your front desk" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === "/api/try/abc123/start")).toBe(true));
   });
 
   it("asks for the microphone first, so a blocked mic never uses up a daily call", async () => {

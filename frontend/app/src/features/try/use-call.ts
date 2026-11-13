@@ -2,7 +2,7 @@ import * as React from "react";
 
 import { ApiError } from "@/lib/api";
 import { recentlyHealthy, waitForBackend } from "@/lib/health";
-import { CallCancelled, requestMicrophone, startCall, type CallRole, type VoiceCall } from "@/lib/voice";
+import { CallCancelled, loadVoice, requestMicrophone, startCall, type CallRole, type VoiceCall } from "@/lib/voice";
 
 import { startCheck, type TryInfo } from "./api";
 
@@ -100,6 +100,16 @@ export function useCall(info: TryInfo | null, onCallEnded: () => void) {
       });
       return;
     }
+    // The voice library next, also before /start: a library that won't load mustn't use up a call.
+    try {
+      await loadVoice();
+    } catch (err) {
+      if (cancelled()) return;
+      setState("idle");
+      setProblem({ kind: "other", message: err instanceof Error ? err.message : "The voice library didn't load." });
+      return;
+    }
+    if (cancelled()) return;
     try {
       const { max_call_seconds } = await startCheck(info.public_id);
       if (cancelled()) return;
