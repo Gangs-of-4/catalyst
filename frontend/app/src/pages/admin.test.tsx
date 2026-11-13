@@ -47,6 +47,7 @@ function mockApi(overrides: Record<string, Handler> = {}) {
   const routes: Record<string, Handler> = {
     "/api/admin/businesses": () => json(200, { businesses: BUSINESSES }),
     "/api/admin/feedback": () => json(200, { feedback: FEEDBACK, types: [], decisions: [] }),
+    "/api/admin/overview?scope=real": () => json(404, { detail: "We couldn't find that.", code: "NOT_FOUND" }),
     ...overrides,
   };
   const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
@@ -101,6 +102,7 @@ describe("<AdminPage>", () => {
   it("totals real businesses only and lists each with its weeks and CSV link", async () => {
     mockApi();
     renderPage();
+    fireEvent.click(await screen.findByRole("tab", { name: "Usage" }));
     const list = await screen.findByRole("list", { name: "Businesses" });
     const totals = screen.getByText("Businesses").closest("dl")!;
     expect(within(totals).getByText("2")).toBeTruthy(); // the demo is left out

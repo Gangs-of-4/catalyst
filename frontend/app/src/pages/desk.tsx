@@ -24,6 +24,7 @@ import { FeedbackButton } from "@/features/feedback/feedback-button";
 import { WalkInDialog, type WalkInTarget } from "@/features/desk/walk-in-dialog";
 import { OrderBoard } from "@/features/orders/order-board";
 import { usePolling } from "@/hooks/use-polling";
+import { useActivityPing } from "@/hooks/use-activity-ping";
 import { ApiError } from "@/lib/api";
 import { getMe, type Me } from "@/lib/session";
 
@@ -44,6 +45,7 @@ const STATUS_DONE: Partial<Record<Status, string>> = {
  */
 export function DeskPage() {
   const navigate = useNavigate();
+  useActivityPing(); // time in the app, for the team's dashboard (issue #56)
   const [me, setMe] = React.useState<Me | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [noSchedule, setNoSchedule] = React.useState(false);
