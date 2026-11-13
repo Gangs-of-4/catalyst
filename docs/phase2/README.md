@@ -22,6 +22,48 @@ In Phase 2 it went from one hard-coded clinic to **any number of businesses**, e
 | React single-page app: landing, signup, home, desk, settings, test page, admin | `frontend/app/` (ADR-0042) |
 | Deployed: Vercel (frontend) + Render (backend) + Neon Postgres, all free tiers | [deploy.md](deploy.md) |
 
+## How it fits together
+
+```
+Browser (React app on Vercel)
+   │  /api/* rewritten to the backend, so login cookies are first-party
+   ▼
+Backend (Python + FastAPI on Render) ── Postgres (Neon): every row carries a business id
+   ▲            │
+   │ tools      │ creates and updates one voice assistant per business
+   │            ▼
+Voice platform (Vapi today, behind our VoiceOrchestrator interface)
+```
+
+- **Our backend owns the brain; the voice layer only talks** (ADR-0032).
+  - The voice platform turns speech into text and back.
+  - Every action (find slots, book, take an order, escalate) is a tool call to *our* backend, which checks it, saves it and returns the answer.
+  - Business rules, the schedule, the safety rules and the data stay with us.
+- **The voice platform can be swapped.** Vapi is the managed platform for the pilot because it was the fastest way to a working call at no cost. It sits behind one interface (`providers/voice_orchestrator/`), so moving to the target self-hosted stack in India (Pipecat + Sarvam, ADR-0040) doesn't change the rest of the product.
+- **Templates are config, not code.** Clinic and wholesale differ only in `verticals/<name>/` (prompt, tools, escalation rules, sample data).
+
+## Feature status
+
+Live = works on the live site. Partial = works, with a gap noted. Manual = a team member does it by hand. Planned = not built yet.
+
+| Feature | Status | PRs |
+|---|---|---|
+| Self-serve signup, login, one assistant per business | Live | #11, #12 |
+| Voice: clinic answers from approved settings, refuses medical advice, offers a callback | Live | #12, #51 |
+| Voice: clinic booking into the shared schedule | Partial: works in tests; in the 13 Nov live test, the agent stalled while checking slots | #12, #51 |
+| Voice: wholesale orders from the catalogue, with read-back | Partial: works in tests; not yet re-tested by voice on the live site | #33 |
+| Desk: bookings, inbox, call log with transcripts | Live | #28 |
+| Wholesale: catalogue, CSV import, order board and order lifecycle | Live | #32 |
+| Settings, with the voice agent updated on save | Live | #12, #28 |
+| Owner custom instructions (rule screen, versions, undo) | Live (LLM screen cut) | #36 |
+| WhatsApp commands per business, with preview and confirm | Partial: Twilio sandbox only; each number must join first | #35 |
+| Admin dashboard, usage CSV, feedback log | Partial: call minutes, time in the app and daily charts wait on issue #56 | #38, #57 |
+| Demo businesses with fictional history | Live | #40 |
+| Daily call caps and the 3-minute call limit | Live | #12, #52 |
+| Demo data reset | Manual (`scripts/seed_demo.py`) | #40 |
+| "Send summary to doctor" button on the desk | Planned (the endpoint exists) | — |
+| Real phone number for a business | Planned (D2) | — |
+
 ## Live
 
 - App: https://catalyst-peach-seven.vercel.app
