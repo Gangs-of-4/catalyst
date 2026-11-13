@@ -14,7 +14,8 @@ def test_desk_apis_need_a_login(isolated):
         for path in ("/api/inbox", "/api/calls", "/api/stats", "/api/desk/day", "/api/staff/meta"):
             r = anon.get(path)
             assert r.status_code == 401 and r.json()["code"] == "UNAUTHENTICATED", path
-        assert anon.get("/desk").status_code == 200  # the page is static; its data needs the login
+        # The desk page is the React app on Vercel; this backend serves no HTML.
+        assert anon.get("/desk").status_code == 404
         assert anon.get("/api/register").status_code == 200  # the public page stays public
 
 

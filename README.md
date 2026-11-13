@@ -48,7 +48,7 @@ You need **Git**, **Python 3.11 or newer**, and **cloudflared** (Windows: `winge
    pip install -r requirements.txt
    Copy-Item ..\.env.example ..\.env
    ```
-   Open `.env` and fill in `VAPI_PRIVATE_KEY` and `VAPI_PUBLIC_KEY` (Vapi dashboard → API Keys), plus `DEMO_LOGIN_PASSWORD` (at least 8 characters: the demo clinic owner's login for `/desk` and `/setup`). Fill in the Twilio values if you have them.
+   Open `.env` and fill in `VAPI_PRIVATE_KEY` and `VAPI_PUBLIC_KEY` (Vapi dashboard → API Keys), plus `DEMO_LOGIN_PASSWORD` (at least 8 characters: the demo clinic owner's login for `/desk` and `/settings`). Fill in the Twilio values if you have them.
 4. Start the server (leave this window open):
    ```powershell
    uvicorn src.main:app --port 8000
@@ -64,9 +64,9 @@ You need **Git**, **Python 3.11 or newer**, and **cloudflared** (Windows: `winge
    python scripts\setup_vapi.py
    ```
    This writes `VAPI_ASSISTANT_ID` and `CATALYST_TOOL_SECRET` into `.env`, and prints the URLs you need next.
-7. **WhatsApp (optional).** In the Twilio console → Messaging → Try it out → WhatsApp sandbox: join the sandbox from the doctor's phone (send the `join <code>` message it shows), then set **"When a message comes in"** to `<PUBLIC_URL>/whatsapp/incoming` (method POST). On `<PUBLIC_URL>/setup`, add the doctor's number under "WhatsApp numbers".
-8. Open `<PUBLIC_URL>/` and click **Talk to the receptionist**. Allow the microphone.
-9. **Desk and settings need a login.** Log in once as `demo.clinic@example.com` (or your `DEMO_LOGIN_EMAIL`) with `DEMO_LOGIN_PASSWORD`, on the React app's `/login` (`cd frontend/app && npm run dev`, then http://localhost:5173/login). The session cookie then also works on http://localhost:8000/desk and `/setup`. Every business you sign up gets its own login and sees only its own desk. The demo wholesale distributor logs in as `demo.wholesale@example.com` with the same password.
+7. **WhatsApp (optional).** In the Twilio console → Messaging → Try it out → WhatsApp sandbox: join the sandbox from the doctor's phone (send the `join <code>` message it shows), then set **"When a message comes in"** to `<PUBLIC_URL>/whatsapp/incoming` (method POST). On the app's `/settings` page (step 9), add the doctor's number under "WhatsApp numbers".
+8. **The pages** are the React app (the backend serves no HTML). In a fourth window: `cd frontend/app`, `npm install` once, then `npm run dev`. It forwards `/api` to the backend on port 8000. Open http://localhost:5173/demo/clinic and press **Talk to your front desk**. Allow the microphone.
+9. **Desk and settings need a login.** Log in once at http://localhost:5173/login as `demo.clinic@example.com` (or your `DEMO_LOGIN_EMAIL`) with `DEMO_LOGIN_PASSWORD`, then open `/desk` and `/settings`. Every business you sign up gets its own login and sees only its own desk. The demo wholesale distributor logs in as `demo.wholesale@example.com` with the same password.
 10. **Demo history (optional).** Set `DEMO_HISTORY=1` and restart to give both demo businesses 4 weeks of fictional calls, bookings, orders and usage, so the desk and the admin page aren't empty. `python scripts/seed_demo.py` clears the demo data and seeds it again, anchored to today.
 
 To check everything at once: `python scripts\doctor.py`. It says what's missing in plain words, including a stale tunnel URL.
@@ -88,24 +88,29 @@ All Vapi and Twilio traffic is mocked in tests. No keys are needed. CI also runs
 
 ### Pages
 
+All pages are the React app (`frontend/app`, details in `frontend/README.md`), live at the Vercel site and at http://localhost:5173 locally.
+
 | URL | Who | |
 |---|---|---|
-| `/` | Prospects (public) | Web call to the agent, live transcript, the clinic register with masked names |
-| `/desk` | The receptionist (password) | Day grid per doctor, walk-ins, Arrived / No-show / Done / Cancel, urgent inbox, call log, send summary |
-| `/setup` | Our team or the clinic (password) | Clinic facts, hours, doctors, fees, FAQs, red flags, WhatsApp numbers, voice, leave days |
+| `/` | Everyone | Landing page |
+| `/signup`, `/login`, `/home` | Business owners | Self-serve setup, login, their home |
+| `/demo/clinic`, `/demo/wholesale`, `/b/<id>/try` | Prospects (public) | Web call to the agent, live transcript, the register or order board with masked names |
+| `/desk` | The receptionist or distributor (login) | Clinic: day per doctor, walk-ins, Arrived / No-show / Done / Cancel. Wholesale: order board and add order. Both: inbox, call log, feedback |
+| `/settings` | The owner (login) | Business details, hours, doctors and fees or order terms, emergencies, FAQs, leave days, own instructions, catalogue and CSV, WhatsApp numbers, voice |
+| `/admin` | Our team (admin password) | Usage evidence and the feedback log, with CSV downloads |
 
 ### A 5-minute demo for a clinic
 
-Open `/` on the laptop and `/desk` on a second screen, with the doctor's WhatsApp to hand.
+Open `/demo/clinic` on the laptop and `/desk` on a second screen, with the doctor's WhatsApp to hand.
 
 1. **Timings.** Ask "Clinic kab khulta hai? Sunday ko?" It answers from the clinic's own settings only.
 2. **Book.** "Kal shaam 5 baje appointment chahiye." It asks your name and number and reads the number back. It offers free slots near 5 pm, reads back day, date, time and doctor, and books after your yes.
-3. **Watch the register.** The booking is written into tomorrow's page on `/` within 3 seconds, and appears on `/desk`.
+3. **Watch the register.** The booking is written into tomorrow's page on the test page within 3 seconds, and appears on `/desk`.
 4. **Safety.** Say "Kal daant nikalwaya tha, khoon ruk hi nahi raha." It gives the emergency instruction, gives no medical advice, and escalates. An urgent item appears at the top of the desk inbox, and the doctor gets a 🔴 URGENT WhatsApp.
 5. **Doctor control.** The doctor sends "kal chhutti" on WhatsApp. The reply is a preview ("Poori clinic — kal (…) chhutti … Sahi hai? Haan/Nahi"). They answer "Haan" and get "Done ✅". Tomorrow's bookings move to the callback list.
 6. **Ask again.** Call again and ask for "kal". The agent says the clinic is closed tomorrow and offers the next open day.
 
-Also good: "aaj ke appointments" on WhatsApp, "consultation fee 400" → Haan (then ask the agent the fee), and **Send summary to doctor** on the desk.
+Also good: "aaj ke appointments" on WhatsApp, "consultation fee 400" → Haan (then ask the agent the fee). (The old desk's **Send summary to doctor** button isn't in the React desk yet; `POST /api/desk/summary/send` still works.)
 
 ### What's next (before a real clinic)
 
@@ -121,7 +126,7 @@ Also good: "aaj ke appointments" on WhatsApp, "consultation fee 400" → Haan (t
 context/      product, contracts, architecture, decisions, roadmap, team
 verticals/    customer types as config (clinic = DRAFT)
 backend/      Python 3.12 + FastAPI; module skeleton under backend/src/
-frontend/     web app: Try-it, desk, setup (static HTML today; Vite + React during Phase 2, ADR-0042)
+frontend/     web app: Vite + React (ADR-0042) in frontend/app, deployed to Vercel
 scripts/      ops CLIs (clinic setup, call review)
 .claude/      optional Claude Code helper commands
 mcp/ open-source/   integration notes and dependency licences

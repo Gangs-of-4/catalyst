@@ -1,14 +1,13 @@
 """Desk APIs for the logged-in owner's business (C7, C10; contracts.md §6.1).
 
-Every route reads and writes only the business in the session. The /desk page itself is static and
-public, like any page on Vercel; without a session its API calls get 401 and it asks the owner to log in.
+Every route reads and writes only the business in the session. The /desk page is the React app on
+Vercel; without a session its API calls get 401 and it sends the owner to log in.
 """
 
 import json
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .. import inbox
@@ -18,18 +17,11 @@ from ..channels.whatsapp import alerts, summary
 from ..core import config, db
 from ..core import phone as ph
 from ..core import settings as cs
-from ..core.config import FRONTEND_DIR
 from ..providers.messaging import twilio_whatsapp
 from .deps import get_user_conn, require_bookings, require_csrf_header
 from .errors import ApiError
 
-pages = APIRouter()
 router = APIRouter(dependencies=[Depends(require_csrf_header)])
-
-
-@pages.get("/desk", include_in_schema=False)
-def desk_page() -> FileResponse:
-    return FileResponse(FRONTEND_DIR / "desk.html")
 
 
 @router.get("/api/staff/meta")

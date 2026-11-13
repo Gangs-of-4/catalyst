@@ -5,7 +5,6 @@ import re
 from datetime import date
 
 from fastapi import APIRouter, Body, Depends
-from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from .. import analytics
@@ -14,12 +13,10 @@ from ..booking.when import short_date, spoken_time
 from ..core import config, db
 from ..core import phone as ph
 from ..core import settings as cs
-from ..core.config import FRONTEND_DIR
 from .deps import get_user_conn, modules, require_bookings, require_csrf_header
 from .errors import ApiError, plain_fields
 from .sync import agent_available, sync_agent
 
-pages = APIRouter()
 router = APIRouter(dependencies=[Depends(require_csrf_header)])
 HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
@@ -106,11 +103,6 @@ class OrdersSettingsIn(BusinessSettingsIn):
 
     min_order: str = Field(default="", max_length=60)
     delivery_area: str = Field(default="", max_length=120)
-
-
-@pages.get("/setup", include_in_schema=False)
-def setup_page() -> FileResponse:
-    return FileResponse(FRONTEND_DIR / "setup.html")
 
 
 def _blocks(conn: db.Conn, s: dict) -> list[dict]:

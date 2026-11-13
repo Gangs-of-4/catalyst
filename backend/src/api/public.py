@@ -1,23 +1,18 @@
-"""Public routes: the Try-it page, its config and the clinic register shown beside the call."""
+"""Public routes: the Try-it config and the clinic register. The pages themselves are the React app
+(frontend/app), served by Vercel; the backend serves no HTML."""
 
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import FileResponse
 
 from ..booking import service as bk
 from ..booking.when import short_date, spoken_date
 from ..core import config, db
 from ..core import settings as cs
-from ..core.config import FRONTEND_DIR, env
+from ..core.config import env
 from .deps import get_conn
 
 router = APIRouter()
-
-
-@router.get("/", include_in_schema=False)
-def try_page() -> FileResponse:
-    return FileResponse(FRONTEND_DIR / "index.html")
 
 
 @router.get("/api/public-config")

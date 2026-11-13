@@ -18,7 +18,7 @@ VALUES = [  # name, required, what it's for
     ("VAPI_PUBLIC_KEY", True, "lets the Try-it page start a web call"),
     ("VAPI_ASSISTANT_ID", True, "written by scripts/setup_vapi.py"),
     ("CATALYST_TOOL_SECRET", True, "written by scripts/setup_vapi.py; Vapi sends it on every tool call"),
-    ("DEMO_LOGIN_PASSWORD", False, "the demo clinic owner's login for /desk and /setup"),
+    ("DEMO_LOGIN_PASSWORD", False, "the demo clinic owner's login for /desk and /settings"),
     ("TWILIO_ACCOUNT_SID", False, "WhatsApp alerts and doctor commands"),
     ("TWILIO_AUTH_TOKEN", False, "WhatsApp alerts and doctor commands"),
     ("TWILIO_WHATSAPP_FROM", False, "the Twilio sandbox number, e.g. whatsapp:+14155238886"),
@@ -114,7 +114,7 @@ def main() -> int:
     if numbers:
         line(OK, f"{numbers} WhatsApp number(s) can give commands and get alerts")
     else:
-        line(WARN, "No WhatsApp numbers on /setup: anyone can send commands and nobody gets alerts")
+        line(WARN, "No WhatsApp numbers in /settings: anyone can send commands and nobody gets alerts")
 
     print("\n" + ("All set." if not problems else f"{problems} thing(s) to fix before the demo."))
     return 1 if problems else 0
