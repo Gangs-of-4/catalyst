@@ -18,6 +18,7 @@ export type CallProblem =
 export type Line = { id: number; role: CallRole; text: string };
 
 const DEFAULT_MAX_SECONDS = 180;
+const NO_AUDIO = "The call connected, but no sound from your microphone reached it. Check the microphone chosen for this site (the lock icon next to the address), close other apps using it, and try again.";
 
 /** One web call to this business's assistant: the cap check, then the voice SDK. */
 export function useCall(info: TryInfo | null, onCallEnded: () => void) {
@@ -34,6 +35,12 @@ export function useCall(info: TryInfo | null, onCallEnded: () => void) {
   const stopTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const lineId = React.useRef(0);
   const endedRef = React.useRef(onCallEnded);
+  // Why a call ended: if neither the caller hung up nor anything they said was heard, and there
+  // was no error, the voice platform hung up for lack of microphone audio (Vapi's "Assistant did
+  // not receive customer audio"). Say so instead of silently resetting the button.
+  const hungUpRef = React.useRef(false);
+  const heardCallerRef = React.useRef(false);
+  const erroredRef = React.useRef(false);
   React.useEffect(() => {
     endedRef.current = onCallEnded;
   });
@@ -56,6 +63,10 @@ export function useCall(info: TryInfo | null, onCallEnded: () => void) {
   );
 
   const finish = React.useCallback(() => {
+    const hadCall = callRef.current !== null;
+    if (hadCall && !hungUpRef.current && !heardCallerRef.current && !erroredRef.current) {
+      setProblem({ kind: "mic", message: NO_AUDIO });
+    }
     callRef.current = null;
     setState("idle");
     setSpeaking(null);
@@ -71,6 +82,9 @@ export function useCall(info: TryInfo | null, onCallEnded: () => void) {
     setProblem(null);
     setLines([]);
     setSeconds(0);
+    hungUpRef.current = false;
+    heardCallerRef.current = false;
+    erroredRef.current = false;
     // Wake the backend before the call if it hasn't answered lately (phase2-plan §5, cold starts).
     if (!recentlyHealthy()) {
       setState("waking");
@@ -132,8 +146,12 @@ export function useCall(info: TryInfo | null, onCallEnded: () => void) {
         onEnded: finish,
         onSpeaking: setSpeaking,
         onVolume: setVolume,
-        onTranscript: (role, text) => setLines((ls) => [...ls, { id: ++lineId.current, role, text }]),
+        onTranscript: (role, text) => {
+          if (role === "user") heardCallerRef.current = true;
+          setLines((ls) => [...ls, { id: ++lineId.current, role, text }]);
+        },
         onError: (message) => {
+          erroredRef.current = true;
           setProblem({ kind: "other", message });
           finish();
         },
@@ -163,6 +181,7 @@ export function useCall(info: TryInfo | null, onCallEnded: () => void) {
   const stop = React.useCallback(() => {
     const call = callRef.current;
     if (!call) return;
+    hungUpRef.current = true;
     setState("ending");
     call.stop();
     // If the SDK never reports the hang-up, don't leave the page stuck on "Ending…".

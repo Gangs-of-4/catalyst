@@ -171,6 +171,28 @@ describe("<TryPage>", () => {
     expect(screen.getByText(/New ·/)).toBeTruthy();
   });
 
+  it("says the microphone wasn't heard when the call ends by itself before the caller spoke", async () => {
+    let events: CallEvents | undefined;
+    startCallMock.mockImplementation(async (_key: string, _asst: string, ev: CallEvents) => {
+      events = ev;
+      return { stop: vi.fn() };
+    });
+    mockApi({
+      "GET /api/try/abc123": () => json(200, INFO),
+      "GET /api/try/abc123/board": () => json(200, bookings()),
+      "GET /healthz": () => json(200, { ok: true }),
+      "POST /api/try/abc123/start": () => json(200, { max_call_seconds: 180 }),
+    });
+    renderAt("/b/abc123/try");
+    await screen.findByText("Ramesh G.");
+    fireEvent.click(screen.getByRole("button", { name: "Talk to your front desk" }));
+    await waitFor(() => expect(startCallMock).toHaveBeenCalled());
+    act(() => events!.onLive());
+    act(() => events!.onTranscript("assistant", "Namaste."));
+    act(() => events!.onEnded()); // the platform hung up: no caller audio
+    expect(await screen.findByText(/no sound from your microphone reached it/)).toBeTruthy();
+  });
+
   it("shows the server's sentence when today's minutes are used up, without starting a call", async () => {
     mockApi({
       "GET /api/try/abc123": () => json(200, INFO),
