@@ -8,7 +8,6 @@ from dotenv import dotenv_values
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BACKEND_DIR = REPO_ROOT / "backend"
-FRONTEND_DIR = REPO_ROOT / "frontend"
 VERTICAL_DIR = REPO_ROOT / "verticals" / "clinic"
 
 # Windows Python ships without a tz database, so IST is a fixed offset.

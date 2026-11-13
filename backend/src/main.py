@@ -1,4 +1,5 @@
-"""FastAPI app: agent webhook, WhatsApp webhook, staff APIs and the static pages."""
+"""FastAPI app: agent webhook, WhatsApp webhook and the browser API. The pages are the React app
+(frontend/app) on Vercel; this backend serves no HTML."""
 
 import threading
 import time
@@ -6,7 +7,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from . import accounts, seed
 from .agents import instructions as instructions_store
@@ -27,7 +27,7 @@ from .api import (
     whatsapp,
 )
 from .core import db, tenancy
-from .core.config import FRONTEND_DIR, env
+from .core.config import env
 from .core.log import log
 
 
@@ -94,12 +94,9 @@ app.include_router(orders.router)
 app.include_router(instructions.router)
 app.include_router(feedback.router)
 app.include_router(admin.router)
-app.include_router(desk.pages)
 app.include_router(desk.router)
 app.include_router(whatsapp.router)
-app.include_router(setup.pages)
 app.include_router(setup.router)
-app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
 
 
 errors.install(app)

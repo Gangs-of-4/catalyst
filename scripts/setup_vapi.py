@@ -31,9 +31,10 @@ def main() -> int:
         return 1
     url = vapi.public_url()
     print(status)
-    print(f"\nTry-it page (public):        {url}/")
-    print(f"Receptionist desk:           {url}/desk")
-    print(f"Clinic settings:             {url}/setup")
+    print("\nPages (the React app; locally run `npm run dev` in frontend/app):")
+    print("  Try-it page (public):       http://localhost:5173/demo/clinic")
+    print("  Receptionist desk:          http://localhost:5173/desk")
+    print("  Clinic settings:            http://localhost:5173/settings")
     print(f"Twilio sandbox webhook URL:  {url}/whatsapp/incoming   (method POST)")
     print("\nThe tunnel URL changes every time cloudflared restarts. When it does: update PUBLIC_URL in .env,")
     print("rerun this script, and paste the new webhook URL into the Twilio sandbox settings.")
