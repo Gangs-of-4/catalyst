@@ -80,13 +80,31 @@ let loading: Promise<VapiClass> | null = null;
  * uses one up. A failure isn't cached: the next press tries again.
  */
 export function loadVoice(): Promise<VapiClass> {
-  loading ??= import("@vapi-ai/web").then(vapiClass).catch((err: unknown) => {
-    loading = null;
-    throw err instanceof Error && err.message.startsWith("The voice library")
-      ? err
-      : new Error("The voice library didn't load. Check your internet and try again.");
-  });
+  loading ??= import("@vapi-ai/web")
+    .then(vapiClass)
+    .catch(async (err: unknown) => {
+      loading = null;
+      if (err instanceof Error && err.message.startsWith("The voice library")) throw err;
+      if (await siteUpdated()) {
+        // A tab opened before the last deploy asks for an old file name, which no longer exists.
+        window.location.reload();
+        throw new Error("This page was updated. Reloading it…");
+      }
+      throw new Error("The voice library didn't load. Check your internet and try again.");
+    });
   return loading;
+}
+
+/** True when the live site now serves a different build from the one this tab is running. */
+async function siteUpdated(): Promise<boolean> {
+  const running = new URL(import.meta.url).pathname.split("/").pop();
+  if (!running || !running.endsWith(".js")) return false; // the dev server and the tests
+  try {
+    const res = await fetch("/", { cache: "no-store" });
+    return res.ok && !(await res.text()).includes(running);
+  } catch {
+    return false;
+  }
 }
 
 /**
