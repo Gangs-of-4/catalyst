@@ -561,7 +561,7 @@ ADR-0029 and ADR-0031 were accepted on 2026-10-27 and stay here so their history
 4. **Tenant isolation in app code**: every tenant table has `tenant_id`, every query goes through one scoping helper, and tests prove business A can't read or change business B's data. Postgres RLS is a stretch goal, not a Phase 2 gate.
 5. **Cold starts** are mitigated by an external keep-alive ping in Indian daytime hours, a 90 s Vapi tool timeout, and a "waking up" state on the pages.
 
-**Consequences:** The data-residency rule (CLAUDE.md rule 9) has a time-boxed exception, recorded here. The Oracle Mumbai VM stays the documented next host. A weekly `pg_dump` backup is needed because the free tiers have no backup guarantee. If Render or Neon change their free tiers before March 2027, we move hosts; `scripts/doctor.py` checks the live backend monthly.
+**Consequences:** The data-residency rule (CLAUDE.md rule 9) has a time-boxed exception, recorded here. The Oracle Mumbai VM stays the documented next host. A weekly `pg_dump` backup is needed because the free tiers have no backup guarantee. If Render or Neon change their free tiers before March 2027, we move hosts; `scripts/doctor.py` checks the live backend monthly. **Measured on the live host (2026-11-13, issue #53):** the free instance has 0.1 CPU. A single request takes 0.3–1.3 s, ten at once take about 2 s each (even `/healthz`), and the first request after the instance sleeps took 33 s. The keep-alive ping (07:00–23:00 IST) avoids most sleeps; the app pools Postgres connections and keeps blocking work off the event loop to spend less CPU per request. If demo days still feel slow, the fallback is a paid Render instance for those days (cost VERIFY), which is a budget decision for the team lead.
 
 ---
 
