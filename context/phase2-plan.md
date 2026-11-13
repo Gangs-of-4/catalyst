@@ -28,9 +28,12 @@
 | M4b: wholesale voice side (tools, prompt, escalation rules, safety suite, catalogue-aware post-call check) | #33 | Merged |
 | M6: WhatsApp per business (routing by sender, wholesale commands, no open demo mode) | #35 | Merged |
 | M5: owner custom instructions (rule screen, versions and undo, fenced prompt section, `/api/instructions`, "agent ko bolo" on WhatsApp; LLM screen cut) | #36 | Merged |
-| M7: usage events, admin counts and weekly breakdown, counts-only usage CSV, feedback log with decisions and Sheet-matching CSV (reset-demo cut) | #38 | Open |
-| M9: demo clinic + demo wholesale with today's data and logins; optional 4-week fictional history (`DEMO_HISTORY=1`); `scripts/seed_demo.py` resets it, anchored to today | #40 | Open |
-| M8, M10–M12 | — | M8 in progress (frontend); M10–M12 not started |
+| M7: usage events, admin counts and weekly breakdown, counts-only usage CSV, feedback log with decisions and Sheet-matching CSV (reset-demo cut) | #38 | Merged |
+| M9: demo clinic + demo wholesale with today's data and logins; optional 4-week fictional history (`DEMO_HISTORY=1`); `scripts/seed_demo.py` resets it, anchored to today | #40 | Merged |
+| M8: React app, all pages (ADR-0042) | several | Merged |
+| M10: deploy (Vercel + Render + Neon, keep-alive, Vapi) and live fixes #46, #51, #54, #58, #59 | several | Merged, live |
+| M11: `docs/phase2/` (overview, try-this, deploy, limitations) | this PR | Open |
+| M12: rehearsal and demo recording | — | Not started |
 
 ---
 
