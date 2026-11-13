@@ -298,6 +298,7 @@ Every table below except `tenants` has `tenant_id`, and every query on it filter
 | `orders` | one order | `id`, `tenant_id`, `number` (per-tenant counter, unique per tenant), `shop_name`, `contact_name`, `phone`, `notes`, `status`, `source`, `call_id`, `idempotency_key` (unique per tenant), `created_at`, `updated_at` |
 | `order_items` | order lines | `id`, `tenant_id`, `order_id`, `product_id`, `name`, `pack_size`, `qty`, `rate_paise` (name and rate are copied at order time) |
 | `instruction_versions` | owner custom instructions | `id`, `tenant_id`, `text` (accepted lines only, ≤ 500 chars), `rejected` (JSON list of `{line, reason}`), `source` (`web` \| `whatsapp`), `active` (one per business), `replaces` (the version active before; undo returns to it), `created_at` |
+| `activity` | time in the app (issue #56) | `tenant_id`, `user_id`, `day` (IST date), `minutes`, `last_minute` (`YYYY-MM-DDTHH:MM`; a second ping in the same minute changes nothing). Key (`tenant_id`, `user_id`, `day`). Counts only. |
 | `events` | usage evidence | `id`, `tenant_id`, `user_id` (nullable), `type`, `created_at`. **No payload column**, so counts can never carry names or numbers. Types so far: `web_call_started` (the call caps count these). |
 | `feedback` | in-app feedback | `id`, `tenant_id`, `person_name`, `person_role`, `text`, `type`, `decision`, `decision_reason`, `shipped_on`, `evidence_url`, `partner_reaction`, `created_at` |
 | `schema_version` | migrations | `version` |
@@ -443,6 +444,12 @@ Auth column: **public**, **user** (session, scoped to the user's business; `401 
 ### 6.2 Admin usage and CSV formats
 
 `GET /api/admin/businesses` returns `{businesses: [...]}`, per business: `id`, `name`, `public_id`, `template`, `created_at`, `users`, `records` (bookings or orders created), `calls`, `wa_commands`, `last_active` (latest `events.created_at` or `users.last_active_at`), `is_demo`, and `weeks`: the last 4 ISO weeks (Monday start, IST), oldest first, each `{week_start, events, records, calls, wa_commands}`.
+
+`POST /api/activity` (owner session + CSRF header, no body; 204): one minute in the app for the logged-in owner, sent by the React app once a minute while the tab is visible and the person interacted. The business and person come from the session only.
+
+`GET /api/admin/overview?scope=real|demo|all` (default `real`; anything else is 422) returns `{generated_at, real, demo, features, daily}`. `real` and `demo` are always both there, each `{businesses, active_businesses_7d, users, active_users_7d, calls, call_minutes, records: {bookings, orders}, records_by_source: {phone?, whatsapp?, walk_in?}, wa_commands, feedback, app_minutes}`. `features` (`[{type, count}]`, biggest first) and `daily` (the last 28 IST days, oldest first, each `{date, active_businesses, events, calls, call_minutes, app_minutes}`) follow `scope`. `calls` counts `call_ended` events; `call_minutes` is worked out from `calls.started_at`/`ended_at` (durations of zero or less skipped, rounded to 0.1); `records` and `records_by_source` come from the `bookings`/`orders` rows; a business is active on a day with any event or app minute; `active_users_7d` uses `users.last_active_at`.
+
+`GET /api/admin/businesses/{id}` returns `{business, features, daily, users}`: `business` is that business's row from `/api/admin/businesses`, `features` and `daily` as above for that business, and `users` as counts only, each `{id, role, last_active, logins, app_minutes, active_days}` (`role` is `owner` until there are staff roles). Never a name, email or phone number. 404 for an unknown id.
 
 `usage.csv` columns (counts only — never names or phone numbers): `week_start,events,records,calls,wa_commands,logins`, one row per week for the last 4 weeks, plus a `total` row.
 

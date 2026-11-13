@@ -104,6 +104,36 @@ def businesses() -> dict:
         conn.close()
 
 
+@router.get("/overview", dependencies=[Depends(require_admin)])
+def overview(scope: str = "real") -> dict:
+    """The dashboard (issue #56): `real` and `demo` totals, plus features and day by day for
+    `scope` (`real`, `demo` or `all`)."""
+    if scope not in analytics.SCOPES:
+        raise ApiError(
+            422,
+            "VALIDATION",
+            "Scope must be real, demo or all.",
+            {"scope": "real, demo or all"},
+        )
+    conn = db.connect_unchecked()
+    try:
+        return analytics.overview(conn, scope)
+    finally:
+        conn.close()
+
+
+@router.get("/businesses/{tenant_id}", dependencies=[Depends(require_admin)])
+def business_detail(tenant_id: str) -> dict:
+    conn = db.connect_unchecked()
+    try:
+        found = analytics.business_detail(conn, tenant_id)
+    finally:
+        conn.close()
+    if found is None:
+        raise ApiError(404, "NOT_FOUND", "No such business.")
+    return found
+
+
 @router.get("/businesses/{tenant_id}/usage.csv", dependencies=[Depends(require_admin)])
 def usage_csv(tenant_id: str) -> Response:
     conn = db.connect_unchecked()
