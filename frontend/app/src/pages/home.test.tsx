@@ -73,4 +73,24 @@ describe("<HomePage>", () => {
     expect(await screen.findByText("Your account didn't load")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Try again/ })).toBeTruthy();
   });
+
+  it("opens edit account dialog and updates user name", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
+      if (String(input) === "/api/me") {
+        if (init?.method === "PATCH") {
+          return json(200, { user: { name: "Updated Name", email: "owner@example.com" } });
+        }
+        return json(200, ME);
+      }
+      throw new Error(`unexpected fetch ${String(input)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderHome();
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    expect(await screen.findByRole("heading", { name: "Edit account" })).toBeTruthy();
+    const nameInput = screen.getByLabelText("Your name");
+    fireEvent.change(nameInput, { target: { value: "Updated Name" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await screen.findByText("Updated Name")).toBeTruthy();
+  });
 });

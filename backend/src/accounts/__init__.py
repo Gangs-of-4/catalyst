@@ -9,7 +9,9 @@ from .service import (
     EmailTaken,
     Locked,
     Session,
+    WrongPassword,
     admin_login,
+    change_password,
     create_user,
     email_taken,
     ensure_demo_login,
@@ -21,6 +23,8 @@ from .service import (
     normalize_email,
     start_session,
     touch,
+    update_name,
+    verify_user_password,
 )
 
 __all__ = [
@@ -34,7 +38,9 @@ __all__ = [
     "EmailTaken",
     "Locked",
     "Session",
+    "WrongPassword",
     "admin_login",
+    "change_password",
     "create_user",
     "email_taken",
     "ensure_demo_login",
@@ -46,4 +52,6 @@ __all__ = [
     "normalize_email",
     "start_session",
     "touch",
+    "update_name",
+    "verify_user_password",
 ]

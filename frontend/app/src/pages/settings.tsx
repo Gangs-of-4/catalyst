@@ -1,16 +1,24 @@
 import { AlertCircle, House, Loader2, RotateCw } from "lucide-react";
 import * as React from "react";
 import { Link, useNavigate } from "react-router";
+import { toast } from "sonner";
 
 import { AppHeader } from "@/components/app-header";
 import { EmptyState } from "@/components/empty-state";
 import { Field } from "@/components/field";
 import { Fieldset } from "@/components/fieldset";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { type Block, getSettings, saveSettings } from "@/features/settings/api";
+import { type Block, getSettings, saveSettings, updateOwnerWhatsapp } from "@/features/settings/api";
 import { agentToast } from "@/features/settings/agent-toast";
 import { CatalogueSection } from "@/features/settings/catalogue";
 import { InstructionsSection } from "@/features/settings/instructions";
@@ -40,6 +48,138 @@ function Section({ id, title, hint, children }: { id: string; title: string; hin
   );
 }
 
+function UpdateOwnerWhatsappForm({
+  currentNumber,
+  onClose,
+  onSaved,
+}: {
+  currentNumber: string;
+  onClose: () => void;
+  onSaved: (newNumber: string) => void;
+}) {
+  const [newNumber, setNewNumber] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const [problem, setProblem] = React.useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErrors({});
+    setProblem(null);
+
+    const newErrors: Record<string, string> = {};
+    if (!newNumber.trim()) {
+      newErrors.newNumber = "Enter your 10-digit Indian mobile number.";
+    }
+    if (!password) {
+      newErrors.password = "Enter your password.";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await updateOwnerWhatsapp(newNumber.trim(), password);
+      toast.success("Owner WhatsApp number updated.");
+      onSaved(res.owner_whatsapp);
+      onClose();
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        if (err.fields) {
+          setErrors({
+            ...(err.fields.new_whatsapp ? { newNumber: err.fields.new_whatsapp } : {}),
+            ...(err.fields.password ? { password: err.fields.password } : {}),
+          });
+        }
+        setProblem(err.detail);
+      } else {
+        setProblem("Could not update number.");
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4 pt-2">
+      {problem && (
+        <div role="alert" className="rounded-md bg-destructive-soft p-3 text-sm text-destructive-text">
+          {problem}
+        </div>
+      )}
+      {currentNumber && (
+        <p className="text-xs text-muted-foreground">
+          Current number: <span className="font-mono font-medium text-foreground">{currentNumber}</span>
+        </p>
+      )}
+      <Field label="New WhatsApp number" error={errors.newNumber} hint="10-digit Indian mobile number">
+        <Input
+          type="tel"
+          value={newNumber}
+          onChange={(e) => setNewNumber(e.target.value)}
+          placeholder="e.g. 98765 00001"
+          autoComplete="tel"
+          disabled={saving}
+        />
+      </Field>
+      <Field label="Your account password" error={errors.password}>
+        <Input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+          disabled={saving}
+        />
+      </Field>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={saving}>
+          {saving && <Loader2 aria-hidden className="mr-2 size-4 animate-spin" />} Update number
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function UpdateOwnerWhatsappDialog({
+  open,
+  onOpenChange,
+  currentNumber,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentNumber: string;
+  onSaved: (newNumber: string) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Update owner WhatsApp number</DialogTitle>
+          <DialogDescription>
+            Enter your new mobile number and confirm your password to update your primary WhatsApp number.
+          </DialogDescription>
+        </DialogHeader>
+        {open && (
+          <UpdateOwnerWhatsappForm
+            currentNumber={currentNumber}
+            onClose={() => onOpenChange(false)}
+            onSaved={onSaved}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /**
  * The owner's settings (M8, C12): one page, every section stacked, one Save that rebuilds the
  * prompt and re-syncs only this business's assistant. The Save bar appears once something
@@ -58,6 +198,8 @@ export function SettingsPage() {
   const [blocks, setBlocks] = React.useState<Block[]>([]);
   const [instructionsDirty, setInstructionsDirty] = React.useState(false);
   const [template, setTemplate] = React.useState<string | null>(null);
+  const [ownerWhatsapp, setOwnerWhatsapp] = React.useState<string>("");
+  const [ownerWhatsappOpen, setOwnerWhatsappOpen] = React.useState(false);
   const problemRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -71,6 +213,7 @@ export function SettingsPage() {
         setSaved(f);
         setForm(f);
         setBlocks(r.blocks ?? []);
+        setOwnerWhatsapp(r.owner_whatsapp ?? "");
         setLoadError(null);
       })
       .catch((err: unknown) => {
@@ -379,7 +522,22 @@ export function SettingsPage() {
         </Section>
 
         <Section id="whatsapp" title="WhatsApp and voice">
-          <Fieldset legend="WhatsApp numbers" error={errors.whatsapp_numbers} hint="These numbers get alerts and the daily summary, and can change settings by message.">
+          <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Primary WhatsApp number (Owner)</p>
+                <p className="text-xs text-muted-foreground">
+                  Receives critical alerts, summaries, and commands the front desk by message.
+                </p>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => setOwnerWhatsappOpen(true)}>
+                Change number
+              </Button>
+            </div>
+            <p className="font-mono text-sm font-medium">{ownerWhatsapp || "Not set"}</p>
+          </div>
+
+          <Fieldset legend="WhatsApp numbers" error={errors.whatsapp_numbers} hint="Additional numbers that get alerts and the daily summary, and can change settings by message.">
             <TextRows
               values={form.whatsapp_numbers}
               onChange={(i, v) => set("whatsapp_numbers", form.whatsapp_numbers.map((x, j) => (j === i ? v : x)))}
@@ -394,6 +552,7 @@ export function SettingsPage() {
               placeholder="10-digit mobile number"
             />
           </Fieldset>
+
           <Fieldset legend="Front desk's voice">
             <RadioGroup value={form.voice} onValueChange={(v) => set("voice", v as Form["voice"])} className="flex gap-6">
               <div className="flex items-center gap-2">
@@ -406,8 +565,35 @@ export function SettingsPage() {
               </div>
             </RadioGroup>
           </Fieldset>
+
+          <Fieldset legend="Assistant persona and greeting">
+            <Field label="Assistant name" optional error={errors.agent_name} hint="Name your front-desk assistant (e.g. Priya or Aarav). Leave blank to use generic title.">
+              <Input
+                value={form.agent_name}
+                onChange={(e) => set("agent_name", e.target.value)}
+                maxLength={40}
+                placeholder="e.g. Priya"
+              />
+            </Field>
+
+            <Field label="Custom welcome greeting" optional error={errors.custom_greeting} hint="First sentence spoken when caller is connected. Leave blank for default greeting.">
+              <Textarea
+                value={form.custom_greeting}
+                onChange={(e) => set("custom_greeting", e.target.value)}
+                maxLength={300}
+                placeholder="e.g. नमस्ते, Sharma Dental Clinic में आपका स्वागत है। बताइए आज आपकी क्या मदद करूँ?"
+              />
+            </Field>
+          </Fieldset>
         </Section>
       </main>
+
+      <UpdateOwnerWhatsappDialog
+        open={ownerWhatsappOpen}
+        onOpenChange={setOwnerWhatsappOpen}
+        currentNumber={ownerWhatsapp}
+        onSaved={(newNum) => setOwnerWhatsapp(newNum)}
+      />
 
       {dirty && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-sm">

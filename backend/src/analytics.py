@@ -27,6 +27,8 @@ TYPES = (
     "catalog_updated",
     "feedback_sent",
     "web_call_started",
+    "profile_updated",
+    "owner_whatsapp_changed",
 )
 RECORDS = ("booking_created", "order_created")  # "records" = bookings or orders created
 WEEKS = 4

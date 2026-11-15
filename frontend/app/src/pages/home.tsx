@@ -5,12 +5,190 @@ import { toast } from "sonner";
 
 import { AppHeader } from "@/components/app-header";
 import { EmptyState } from "@/components/empty-state";
+import { Field } from "@/components/field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { FeedbackButton } from "@/features/feedback/feedback-button";
 import { useActivityPing } from "@/hooks/use-activity-ping";
 import { ApiError } from "@/lib/api";
-import { getMe, logout, type Me } from "@/lib/session";
+import { getMe, logout, updateProfile, type Me } from "@/lib/session";
+
+function EditAccountForm({
+  currentName,
+  onClose,
+  onSaved,
+}: {
+  currentName: string;
+  onClose: () => void;
+  onSaved: (newName: string) => void;
+}) {
+  const [name, setName] = React.useState(currentName);
+  const [currentPassword, setCurrentPassword] = React.useState("");
+  const [newPassword, setNewPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const [problem, setProblem] = React.useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErrors({});
+    setProblem(null);
+
+    const newErrors: Record<string, string> = {};
+    if (!name.trim()) {
+      newErrors.name = "Enter your name.";
+    }
+    if (newPassword || currentPassword) {
+      if (!currentPassword) {
+        newErrors.currentPassword = "Enter your current password.";
+      }
+      if (newPassword.length < 8) {
+        newErrors.newPassword = "Password must be at least 8 characters.";
+      }
+      if (newPassword !== confirmPassword) {
+        newErrors.confirmPassword = "Passwords do not match.";
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload: { name?: string; current_password?: string; new_password?: string } = {};
+      if (name.trim() !== currentName) {
+        payload.name = name.trim();
+      }
+      if (newPassword) {
+        payload.current_password = currentPassword;
+        payload.new_password = newPassword;
+      }
+      if (Object.keys(payload).length === 0) {
+        onClose();
+        return;
+      }
+      const res = await updateProfile(payload);
+      toast.success("Account updated.");
+      onSaved(res.user.name);
+      onClose();
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        if (err.fields) {
+          setErrors({
+            ...(err.fields.name ? { name: err.fields.name } : {}),
+            ...(err.fields.current_password ? { currentPassword: err.fields.current_password } : {}),
+            ...(err.fields.new_password ? { newPassword: err.fields.new_password } : {}),
+          });
+        }
+        setProblem(err.detail);
+      } else {
+        setProblem("Could not update account.");
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4 pt-2">
+      {problem && (
+        <div role="alert" className="rounded-md bg-destructive-soft p-3 text-sm text-destructive-text">
+          {problem}
+        </div>
+      )}
+      <Field label="Your name" error={errors.name}>
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={80}
+          autoComplete="name"
+          disabled={saving}
+        />
+      </Field>
+
+      <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3.5">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Change password (optional)</p>
+        <Field label="Current password" error={errors.currentPassword}>
+          <Input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            autoComplete="current-password"
+            disabled={saving}
+          />
+        </Field>
+        <Field label="New password" error={errors.newPassword} hint="At least 8 characters">
+          <Input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            autoComplete="new-password"
+            disabled={saving}
+          />
+        </Field>
+        <Field label="Confirm new password" error={errors.confirmPassword}>
+          <Input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            autoComplete="new-password"
+            disabled={saving}
+          />
+        </Field>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={saving}>
+          {saving && <Loader2 aria-hidden className="mr-2 size-4 animate-spin" />} Save changes
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function EditAccountDialog({
+  open,
+  onOpenChange,
+  currentName,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentName: string;
+  onSaved: (newName: string) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit account</DialogTitle>
+          <DialogDescription>Update your display name or change your password.</DialogDescription>
+        </DialogHeader>
+        {open && (
+          <EditAccountForm
+            currentName={currentName}
+            onClose={() => onOpenChange(false)}
+            onSaved={onSaved}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 /**
  * The owner's signed-in home (M8 task 3). Small on purpose: later tasks add the desk, settings and
@@ -23,6 +201,7 @@ export function HomePage() {
   const [error, setError] = React.useState<string | null>(null);
   const [attempt, setAttempt] = React.useState(0);
   const [leaving, setLeaving] = React.useState(false);
+  const [editOpen, setEditOpen] = React.useState(false);
 
   React.useEffect(() => {
     const ctrl = new AbortController();
@@ -172,11 +351,16 @@ export function HomePage() {
           </Card>
 
           <Card className="gap-4">
-            <CardHeader className="flex-row items-center gap-3">
-              <span className="flex size-9 items-center justify-center rounded-md bg-muted">
-                <UserRound aria-hidden className="size-[18px]" />
-              </span>
-              <CardTitle className="text-base">Your account</CardTitle>
+            <CardHeader className="flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex size-9 items-center justify-center rounded-md bg-muted">
+                  <UserRound aria-hidden className="size-[18px]" />
+                </span>
+                <CardTitle className="text-base">Your account</CardTitle>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                Edit
+              </Button>
             </CardHeader>
             <CardContent>
               <dl className="flex flex-col gap-2 text-sm">
@@ -193,6 +377,15 @@ export function HomePage() {
           </Card>
         </div>
       </main>
+
+      <EditAccountDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        currentName={me.user.name}
+        onSaved={(newName) => {
+          setMe((prev) => (prev ? { ...prev, user: { ...prev.user, name: newName } } : prev));
+        }}
+      />
     </>
   );
 }

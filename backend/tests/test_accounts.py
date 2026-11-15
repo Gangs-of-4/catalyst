@@ -389,3 +389,41 @@ def test_each_module_validates_its_own_details():
     )
     s = onboarding.build_settings(t, ok)
     assert s["min_order"] == "₹500" and s["doctors"][0]["name"] == "Dr. Test One"
+
+
+def test_update_profile_name(client):
+    assert post(client, "/api/signup", CLINIC).status_code == 200
+    r = client.patch("/api/me", json={"name": "Dr. Asha Rao Updated"}, headers=H)
+    assert r.status_code == 200
+    assert r.json()["user"]["name"] == "Dr. Asha Rao Updated"
+    me = client.get("/api/me").json()
+    assert me["user"]["name"] == "Dr. Asha Rao Updated"
+
+
+def test_update_profile_password(client):
+    assert post(client, "/api/signup", CLINIC).status_code == 200
+    # Wrong current password
+    r = client.patch(
+        "/api/me",
+        json={"current_password": "wrong password", "new_password": "brand new pass"},
+        headers=H,
+    )
+    assert r.status_code == 401
+    assert r.json()["code"] == "UNAUTHENTICATED"
+
+    # Successful password change
+    r = client.patch(
+        "/api/me",
+        json={"current_password": "correct horse", "new_password": "brand new pass"},
+        headers=H,
+    )
+    assert r.status_code == 200
+
+    # Logout and login with new password
+    post(client, "/api/logout", {})
+    login_r = post(
+        client,
+        "/api/login",
+        {"email": "owner@example.com", "password": "brand new pass"},
+    )
+    assert login_r.status_code == 200

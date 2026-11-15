@@ -79,3 +79,64 @@ def me(
             "labels": s.get("labels", {}),
         },
     }
+
+
+class ProfileUpdateIn(BaseModel):
+    name: str | None = None
+    current_password: str | None = None
+    new_password: str | None = None
+
+
+@router.patch("/me")
+def update_profile(
+    body: ProfileUpdateIn,
+    session: accounts.Session = Depends(current_session),
+    conn: db.Conn = Depends(get_user_conn),
+) -> dict:
+    if body.new_password:
+        if not body.current_password:
+            raise ApiError(
+                422,
+                "VALIDATION",
+                "Current password is required to set a new password.",
+                {"current_password": "Enter your current password."},
+            )
+        if len(body.new_password) < accounts.MIN_PASSWORD:
+            raise ApiError(
+                422,
+                "VALIDATION",
+                f"Choose a password of at least {accounts.MIN_PASSWORD} characters.",
+                {
+                    "new_password": f"Choose a password of at least {accounts.MIN_PASSWORD} characters."
+                },
+            )
+        try:
+            accounts.change_password(
+                conn, session.user_id, body.current_password, body.new_password
+            )
+        except accounts.WrongPassword:
+            raise ApiError(
+                401,
+                "UNAUTHENTICATED",
+                "Current password is incorrect.",
+                {"current_password": "Current password is incorrect."},
+            ) from None
+
+    if body.name is not None:
+        trimmed = body.name.strip()
+        if len(trimmed) < 2 or len(trimmed) > 80:
+            raise ApiError(
+                422,
+                "VALIDATION",
+                "Name must be between 2 and 80 characters.",
+                {"name": "Name must be between 2 and 80 characters."},
+            )
+        accounts.update_name(conn, session.user_id, trimmed)
+
+    accounts.touch(conn, session.user_id)
+    row = conn.execute(
+        "SELECT name, email FROM users WHERE tenant_id = ? AND id = ?",
+        (conn.tid, session.user_id),
+    ).fetchone()
+    analytics.record(conn, "profile_updated", session.user_id)
+    return {"user": {"name": row["name"], "email": row["email"]}}

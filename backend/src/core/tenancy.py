@@ -175,3 +175,20 @@ def save_settings(conn: db.Conn, s: dict) -> None:
             "SELECT owner_whatsapp FROM tenants WHERE id = ?", (conn.tid,)
         ).fetchone()
         _index_numbers(conn, conn.tid, s, owner["owner_whatsapp"] if owner else None)
+
+
+def update_owner_whatsapp(conn: db.Conn, tid: str, new_whatsapp: str) -> str:
+    """Update primary owner WhatsApp. Raises db.Conflict if taken by another business."""
+    norm = ph.normalize(new_whatsapp)
+    if not norm:
+        raise ValueError(f"'{new_whatsapp}' is not a 10-digit Indian mobile number.")
+    if number_taken(conn, norm, tid):
+        raise db.Conflict("This WhatsApp number already belongs to another business.")
+    with conn:
+        conn.execute(
+            "UPDATE tenants SET owner_whatsapp = ? WHERE id = ?",
+            (norm, tid),
+        )
+        s = load_settings(conn)
+        _index_numbers(conn, tid, s, norm)
+    return norm
