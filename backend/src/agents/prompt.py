@@ -67,8 +67,11 @@ def build(conn: db.Conn, s: dict, template: str | None = None) -> tuple[str, str
     body, _, first = raw.partition("## First message")
     voice = s.get("voice", "female") if s.get("voice") in VOICE_FORMS else "female"
     facts = snapshot(conn, s)
+    agent_name = (s.get("agent_name") or "").strip()
+    custom_greeting = (s.get("custom_greeting") or "").strip()
     values = {
         "tenant_name": s["name"],
+        "agent_name": agent_name,
         "clinic_snapshot": facts,
         "business_snapshot": facts,
         "owner_instructions": instructions.for_prompt(conn),
@@ -78,6 +81,16 @@ def build(conn: db.Conn, s: dict, template: str | None = None) -> tuple[str, str
         "red_flags": "\n".join(f"  - {r}" for r in s.get("red_flags", []))
         or "  - (none listed: treat anything worrying as grey zone)",
     }
-    greetings = dict(line.split(":", 1) for line in first.strip().splitlines() if ":" in line)
-    greeting = greetings.get(voice, next(iter(greetings.values()), "Namaste!")).strip()
+    if custom_greeting:
+        greeting = custom_greeting
+    else:
+        greetings = dict(line.split(":", 1) for line in first.strip().splitlines() if ":" in line)
+        greeting = greetings.get(voice, next(iter(greetings.values()), "Namaste!")).strip()
+        if agent_name:
+            if "मैं clinic" in greeting:
+                greeting = greeting.replace("मैं clinic", f"मैं {agent_name}, clinic")
+            elif "मैं distributor" in greeting:
+                greeting = greeting.replace("मैं distributor", f"मैं {agent_name}, distributor")
+            elif "मैं automated" in greeting:
+                greeting = greeting.replace("मैं automated", f"मैं {agent_name}, automated")
     return _fill(body.strip(), values), _fill(greeting, values)

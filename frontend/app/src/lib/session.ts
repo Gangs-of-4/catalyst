@@ -18,6 +18,15 @@ export type LoginResponse = { public_id: string; template: string };
 
 export const getMe = (signal?: AbortSignal) => api<Me>("/api/me", { signal });
 
+export type ProfileUpdate = {
+  name?: string;
+  current_password?: string;
+  new_password?: string;
+};
+
+export const updateProfile = (body: ProfileUpdate) =>
+  api<{ user: { name: string; email: string } }>("/api/me", { method: "PATCH", body });
+
 export const login = (email: string, password: string) =>
   api<LoginResponse>("/api/login", { method: "POST", body: { email: email.trim(), password } });
 

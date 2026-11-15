@@ -450,4 +450,40 @@ describe("catalogue (distributor)", () => {
     expect(within(list).getByText("Cotton roll")).toBeTruthy();
     expect(within(list).queryByText("ORS powder orange")).toBeNull();
   });
+
+  it("saves assistant name and custom greeting", async () => {
+    let savedBody: Record<string, unknown> | null = null;
+    mockApi(CLINIC, (init) => {
+      savedBody = JSON.parse(String(init?.body));
+      return json(200, { saved: true, agent: "Agent updated.", settings: savedBody });
+    });
+    renderPage();
+    const agentInput = await screen.findByLabelText(/Assistant name/);
+    fireEvent.change(agentInput, { target: { value: "Priya" } });
+    const greetingInput = screen.getByLabelText(/Custom welcome greeting/);
+    fireEvent.change(greetingInput, { target: { value: "Namaste, Sharma Clinic." } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(savedBody).toBeTruthy());
+    expect((savedBody as any)?.agent_name).toBe("Priya");
+    expect((savedBody as any)?.custom_greeting).toBe("Namaste, Sharma Clinic.");
+  });
+
+  it("updates primary owner WhatsApp number", async () => {
+    let updateBody: Record<string, unknown> | null = null;
+    mockApi(CLINIC, undefined, {
+      "/api/settings/owner-whatsapp": (init) => {
+        updateBody = JSON.parse(String(init?.body));
+        return json(200, { saved: true, owner_whatsapp: "+919876543211" });
+      },
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Change number" }));
+    const dialog = await screen.findByRole("dialog", { name: "Update owner WhatsApp number" });
+    fireEvent.change(within(dialog).getByLabelText(/New WhatsApp number/), { target: { value: "98765 43211" } });
+    fireEvent.change(within(dialog).getByLabelText(/Your account password/), { target: { value: "secret123" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Update number" }));
+    await waitFor(() => expect(updateBody).toBeTruthy());
+    expect(updateBody).toEqual({ new_whatsapp: "98765 43211", password: "secret123" });
+    expect(await screen.findByText("+919876543211")).toBeTruthy();
+  });
 });

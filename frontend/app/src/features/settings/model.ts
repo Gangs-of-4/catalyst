@@ -17,6 +17,8 @@ export type Form = {
   faqs: Faq[];
   whatsapp_numbers: string[];
   voice: "female" | "male";
+  agent_name: string;
+  custom_greeting: string;
   // bookings
   slot_min: string;
   doctors: { id?: string; name: string }[];
@@ -46,6 +48,8 @@ export function toForm(s: Settings): Form {
     faqs: (s.faqs ?? []).map((f) => ({ ...f })),
     whatsapp_numbers: (s.whatsapp_numbers ?? []).map(showPhone),
     voice: s.voice === "male" ? ("male" as const) : ("female" as const),
+    agent_name: s.agent_name ?? "",
+    custom_greeting: s.custom_greeting ?? "",
     slot_min: "15",
     doctors: [] as Form["doctors"],
     services: [] as Service[],
@@ -80,6 +84,8 @@ export function toBody(f: Form): Settings {
     faqs: f.faqs.filter((x) => x.q.trim() || x.a.trim()).map((x) => ({ q: x.q.trim(), a: x.a.trim() })),
     whatsapp_numbers: f.whatsapp_numbers.map((n) => n.trim()).filter(Boolean),
     voice: f.voice,
+    agent_name: f.agent_name.trim(),
+    custom_greeting: f.custom_greeting.trim(),
   };
   if (f.kind === "orders") return { ...common, min_order: f.min_order.trim(), delivery_area: f.delivery_area.trim() };
   return {

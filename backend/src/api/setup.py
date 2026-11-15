@@ -7,13 +7,13 @@ from datetime import date
 from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from .. import analytics
+from .. import accounts, analytics
 from ..booking import service as bk
 from ..booking.when import short_date, spoken_time
-from ..core import config, db
+from ..core import config, db, tenancy
 from ..core import phone as ph
 from ..core import settings as cs
-from .deps import get_user_conn, modules, require_bookings, require_csrf_header
+from .deps import current_session, get_user_conn, modules, require_bookings, require_csrf_header
 from .errors import ApiError, plain_fields
 from .sync import agent_available, sync_agent
 
@@ -48,6 +48,8 @@ class BusinessSettingsIn(BaseModel):
     faqs: list[Faq] = []
     whatsapp_numbers: list[str] = []
     voice: str = "female"
+    agent_name: str = Field(default="", max_length=40)
+    custom_greeting: str = Field(default="", max_length=300)
 
     @field_validator("sessions")
     @classmethod
@@ -128,7 +130,49 @@ def _blocks(conn: db.Conn, s: dict) -> list[dict]:
 def get_settings(conn: db.Conn = Depends(get_user_conn)) -> dict:
     s = cs.load(conn)
     blocks = _blocks(conn, s) if "bookings" in modules(conn) else []
-    return {"settings": s, "blocks": blocks, "agentConfigured": agent_available(conn)}
+    t = tenancy.get(conn, conn.tid)
+    owner_whatsapp = t["owner_whatsapp"] if t else None
+    return {
+        "settings": s,
+        "blocks": blocks,
+        "agentConfigured": agent_available(conn),
+        "owner_whatsapp": owner_whatsapp,
+    }
+
+
+class OwnerWhatsappIn(BaseModel):
+    new_whatsapp: str
+    password: str
+
+
+@router.post("/api/settings/owner-whatsapp")
+def update_owner_whatsapp(
+    body: OwnerWhatsappIn,
+    session: accounts.Session = Depends(current_session),
+    conn: db.Conn = Depends(get_user_conn),
+) -> dict:
+    if not accounts.verify_user_password(conn, session.user_id, body.password):
+        raise ApiError(
+            401,
+            "UNAUTHENTICATED",
+            "Password is incorrect.",
+            {"password": "Password is incorrect."},
+        )
+    norm = ph.normalize(body.new_whatsapp)
+    if not norm:
+        raise ApiError(
+            422,
+            "VALIDATION",
+            "Enter a valid 10-digit Indian mobile number.",
+            {"new_whatsapp": "Enter a valid 10-digit Indian mobile number."},
+        )
+    try:
+        tenancy.update_owner_whatsapp(conn, conn.tid, norm)
+    except db.Conflict:
+        msg = "This WhatsApp number already belongs to another business."
+        raise ApiError(409, "WHATSAPP_TAKEN", msg, {"new_whatsapp": msg})
+    analytics.record(conn, "owner_whatsapp_changed")
+    return {"saved": True, "owner_whatsapp": norm}
 
 
 SETTINGS_MODELS: dict[str, type[BaseModel]] = {

@@ -105,3 +105,45 @@ def test_leave_add_and_remove(client):
     r = client.delete(f"/api/settings/blocks/{r['blocks'][0]['id']}").json()
     assert r["blocks"] == []
     assert client.post("/api/settings/blocks", json={"date": "2026-01-01"}).status_code == 422
+
+
+def test_agent_name_and_greeting_in_settings(client):
+    body = {
+        **current(client),
+        "agent_name": "Priya",
+        "custom_greeting": "Namaste, Sharma Clinic me aapka swagat hai.",
+    }
+    r = client.put("/api/settings", json=body)
+    assert r.status_code == 200
+    res = r.json()
+    assert res["settings"]["agent_name"] == "Priya"
+    assert res["settings"]["custom_greeting"] == "Namaste, Sharma Clinic me aapka swagat hai."
+
+
+def test_owner_whatsapp_update(client):
+    # Wrong password
+    r = client.post(
+        "/api/settings/owner-whatsapp",
+        json={"new_whatsapp": "9876543211", "password": "wrong-password"},
+    )
+    assert r.status_code == 401
+    assert r.json()["code"] == "UNAUTHENTICATED"
+
+    # Invalid phone
+    r = client.post(
+        "/api/settings/owner-whatsapp",
+        json={"new_whatsapp": "123", "password": "demo-pass-123"},
+    )
+    assert r.status_code == 422
+
+    # Success (owner fixture password is demo-pass-123)
+    r = client.post(
+        "/api/settings/owner-whatsapp",
+        json={"new_whatsapp": "9876543211", "password": "demo-pass-123"},
+    )
+    assert r.status_code == 200
+    assert r.json()["owner_whatsapp"] == "+919876543211"
+
+    # Reflected in get_settings
+    settings = client.get("/api/settings").json()
+    assert settings["owner_whatsapp"] == "+919876543211"

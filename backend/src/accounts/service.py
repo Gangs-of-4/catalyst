@@ -38,6 +38,10 @@ class Locked(Exception):
     pass
 
 
+class WrongPassword(Exception):
+    pass
+
+
 @dataclass(frozen=True)
 class Session:
     user_id: str
@@ -130,6 +134,45 @@ def email_taken(conn: db.Conn, email: str) -> bool:
         conn.execute("SELECT 1 FROM users WHERE email = ?", (normalize_email(email),)).fetchone()
         is not None
     )
+
+
+def update_name(conn: db.Conn, user_id: str, new_name: str) -> None:
+    """Update a user's display name. `conn` is scoped to the owner's business."""
+    name = new_name.strip()
+    if len(name) < 2 or len(name) > 80:
+        raise ValueError("Name must be between 2 and 80 characters.")
+    with conn:
+        conn.execute(
+            "UPDATE users SET name = ? WHERE tenant_id = ? AND id = ?",
+            (name, conn.tid, user_id),
+        )
+
+
+def verify_user_password(conn: db.Conn, user_id: str, password: str) -> bool:
+    """True if `password` matches the stored hash for `user_id`."""
+    row = conn.execute(
+        "SELECT password_hash FROM users WHERE tenant_id = ? AND id = ?",
+        (conn.tid, user_id),
+    ).fetchone()
+    if not row:
+        return False
+    return verify_password(password, row["password_hash"])
+
+
+def change_password(
+    conn: db.Conn, user_id: str, current_password: str, new_password: str
+) -> None:
+    """Change a user's password after verifying current_password."""
+    if not verify_user_password(conn, user_id, current_password):
+        raise WrongPassword("Current password is wrong.")
+    if len(new_password) < MIN_PASSWORD:
+        raise ValueError(f"Choose a password of at least {MIN_PASSWORD} characters.")
+    new_hash = hash_password(new_password)
+    with conn:
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE tenant_id = ? AND id = ?",
+            (new_hash, conn.tid, user_id),
+        )
 
 
 def start_session(conn: db.Conn, user_id: str, tenant_id: str) -> str:
