@@ -106,7 +106,9 @@ def update_profile(
                 422,
                 "VALIDATION",
                 f"Choose a password of at least {accounts.MIN_PASSWORD} characters.",
-                {"new_password": f"Choose a password of at least {accounts.MIN_PASSWORD} characters."},
+                {
+                    "new_password": f"Choose a password of at least {accounts.MIN_PASSWORD} characters."
+                },
             )
         try:
             accounts.change_password(

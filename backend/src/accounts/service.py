@@ -159,9 +159,7 @@ def verify_user_password(conn: db.Conn, user_id: str, password: str) -> bool:
     return verify_password(password, row["password_hash"])
 
 
-def change_password(
-    conn: db.Conn, user_id: str, current_password: str, new_password: str
-) -> None:
+def change_password(conn: db.Conn, user_id: str, current_password: str, new_password: str) -> None:
     """Change a user's password after verifying current_password."""
     if not verify_user_password(conn, user_id, current_password):
         raise WrongPassword("Current password is wrong.")
