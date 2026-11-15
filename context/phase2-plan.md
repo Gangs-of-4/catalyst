@@ -31,7 +31,7 @@
 | M7: usage events, admin counts and weekly breakdown, counts-only usage CSV, feedback log with decisions and Sheet-matching CSV (reset-demo cut) | #38 | Merged |
 | M9: demo clinic + demo wholesale with today's data and logins; optional 4-week fictional history (`DEMO_HISTORY=1`); `scripts/seed_demo.py` resets it, anchored to today | #40 | Merged |
 | M8: React app, all pages (ADR-0042) | several | Merged |
-| M10: deploy (Vercel + Render + Neon, keep-alive, Vapi) and live fixes #46, #51, #54, #58, #59 | several | Merged, live |
+| M10: deploy (Vercel + Render + Neon, keep-alive, Vapi) and live fixes #46, #51, #54, #58, #59, #62 | several | Merged, live |
 | M11: `docs/phase2/` (overview, try-this, deploy, limitations) | this PR | Open |
 | M12: rehearsal and demo recording | — | Not started |
 

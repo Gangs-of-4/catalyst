@@ -35,7 +35,7 @@ Item titles are listed with each capability.
 - 10 Dropped-call recovery
 - 11 Male or female voice
 - 12 Indian voice library
-- 13 Custom agent name
+- 13 Custom agent name *(implemented in PR #62: configurable in Settings and injected into assistant prompt)*
 - 14 Speed and tone
 - 19 Patience mode for older callers
 - 37 Service-based slot length *(the data model supports it from the MVP)*
@@ -51,8 +51,8 @@ Item titles are listed with each capability.
 - 65 Home-screen app with alerts
 - 66 Hindi or English interface
 - 68 Patient search and history
-- 71 Agent customisation panel: profile
-- 72 Agent customisation panel: greeting editor
+- 71 Agent customisation panel: profile *(implemented in PR #62: user display name, password change, primary owner WhatsApp update)*
+- 72 Agent customisation panel: greeting editor *(implemented in PR #62: custom welcome greeting in Settings & prompt)*
 - 73 Agent customisation panel: FAQ editor
 - 74 Agent customisation panel: services and fees
 - 75 Agent customisation panel: hours

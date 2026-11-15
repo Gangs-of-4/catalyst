@@ -61,4 +61,5 @@ Milestones M0–M10 merged through PRs #8 to #59. The progress table is in `cont
 - #55: the old static pages and their backend routes are removed, so the backend serves no HTML;
 - #57: admin dashboard for the mentor showcase, and time-in-app pings;
 - #58: "microphone not heard" message;
-- #59: a stale tab reloads after a deploy.
+- #59: a stale tab reloads after a deploy;
+- #62: self-serve user profile edit (name and password change), primary owner WhatsApp update with password verification, and assistant persona customization (agent name and custom greeting).

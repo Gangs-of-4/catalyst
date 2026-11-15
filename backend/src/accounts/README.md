@@ -4,12 +4,17 @@
 
 **Capabilities served.** C12 (self-serve setup), C11 (business isolation: the session decides which business a request may touch).
 
-**Contracts used.** `contracts.md` §3.1 (`users`, `sessions`) and §6 (cookie, CSRF header, error shape, `/api/signup`, `/api/login`, `/api/logout`, `/api/me`).
+**Contracts used.** `contracts.md` §3.1 (`users`, `sessions`) and §6 (cookie, CSRF header, error shape, `/api/signup`, `/api/login`, `/api/logout`, `/api/me`, `PATCH /api/me`).
 
 **How it works.**
 - Passwords are `hashlib.scrypt` with a per-user salt. The stored form is `scrypt$n$r$p$salt$hash`.
 - The cookie `catalyst_session` is `<token>.<HMAC-SHA256 of the token>` using `SESSION_SECRET`. The database stores only the token's SHA-256, so a database leak can't be replayed as logins. Logout deletes the row.
 - Five wrong passwords lock the account for 15 minutes (`LOCKED`). A good login resets the count. The count is updated atomically, so parallel guesses can't skip the lock. Wrong email and wrong password give the same answer and take the same time (scrypt always runs). Only a real account can reach `LOCKED`, so the lock does show that an email has an account; contracts §6 accepts that for a per-email lock. A per-IP limit is not here yet.
+- Profile and password management:
+  - `update_name(conn, user_id, name)` updates the owner's display name (`users.name`) within the tenant scope.
+  - `verify_user_password(conn, user_id, current_password)` verifies the user's password against the stored scrypt hash.
+  - `change_password(conn, user_id, current_password, new_password)` checks the current password (raising `WrongPassword` if incorrect), validates minimum password length, and hashes the new password with a fresh salt.
+  - `PATCH /api/me` handles self-serve profile updates, emitting `profile_updated` analytics events.
 - `SESSION_SECRET` is checked once at startup. With `DATABASE_URL` set, the backend refuses to start without it. For local SQLite dev, one is generated into `.env`.
 - Auth lookups run on `db.connect_unchecked()` because the session or email is what *tells us* the business. After that every route uses `get_user_conn`, a connection scoped to the owner's business.
 
