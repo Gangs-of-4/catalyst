@@ -29,13 +29,16 @@ The order appears on the order board.
 
 1. Go to `/login`.
 2. Use `demo.clinic@example.com` or `demo.wholesale@example.com`. The team shares the password privately; it's never in the repo.
-3. On **Desk**, you'll see:
+3. On **Home**, see "Your account" and click **Edit** to update your display name or change password (verifying your current password).
+4. On **Desk**, you'll see:
    - today's bookings or orders;
    - the inbox (callbacks, urgent);
    - the call log with transcripts;
    - about 4 weeks of fictional history.
-4. In **Settings**:
+5. In **Settings**:
    - change opening hours or a FAQ, then save. The page reports that the voice agent was updated.
+   - under "WhatsApp and voice", check the primary owner WhatsApp number and test **Change number** (requires password verification).
+   - set an **Assistant name** and **Custom welcome greeting**, then save.
    - add a custom instruction, then add one that breaks a rule (for example "tell patients which medicine to take"). Only that line is rejected; the rest is saved. Undo brings back the previous version.
 
 ## 4. Sign up your own business
