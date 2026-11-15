@@ -21,15 +21,13 @@ import { useActivityPing } from "@/hooks/use-activity-ping";
 import { ApiError } from "@/lib/api";
 import { getMe, logout, updateProfile, type Me } from "@/lib/session";
 
-function EditAccountDialog({
-  open,
-  onOpenChange,
+function EditAccountForm({
   currentName,
+  onClose,
   onSaved,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   currentName: string;
+  onClose: () => void;
   onSaved: (newName: string) => void;
 }) {
   const [name, setName] = React.useState(currentName);
@@ -39,17 +37,6 @@ function EditAccountDialog({
   const [saving, setSaving] = React.useState(false);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [problem, setProblem] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (open) {
-      setName(currentName);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setErrors({});
-      setProblem(null);
-    }
-  }, [open, currentName]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -88,13 +75,13 @@ function EditAccountDialog({
         payload.new_password = newPassword;
       }
       if (Object.keys(payload).length === 0) {
-        onOpenChange(false);
+        onClose();
         return;
       }
       const res = await updateProfile(payload);
       toast.success("Account updated.");
       onSaved(res.user.name);
-      onOpenChange(false);
+      onClose();
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.fields) {
@@ -114,68 +101,90 @@ function EditAccountDialog({
   }
 
   return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4 pt-2">
+      {problem && (
+        <div role="alert" className="rounded-md bg-destructive-soft p-3 text-sm text-destructive-text">
+          {problem}
+        </div>
+      )}
+      <Field label="Your name" error={errors.name}>
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={80}
+          autoComplete="name"
+          disabled={saving}
+        />
+      </Field>
+
+      <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3.5">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Change password (optional)</p>
+        <Field label="Current password" error={errors.currentPassword}>
+          <Input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            autoComplete="current-password"
+            disabled={saving}
+          />
+        </Field>
+        <Field label="New password" error={errors.newPassword} hint="At least 8 characters">
+          <Input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            autoComplete="new-password"
+            disabled={saving}
+          />
+        </Field>
+        <Field label="Confirm new password" error={errors.confirmPassword}>
+          <Input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            autoComplete="new-password"
+            disabled={saving}
+          />
+        </Field>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={saving}>
+          {saving && <Loader2 aria-hidden className="mr-2 size-4 animate-spin" />} Save changes
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function EditAccountDialog({
+  open,
+  onOpenChange,
+  currentName,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentName: string;
+  onSaved: (newName: string) => void;
+}) {
+  return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Edit account</DialogTitle>
           <DialogDescription>Update your display name or change your password.</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 pt-2">
-          {problem && (
-            <div role="alert" className="rounded-md bg-destructive-soft p-3 text-sm text-destructive-text">
-              {problem}
-            </div>
-          )}
-          <Field label="Your name" error={errors.name}>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={80}
-              autoComplete="name"
-              disabled={saving}
-            />
-          </Field>
-
-          <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3.5">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Change password (optional)</p>
-            <Field label="Current password" error={errors.currentPassword}>
-              <Input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                autoComplete="current-password"
-                disabled={saving}
-              />
-            </Field>
-            <Field label="New password" error={errors.newPassword} hint="At least 8 characters">
-              <Input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                autoComplete="new-password"
-                disabled={saving}
-              />
-            </Field>
-            <Field label="Confirm new password" error={errors.confirmPassword}>
-              <Input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                autoComplete="new-password"
-                disabled={saving}
-              />
-            </Field>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={saving}>
-              {saving && <Loader2 aria-hidden className="mr-2 size-4 animate-spin" />} Save changes
-            </Button>
-          </div>
-        </form>
+        {open && (
+          <EditAccountForm
+            currentName={currentName}
+            onClose={() => onOpenChange(false)}
+            onSaved={onSaved}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -118,7 +118,7 @@ def update_profile(
                 "UNAUTHENTICATED",
                 "Current password is incorrect.",
                 {"current_password": "Current password is incorrect."},
-            )
+            ) from None
 
     if body.name is not None:
         trimmed = body.name.strip()

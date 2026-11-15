@@ -452,10 +452,10 @@ describe("catalogue (distributor)", () => {
   });
 
   it("saves assistant name and custom greeting", async () => {
-    let savedBody: Record<string, unknown> | null = null;
+    let savedBody: Record<string, string> | null = null;
     mockApi(CLINIC, (init) => {
-      savedBody = JSON.parse(String(init?.body));
-      return json(200, { saved: true, agent: "Agent updated.", settings: savedBody });
+      savedBody = JSON.parse(String(init?.body)) as Record<string, string>;
+      return json(200, { saved: true, agent: "Agent updated.", settings: savedBody as unknown as BookingsSettings });
     });
     renderPage();
     const agentInput = await screen.findByLabelText(/Assistant name/);
@@ -464,8 +464,9 @@ describe("catalogue (distributor)", () => {
     fireEvent.change(greetingInput, { target: { value: "Namaste, Sharma Clinic." } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(savedBody).toBeTruthy());
-    expect((savedBody as any)?.agent_name).toBe("Priya");
-    expect((savedBody as any)?.custom_greeting).toBe("Namaste, Sharma Clinic.");
+    const payload = savedBody as unknown as Record<string, string>;
+    expect(payload?.agent_name).toBe("Priya");
+    expect(payload?.custom_greeting).toBe("Namaste, Sharma Clinic.");
   });
 
   it("updates primary owner WhatsApp number", async () => {

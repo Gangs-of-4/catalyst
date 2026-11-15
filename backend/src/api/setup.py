@@ -170,7 +170,7 @@ def update_owner_whatsapp(
         tenancy.update_owner_whatsapp(conn, conn.tid, norm)
     except db.Conflict:
         msg = "This WhatsApp number already belongs to another business."
-        raise ApiError(409, "WHATSAPP_TAKEN", msg, {"new_whatsapp": msg})
+        raise ApiError(409, "WHATSAPP_TAKEN", msg, {"new_whatsapp": msg}) from None
     analytics.record(conn, "owner_whatsapp_changed")
     return {"saved": True, "owner_whatsapp": norm}
 

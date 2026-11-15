@@ -48,15 +48,13 @@ function Section({ id, title, hint, children }: { id: string; title: string; hin
   );
 }
 
-function UpdateOwnerWhatsappDialog({
-  open,
-  onOpenChange,
+function UpdateOwnerWhatsappForm({
   currentNumber,
+  onClose,
   onSaved,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   currentNumber: string;
+  onClose: () => void;
   onSaved: (newNumber: string) => void;
 }) {
   const [newNumber, setNewNumber] = React.useState("");
@@ -64,15 +62,6 @@ function UpdateOwnerWhatsappDialog({
   const [saving, setSaving] = React.useState(false);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [problem, setProblem] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (open) {
-      setNewNumber("");
-      setPassword("");
-      setErrors({});
-      setProblem(null);
-    }
-  }, [open]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -97,7 +86,7 @@ function UpdateOwnerWhatsappDialog({
       const res = await updateOwnerWhatsapp(newNumber.trim(), password);
       toast.success("Owner WhatsApp number updated.");
       onSaved(res.owner_whatsapp);
-      onOpenChange(false);
+      onClose();
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.fields) {
@@ -116,6 +105,61 @@ function UpdateOwnerWhatsappDialog({
   }
 
   return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4 pt-2">
+      {problem && (
+        <div role="alert" className="rounded-md bg-destructive-soft p-3 text-sm text-destructive-text">
+          {problem}
+        </div>
+      )}
+      {currentNumber && (
+        <p className="text-xs text-muted-foreground">
+          Current number: <span className="font-mono font-medium text-foreground">{currentNumber}</span>
+        </p>
+      )}
+      <Field label="New WhatsApp number" error={errors.newNumber} hint="10-digit Indian mobile number">
+        <Input
+          type="tel"
+          value={newNumber}
+          onChange={(e) => setNewNumber(e.target.value)}
+          placeholder="e.g. 98765 00001"
+          autoComplete="tel"
+          disabled={saving}
+        />
+      </Field>
+      <Field label="Your account password" error={errors.password}>
+        <Input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+          disabled={saving}
+        />
+      </Field>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={saving}>
+          {saving && <Loader2 aria-hidden className="mr-2 size-4 animate-spin" />} Update number
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function UpdateOwnerWhatsappDialog({
+  open,
+  onOpenChange,
+  currentNumber,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentNumber: string;
+  onSaved: (newNumber: string) => void;
+}) {
+  return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
@@ -124,46 +168,13 @@ function UpdateOwnerWhatsappDialog({
             Enter your new mobile number and confirm your password to update your primary WhatsApp number.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 pt-2">
-          {problem && (
-            <div role="alert" className="rounded-md bg-destructive-soft p-3 text-sm text-destructive-text">
-              {problem}
-            </div>
-          )}
-          {currentNumber && (
-            <p className="text-xs text-muted-foreground">
-              Current number: <span className="font-mono font-medium text-foreground">{currentNumber}</span>
-            </p>
-          )}
-          <Field label="New WhatsApp number" error={errors.newNumber} hint="10-digit Indian mobile number">
-            <Input
-              type="tel"
-              value={newNumber}
-              onChange={(e) => setNewNumber(e.target.value)}
-              placeholder="e.g. 98765 00001"
-              autoComplete="tel"
-              disabled={saving}
-            />
-          </Field>
-          <Field label="Your account password" error={errors.password}>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              disabled={saving}
-            />
-          </Field>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={saving}>
-              {saving && <Loader2 aria-hidden className="mr-2 size-4 animate-spin" />} Update number
-            </Button>
-          </div>
-        </form>
+        {open && (
+          <UpdateOwnerWhatsappForm
+            currentNumber={currentNumber}
+            onClose={() => onOpenChange(false)}
+            onSaved={onSaved}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
