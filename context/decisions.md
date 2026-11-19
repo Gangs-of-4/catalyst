@@ -598,7 +598,7 @@ ADR-0029 and ADR-0031 were accepted on 2026-10-27 and stay here so their history
 ### ADR-0043: Move the frontend from Vercel Hobby to Cloudflare Workers (static assets)
 
 - **Date:** 2026-11-11
-- **Status:** **Proposed**. It needs the whole team's agreement, and the timing is an open question (see below).
+- **Status:** Accepted — whole team, 2026-11-19 (proposed in #19; Ajit approved there, Rahul and Vinay agreed in #64), with Option A timing (after 15 Nov). The Cloudflare account is on a company email, so the "one member's personal account" risk is gone. Built in the PR that adds `frontend/wrangler.jsonc`. Two details differ from the text below: `BACKEND_URL` comes from the repo variable of the same name (passed as `wrangler deploy --var`), and the workflow runs a pinned `npx wrangler` instead of `wrangler-action`. ADR-0036 (Vercel) becomes Superseded at cut-over, once the checks below pass.
 - **Cost implication:** Free tier with limits. Static asset requests are free and unlimited; requests that run the Worker script (only `/api/*` and `/healthz`) count toward 100,000 a day on the Free plan.
 - **Would change:** supersede ADR-0036 (Vercel). ADR-0041's `/api` forwarding would become a small Worker script instead of a `vercel.json` rewrite. ADR-0042 (React) is unchanged.
 

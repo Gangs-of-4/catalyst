@@ -1,0 +1,74 @@
+# Deploy the React app to Cloudflare Workers (ADR-0043): static assets plus a small script that
+# forwards /api/* and /healthz to the backend. Same gate as the Vercel deploy: runs only after CI
+# succeeds on a push to main, and deploys exactly the commit CI tested. Manual runs from main allowed.
+# Secrets: CLOUDFLARE_API_TOKEN ("Edit Cloudflare Workers", our account only), CLOUDFLARE_ACCOUNT_ID.
+# Variable: BACKEND_URL, the backend's https origin (not a secret).
+# The Vercel deploy keeps running until the Cloudflare site passes ADR-0043's checks.
+name: Deploy frontend (Cloudflare)
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build and deploy to Cloudflare Workers
+    if: >-
+      (github.event_name == 'workflow_run'
+        && github.event.workflow_run.conclusion == 'success'
+        && github.event.workflow_run.event == 'push')
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      BACKEND_URL: ${{ vars.BACKEND_URL }}
+      WRANGLER_SEND_METRICS: "false"
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: Checkout the tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+
+      - name: Check the settings
+        run: |
+          [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || { echo "Cloudflare secrets are missing."; exit 1; }
+          echo "$BACKEND_URL" | grep -Eq '^https://[^/[:space:]]+/?$' || { echo "Repo variable BACKEND_URL must be the backend's https origin."; exit 1; }
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/app/package-lock.json
+
+      - name: Build the app
+        working-directory: frontend/app
+        env:
+          VITE_BACKEND_CONFIGURED: "1" # pages call /api on their own origin; the Worker forwards it
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Deploy
+        working-directory: frontend
+        run: npx --yes wrangler@4.154.0 deploy --var "BACKEND_URL:${BACKEND_URL%/}"
+
+      - name: Record deployed commit
+        run: |
+          {
+            echo "### Cloudflare Workers deployment"
+            echo "- Commit: \`$DEPLOY_SHA\`"
+            echo "- URL: https://catalyst.catalystfounders.workers.dev"
+          } >> "$GITHUB_STEP_SUMMARY"

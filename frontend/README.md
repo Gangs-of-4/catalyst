@@ -89,3 +89,10 @@ Production deploys come only from GitHub Actions (`.github/workflows/deploy-fron
 - Logged-in pages (`/home`, `/desk`, `/settings`) use the session cookie, which reaches the backend first-party through the `/api` rewrite (ADR-0041). Basic auth is gone (#28).
 
 One-time setup: Vercel project with Root Directory `frontend` and no Git connection; repo secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
+
+## Cloudflare Workers (ADR-0043, moving from Vercel)
+
+- `wrangler.jsonc`: the built app (`app/dist`) is served as static assets; every page route gets the app shell (`not_found_handling: single-page-application`).
+- `cloudflare/worker.js` runs only for `/api/*` and `/healthz`. It forwards the request to `BACKEND_URL` and returns the response unchanged, `Set-Cookie` included, so the session cookie stays first-party (ADR-0041). Tests: `node cloudflare/worker.test.mjs` from `frontend/` (CI runs them).
+- Deploy: `.github/workflows/deploy-cloudflare.yml`, after CI passes on `main`. Secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, and the repo **variable** `BACKEND_URL` (the backend's https origin, not a secret).
+- Site: https://catalyst.catalystfounders.workers.dev. Vercel keeps deploying until this site passes the ADR-0043 checks; then a separate PR removes `vercel.json`, `configure-vercel.mjs`, `build.mjs`, the Vercel workflow and its secrets.
