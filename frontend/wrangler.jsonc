@@ -1,0 +1,20 @@
+// Cloudflare Workers config for the frontend (ADR-0043). Deployed by
+// .github/workflows/deploy-cloudflare.yml after CI passes on main.
+// BACKEND_URL (the backend's https origin) comes from the deploy: `--var BACKEND_URL:...`,
+// from the repo variable of the same name. It isn't a secret.
+{
+  "$schema": "./app/node_modules/wrangler/config-schema.json",
+  "name": "catalyst",
+  "main": "cloudflare/worker.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "app/dist",
+    "binding": "ASSETS",
+    // Every page route (/desk, /b/<id>/try, …) gets index.html, the React app shell.
+    "not_found_handling": "single-page-application",
+    // The script runs only for these; everything else is served as a static file.
+    "run_worker_first": ["/api/*", "/healthz"]
+  }
+}

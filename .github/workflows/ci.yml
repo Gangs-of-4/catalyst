@@ -144,6 +144,10 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      - name: Cloudflare Worker tests (ADR-0043)
+        working-directory: frontend
+        run: node cloudflare/worker.test.mjs
+
       - name: Build (as Vercel does)
         working-directory: frontend
         run: node build.mjs
