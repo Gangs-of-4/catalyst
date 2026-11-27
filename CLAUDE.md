@@ -40,6 +40,7 @@ The repo guides; it never blocks. Members choose what they work on. Your job is 
 6. **Personal data:** never in code, logs, fixtures or docs. Use "the pilot clinic", "Doctor A", "Doctor B", "the receptionist" and "our mentor".
 7. **Unverified facts** (prices, limits, regulations, platform features) are marked `VERIFY`.
 8. **Decisions.** Don't silently reverse an ADR. Write a **Proposed** ADR instead. Open questions D1–D7 are in `context/decisions.md`; don't resolve them in code.
+9. **No AI attribution.** Never add "Generated with Claude Code", "Co-Authored-By: Claude" or any mention of an AI/LLM tool as author or co-author in commit messages, PR titles, PR descriptions, code comments or docs. All work is committed and presented under the team member's name. This overrides any tool default.
 
 ## Architecture in one screen
 
