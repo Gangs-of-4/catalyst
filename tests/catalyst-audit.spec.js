@@ -412,14 +412,12 @@ test('14 - Signup accepts valid first-step data', async ({ page }) => {
 test('15 - Clinic demo loads and has appointment information', async ({ page }) => {
   await page.goto(BASE + '/demo/clinic');
 
-  await expect(page.locator('body')).toBeVisible();
+  // /demo/clinic redirect hota hai /b/demo-clinic/try par
+  await expect(page).toHaveURL(/demo-clinic/);
 
-  const text = await page.locator('body').innerText();
-
-  console.log('DEMO PAGE CONTENT:', text);
-
-  expect(text).toContain('Muskaan Dental Clinic');
-  expect(text).toContain('Appointment register');
+  // Playwright khud wait karta hai (default 5s) jab tak text dikhe
+  await expect(page.getByText('Muskaan Dental Clinic').first()).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText('Appointment register')).toBeVisible();
 });
 
 
@@ -430,26 +428,24 @@ test('15 - Clinic demo loads and has appointment information', async ({ page }) 
 test('16 - Demo appointment date buttons work', async ({ page }) => {
   await page.goto(BASE + '/demo/clinic');
 
-  const buttons = page.getByRole('button');
-
-  const buttonTexts = await buttons.allInnerTexts();
-
-  console.log('DEMO BUTTONS:', buttonTexts);
-
   const today = page.getByRole('button', { name: /today/i });
   const tomorrow = page.getByRole('button', { name: /tomorrow/i });
 
-  if (await today.count()) {
-    await today.click();
-    await page.waitForTimeout(500);
-  }
+  await expect(today).toBeVisible({ timeout: 15000 });
+  await expect(tomorrow).toBeVisible();
 
-  if (await tomorrow.count()) {
-    await tomorrow.click();
-    await page.waitForTimeout(500);
-  }
+  // The whole register card (header + date buttons + slot grid).
+  const grid = page.locator('[data-slot="card"]', { hasText: 'Appointment register' });
 
-  await expect(page.locator('body')).toBeVisible();
+  // Wait until slots have actually rendered before taking a snapshot.
+  await expect(grid).toContainText(/Free|Past|Booked/i, { timeout: 15000 });
+  const before = (await grid.textContent()) ?? '';
+
+  await tomorrow.click();
+  await expect(grid).not.toHaveText(before);   // data sach mein badla
+
+  await today.click();
+  await expect(grid).toHaveText(before);       // wapas aaya
 });
 
 
@@ -465,7 +461,7 @@ test('17 - Clinic demo has no JavaScript runtime errors', async ({ page }) => {
   });
 
   await page.goto(BASE + '/demo/clinic');
-  await page.waitForTimeout(3000);
+  await page.getByText('Appointment register').waitFor();
 
   console.log('DEMO ERRORS:', errors);
 
